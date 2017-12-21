@@ -40,20 +40,22 @@ def main():
     init_dir(wargs.dir_valid)
 
     vocab_data = {}
-    train_srcD_file = wargs.src_vocab_from
-    wlog('\nPreparing source vocabulary from {} ... '.format(train_srcD_file))
-    src_vocab = extract_vocab(train_srcD_file, wargs.src_dict, wargs.src_dict_size)
-    vocab_data['src'] = src_vocab
+    if wargs.word_piece is False:
+        wlog('\n[o/Subword] Preparing source vocabulary from {} ... '.format(wargs.src_vocab_from))
+        src_vocab = extract_vocab(wargs.src_vocab_from, wargs.src_dict, wargs.src_dict_size)
+        wlog('\n[o/Subword] Preparing target vocabulary from {} ... '.format(wargs.trg_vocab_from))
+        trg_vocab = extract_vocab(wargs.trg_vocab_from, wargs.trg_dict, wargs.trg_dict_size)
+    else:
+        wlog('\n[w/Subword] Preparing source vocabulary from {} ... '.format(wargs.src_vocab_from))
+        src_vocab = get_or_generate_vocab(wargs.src_vocab_from, wargs.src_dict)
+        wlog('\n[w/Subword] Preparing target vocabulary from {} ... '.format(wargs.trg_vocab_from))
+        trg_vocab = get_or_generate_vocab(wargs.trg_vocab_from, wargs.trg_dict)
 
-    train_trgD_file = wargs.trg_vocab_from
-    wlog('\nPreparing target vocabulary from {} ... '.format(train_trgD_file))
-    trg_vocab = extract_vocab(train_trgD_file, wargs.trg_dict, wargs.trg_dict_size)
+    vocab_data['src'] = src_vocab
     vocab_data['trg'] = trg_vocab
 
-    train_src_file = wargs.train_src
-    train_trg_file = wargs.train_trg
-    wlog('\nPreparing training set from {} and {} ... '.format(train_src_file, train_trg_file))
-    train_src_tlst, train_trg_tlst = wrap_data(train_src_file, train_trg_file,
+    wlog('\nPreparing training set from {} and {} ... '.format(wargs.train_src, wargs.train_trg))
+    train_src_tlst, train_trg_tlst = wrap_data(wargs.train_src, wargs.train_trg,
                                                src_vocab, trg_vocab, max_seq_len=wargs.max_seq_len)
     '''
     list [torch.LongTensor (sentence), torch.LongTensor, torch.LongTensor, ...]
@@ -103,8 +105,8 @@ def main():
     wlog(trg_lookup_table)
     '''
 
-    sv = vocab_data['src'].idx2key
-    tv = vocab_data['trg'].idx2key
+    sv = vocab_data['src'] if wargs.word_piece else vocab_data['src'].idx2key
+    tv = vocab_data['trg'] if wargs.word_piece else vocab_data['trg'].idx2key
 
     nmtModel = NMT(src_vocab_size, trg_vocab_size)
     #classifier = Classifier(wargs.out_size, trg_vocab_size,

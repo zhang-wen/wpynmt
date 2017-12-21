@@ -83,6 +83,7 @@ train_src = dir_data + 'train.src'
 train_trg = dir_data + 'train.trg'
 
 # Dictionary
+word_piece = True
 src_vocab_from = train_src
 trg_vocab_from = train_trg
 src_dict_size = 30000
@@ -116,8 +117,8 @@ start_epoch = 1
 model_prefix = dir_model + '/model'
 best_model = dir_valid + '/best.model.pt' if dir_valid else 'best.model.pt'
 # pretrained model
-#pre_train = None
-pre_train = best_model
+pre_train = None
+#pre_train = best_model
 fix_pre_params = False
 
 # decoder hype-parameters
@@ -174,7 +175,7 @@ with_postproc = False
 copy_trg_emb = False
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet, 7: non-local
-model = 4
+model = 1
 
 # convolutional layer
 filter_window_size = [1, 3, 5]   # windows size

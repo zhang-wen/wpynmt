@@ -20,8 +20,8 @@ class Trainer(object):
 
         self.model = model
         self.train_data = train_data
-        self.sv = vocab_data['src'].idx2key
-        self.tv = vocab_data['trg'].idx2key
+        self.sv = vocab_data['src'] if wargs.word_piece else vocab_data['src'].idx2key
+        self.tv = vocab_data['trg'] if wargs.word_piece else vocab_data['trg'].idx2key
         self.optim = optim
         self.valid_data = valid_data
         self.tests_data = tests_data

@@ -1,4 +1,5 @@
 from __future__ import division
+from __future__ import absolute_import
 
 import os
 import math
@@ -9,11 +10,63 @@ import wargs
 from tools.utils import *
 from tools.dictionary import Dictionary
 
+import sys
+import tools.text_encoder as text_encoder
+import tools.tokenizer as tokenizer
+from collections import defaultdict
+
+# English tokens
+EN_SPACE_TOK = 3
+# Chinese tokens
+ZH_SPACE_TOK = 16
+
+# 8192
+def get_or_generate_vocab(data_file, vocab_file, vocab_size=2**13):
+    """Inner implementation for vocab generators.
+    Args:
+    vocab_filename: relative filename where vocab file is stored
+    vocab_file: generated vocabulary file
+    vocab_size: target size of the vocabulary constructed by SubwordTextEncoder
+    Returns:
+    A SubwordTextEncoder vocabulary object.
+    """
+    if os.path.exists(vocab_file):
+      wlog('Load dictionary from file {}'.format(vocab_file))
+      vocab = text_encoder.SubwordTextEncoder(vocab_file)
+      return vocab
+
+    wlog('Save dictionary file into {}'.format(vocab_file))
+    token_counts = defaultdict(int)
+    for item in genVcb(data_file):
+      for tok in tokenizer.encode(text_encoder.native_to_unicode(item)):
+          token_counts[tok] += 1
+
+    vocab = text_encoder.SubwordTextEncoder.build_to_target_size(vocab_size, token_counts, 1, 1e3)
+    vocab.store_to_file(vocab_file)
+
+    return vocab
+
+"""Generate a vocabulary from the datasets in sources."""
+def genVcb(filepath):
+    wlog("Generating vocab from: {}".format(filepath))
+    # Use Tokenizer to count the word occurrences.
+    with open(filepath, 'r') as train_file:
+        file_byte_budget = 1e6
+        counter = 0
+        countermax = int(os.path.getsize(filepath) / file_byte_budget / 2)
+        for line in train_file:
+            if counter < countermax:
+                counter += 1
+            else:
+                if file_byte_budget <= 0: break
+                line = line.strip()
+                file_byte_budget -= len(line)
+                counter = 0
+                yield line
+
 def extract_vocab(data_file, vocab_file, max_vcb_size=30000):
 
-    vocab_exist = os.path.exists(vocab_file)
-
-    if vocab_exist:
+    if os.path.exists(vocab_file) is True:
 
         # If vocab file has been exist, we load word dictionary
         wlog('Load dictionary from file {}'.format(vocab_file))
@@ -75,16 +128,22 @@ def wrap_data(src_data, trg_data, src_vocab, trg_vocab, shuffle=True, sort_data=
             wlog('Ignore abnormal blank sentence in line number {}'.format(idx))
             ignore += 1
 
-        src_words = src_sent.strip().split()
-        trg_words = trg_sent.strip().split()
-
+        src_sent, trg_sent = src_sent.strip(), trg_sent.strip()
+        src_words, trg_words = src_sent.split(), trg_sent.split()
         src_len = len(src_words)
         if src_len <= max_seq_len or len(trg_words) <= max_seq_len:
 
-            srcs.append(src_vocab.keys2idx(src_words, UNK_WORD))
-            trgs.append(trg_vocab.keys2idx(trg_words, UNK_WORD,
-                                           bos_word=BOS_WORD,
-                                           eos_word=EOS_WORD))
+            if wargs.word_piece is False:
+                srcs.append(src_vocab.keys2idx(src_words, UNK_WORD))
+                trgs.append(trg_vocab.keys2idx(trg_words, UNK_WORD,
+                                               bos_word=BOS_WORD,
+                                               eos_word=EOS_WORD))
+            else:
+                src_wids = src_vocab.encode(src_sent)
+                trg_wids = trg_vocab.encode(trg_sent)
+                srcs.append(ids2Tensor(src_wids))
+                trgs.append(ids2Tensor(trg_wids, bos_id=BOS, eos_id=EOS))
+
             slens.append(src_len)
         else:
             longer += 1
@@ -152,9 +211,15 @@ def val_wrap_data(src_data, src_vocab):
             wlog('Error. Ignore abnormal blank sentence in line number {}'.format(idx))
             sys.exit(0)
 
-        src_words = src_sent.strip().split()
+        src_sent = src_sent.strip()
+        src_words = src_sent.split()
         src_len = len(src_words)
-        srcs.append(src_vocab.keys2idx(src_words, UNK_WORD))
+        if wargs.word_piece is False:
+            srcs.append(src_vocab.keys2idx(src_words, UNK_WORD))
+        else:
+            src_wids = src_vocab.encode(src_sent)
+            srcs.append(ids2Tensor(src_wids))
+
         slens.append(src_len)
 
     srcF.close()

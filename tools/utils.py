@@ -22,16 +22,21 @@ def str1(content, encoding='utf-8'):
 
 #DEBUG = True
 DEBUG = False
-
-PAD = 0
-UNK = 1
-BOS = 2
-EOS = 3
+#PAD = 0
+#UNK = 1
+#BOS = 2
+#EOS = 3
 
 PAD_WORD = '<pad>'
 UNK_WORD = 'unk'
 BOS_WORD = '<b>'
 EOS_WORD = '<e>'
+# Reserved tokens for things like padding and EOS symbols.
+RESERVED_TOKENS = [PAD_WORD, BOS_WORD, EOS_WORD]
+NUM_RESERVED_TOKENS = len(RESERVED_TOKENS)
+PAD = RESERVED_TOKENS.index(PAD_WORD)  # Normally 0
+BOS = RESERVED_TOKENS.index(BOS_WORD)  # Normally 1
+EOS = RESERVED_TOKENS.index(EOS_WORD)  # Normally 2
 
 epsilon = 1e-20
 
@@ -99,39 +104,6 @@ def cor_coef(x, y):
     rho = tc.mean(x * y) - E_x * E_y
     D_x, D_y = E_x_2 - E_x * E_x, E_y_2 - E_y * E_y
     return rho / math.sqrt(D_x * D_y) + eps
-
-def to_pytorch_state_dict(model, eid, bid, optim):
-
-    model_dict = model.state_dict()
-    model_dict = {k: v for k, v in model_dict.items() if 'classifier' not in k}
-
-    #class_dict = model.classifier.state_dict()
-    class_dict = model.decoder.classifier.state_dict()
-
-    state_dict = {
-        'model': model_dict,
-        'class': class_dict,
-        'epoch': eid,
-        'batch': bid,
-        'optim': optim
-    }
-
-    return state_dict
-
-def load_pytorch_model(model_path):
-
-    state_dict = tc.load(model_path, map_location=lambda storage, loc: storage)
-
-    model_dict = state_dict['model']
-    class_dict = state_dict['class']
-    eid, bid, optim = state_dict['epoch'], state_dict['batch'], state_dict['optim']
-
-    wlog('Loading pre-trained model from {} at epoch {} and batch {}'.format(model_path, eid, bid))
-
-    wlog('Loading optimizer from {}'.format(model_path))
-    wlog(optim)
-
-    return model_dict, class_dict, eid, bid, optim
 
 def format_time(time):
     '''
@@ -333,8 +305,12 @@ def sent_filter(sent):
 
 def idx2sent(vec, vcb_i2w):
     # vec: [int, int, ...]
-    r = [vcb_i2w[idx] for idx in vec]
-    return ' '.join(r)
+    if isinstance(vcb_i2w, dict):
+        r = [vcb_i2w[idx] for idx in vec]
+        sent = ' '.join(r)
+    else:
+        sent = vcb_i2w.decode(vec)
+    return sent
 
 def dec_conf():
 
@@ -602,6 +578,13 @@ def layer_prepostprocess(pre_layer_out, pre_layer_in=None, handle_type=None, nor
       elif c == 'd': pre_layer_out = F.dropout(pre_layer_out, p=dropout_rate, training=training)
       else: wlog('Unknown handle type {}'.format(c))
     return pre_layer_out
+
+def ids2Tensor(list_wids, bos_id=None, eos_id=None):
+    # input: list of int for one sentence
+    list_idx = [bos_id] if bos_id else []
+    for wid in list_wids: list_idx.extend([wid])
+    list_idx.extend([eos_id] if eos_id else [])
+    return tc.LongTensor(list_idx)
 
 
 
