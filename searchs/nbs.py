@@ -156,7 +156,7 @@ class Nbs(object):
             cnt_bp = (i >= 2)
             if cnt_bp: self.C[0] += preb_sz
             # batch states of previous beam, (preb_sz, 1, nhids) -> (preb_sz, nhids)
-            #for b in prevb: print b[1].size()
+            #for b in prevb: print b[-3]
             s_im1 = tc.stack(tuple([b[-3] for b in prevb]), dim=0).squeeze(1)
             #print s_im1.size()
             #c_im1 = [tc.stack(tuple([prevb[bid][1][lid] for bid in range(len(prevb))])
@@ -278,14 +278,19 @@ class Nbs(object):
             #print s_i[tp_bid].size()
             #print 'before...'
             #print self.batch_adj_list
+            #print alpha_ij.size() #(slen, batch_size)
             delete_idx = []
             for _j, b in enumerate(zip(costs, s_i[tp_bid], word_indices, prevb_id)):
-                if cnt_bp: self.C[1] += (b[-1] + 1)
+                bp = b[-1]
+                if wargs.len_norm == 0: score = (b[0], None)
+                elif wargs.len_norm == 1: score = (b[0] / i, b[0])
+                elif wargs.len_norm == 2:   # alpha length normal
+                    lp, cp = lp_cp(bp, i, self.beam)
+                    score = (b[0] / lp + cp, b[0])
+                if cnt_bp: self.C[1] += (bp + 1)
                 if b[-2] == EOS:
-                    #print len(self.batch_adj_list), b[-1]
                     delete_idx.append(b[-1])
-                    if wargs.len_norm: self.hyps.append(((b[0] / i), b[0]) + b[-2:] + (i, ))
-                    else: self.hyps.append((b[0], ) + b[-2:] + (i,))
+                    self.hyps.append(score + b[-2:] + (i, ))
                     debug('Gen hypo {}'.format(self.hyps[-1]))
                     # because i starts from 1, so the length of the first beam is 1, no <bos>
                     if len(self.hyps) == self.k:
@@ -295,14 +300,16 @@ class Nbs(object):
                         for hyp in sorted_hyps: debug('{}'.format(hyp))
                         best_hyp = sorted_hyps[0]
                         debug('Best hyp length (w/ EOS)[{}]'.format(best_hyp[-1]))
-
                         return back_tracking(self.beam, best_hyp, self.attent_probs)
                 # should calculate when generate item in current beam
                 else:
                     if wargs.dynamic_cyk_decoding is True:
-                        dyn_tup = [batch_adj_list[b[-1]], c_attend_sidx[b[-1]], btg_xs_mask[:, b[-1]]]
+                        dyn_tup = [batch_adj_list[bp], c_attend_sidx[bp], btg_xs_mask[:, bp]]
                         self.beam[i].append((b[0], ) + (dyn_tup, ) + b[-3:])
-                    else: self.beam[i].append(b)
+                    #else: self.beam[i].append(b)
+                    else:
+                        if wargs.len_norm == 2: self.beam[i].append((score[0], alpha_ij[:, bp]) + b[1:])
+                        else: self.beam[i].append((score[0], ) + b[1:])
 
             if wargs.dynamic_cyk_decoding is True:
                 #self.batch_adj_list = rm_elems_byid(self.batch_adj_list, delete_idx)
@@ -335,11 +342,13 @@ class Nbs(object):
         if len(self.hyps) == 0:
             debug('No early stop, no hyp ending with EOS, select one length {} '.format(self.maxL))
             best_hyp = self.beam[self.maxL][0]
-            if wargs.len_norm:
-                best_hyp = (best_hyp[0]/self.maxL, best_hyp[0], ) + best_hyp[-2:] + (self.maxL, )
-            else:
+            if wargs.len_norm == 0:
                 best_hyp = (best_hyp[0], ) + best_hyp[-2:] + (self.maxL, )
-
+            elif wargs.len_norm == 1:
+                best_hyp = (best_hyp[0]/self.maxL, best_hyp[0], ) + best_hyp[-2:] + (self.maxL, )
+            elif wargs.len_norm == 2:
+                lp, cp = lp_cp(0, self.maxL+1, self.beam)
+                best_hyp = (best_hyp[0]/lp - cp, best_hyp[0], ) + best_hyp[-2:] + (self.maxL, )
         else:
             debug('No early stop, no enough {} hyps ending with EOS, select the best '
                   'one from {} hyps.'.format(self.k, len(self.hyps)))

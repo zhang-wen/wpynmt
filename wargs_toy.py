@@ -65,7 +65,7 @@ val_ref_suffix = 'ref.plain_'
 ref_cnt = 4
 
 #tests_prefix = ['nist02', 'nist03', 'nist04', 'nist05', 'nist06', 'nist08', 'wmt17.tst']
-tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08']
+tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
 #tests_prefix = ['data2', 'data3', 'test']
 #tests_prefix = ['devset3.lc', '900']
 #tests_prefix = ['devset3.lc']
@@ -83,6 +83,7 @@ train_src = dir_data + 'train.src'
 train_trg = dir_data + 'train.trg'
 
 # Dictionary
+word_piece = True
 src_vocab_from = train_src
 trg_vocab_from = train_trg
 src_dict_size = 30000
@@ -93,12 +94,12 @@ trg_dict = dir_data + 'trg.dict.tcf'
 inputs_data = dir_data + 'inputs.pt'
 
 # Training
-max_epochs = 30
+max_epochs = 20
 
 epoch_shuffle = False
 epoch_shuffle_minibatch = 1
 
-small = False
+small = True
 
 display_freq = 10 if small else 1000
 sampling_freq = 100 if small else 5000
@@ -116,23 +117,23 @@ start_epoch = 1
 model_prefix = dir_model + '/model'
 best_model = dir_valid + '/best.model.pt' if dir_valid else 'best.model.pt'
 # pretrained model
-#pre_train = None
-pre_train = best_model
+pre_train = None
+#pre_train = best_model
 fix_pre_params = True
 
 # decoder hype-parameters
 search_mode = 1
 with_batch = 1
 ori_search = 0
-beam_size = 10
-vocab_norm = 1
-len_norm = 1
+beam_size = 4
+vocab_norm = 1  # softmax
+len_norm = 2    # 0: no noraml, 1: length normal, 2: alpha-beta
 with_mv = 0
 merge_way = 'Y'
 avg_att = 0
 m_threshold = 100.
 ngram = 3
-length_norm = 0.
+length_norm = 0.6
 cover_penalty = 0.
 
 # optimizer
@@ -174,7 +175,7 @@ with_postproc = True
 copy_trg_emb = False
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 4
+model = 1
 
 # convolutional layer
 #filter_window_size = [1, 3, 5]   # windows size
@@ -202,7 +203,7 @@ self_norm_alpha = None
 nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [0]
+gpu_id = [3]
 #gpu_id = None
 
 

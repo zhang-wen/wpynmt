@@ -125,15 +125,15 @@ fix_pre_params = False
 search_mode = 1
 with_batch = 1
 ori_search = 0
-beam_size = 10
-vocab_norm = 1
-len_norm = 1
+beam_size = 4
+vocab_norm = 1  # softmax
+len_norm = 1    # 0: no noraml, 1: length normal, 2: alpha-beta
 with_mv = 0
 merge_way = 'Y'
 avg_att = 0
 m_threshold = 100.
 ngram = 3
-length_norm = 0.
+length_norm = 0.6
 cover_penalty = 0.
 
 # optimizer
@@ -192,7 +192,8 @@ print_att = True
 ss_type = 1     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
 ss_eps_begin = 1   # set None for no scheduled sampling
 ss_eps_end = 1
-ss_decay_rate = 0.005
+#ss_decay_rate = 0.005
+ss_decay_rate = (ss_eps_begin - ss_eps_end) / 10.
 ss_k = 0.98     # k < 1 for exponential decay, k >= 1 for inverse sigmoid decay
 
 # free parameter for self-normalization

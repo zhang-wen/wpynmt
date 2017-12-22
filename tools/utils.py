@@ -243,7 +243,7 @@ def part_sort(vec, num):
 
 
 # beam search
-def init_beam(beam, cnt=50, score_0=0.0, loss_0=0.0, hs0=None, s0=None, dyn_dec_tup=None):
+def init_beam(beam, cnt=50, score_0=0.0, loss_0=0.0, s0=None, dyn_dec_tup=None):
     del beam[:]
     for i in range(cnt + 1):
         ibeam = []  # one beam [] for one char besides start beam
@@ -251,6 +251,8 @@ def init_beam(beam, cnt=50, score_0=0.0, loss_0=0.0, hs0=None, s0=None, dyn_dec_
     # indicator for the first target word (<b>)
     if dyn_dec_tup is not None:
         beam[0].append((loss_0, dyn_dec_tup, s0, BOS, 0))
+    elif wargs.length_norm == 2:
+        beam[0].append((loss_0, None, s0, BOS, 0))
     else:
         beam[0].append((loss_0, s0, BOS, 0))
 
@@ -586,5 +588,19 @@ def ids2Tensor(list_wids, bos_id=None, eos_id=None):
     list_idx.extend([eos_id] if eos_id else [])
     return tc.LongTensor(list_idx)
 
+def lp_cp(bp, bidx, beam):
+
+    ys_pi = []
+    for i in reversed(xrange(1, bidx)):
+        _, p_im1, _, w, bp = beam[i][bp]
+        ys_pi.append(p_im1)
+    if len(ys_pi) == 0: return 1.0, 0.0
+    ys_pi = tc.stack(ys_pi, dim=0).sum(0)   # (part_trg_len, src_len) -> (src_len, )
+    m = (ys_pi > 1.0).float()
+    ys_pi = ys_pi * (1. - m) + m
+    lp = ((5+bidx-1) ** wargs.length_norm) / ((5+1)**wargs.length_norm)
+    cp = wargs.cover_penalty * (ys_pi.log().sum().data[0])
+
+    return lp, cp
 
 
