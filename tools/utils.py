@@ -588,7 +588,6 @@ def ids2Tensor(list_wids, bos_id=None, eos_id=None):
     return tc.LongTensor(list_idx)
 
 def lp_cp(bp, bidx, beam):
-    print wargs.beta_cover_penalty
     ys_pi = []
     for i in reversed(xrange(1, bidx)):
         _, p_im1, _, w, bp = beam[i][bp]
