@@ -251,15 +251,14 @@ def init_beam(beam, cnt=50, score_0=0.0, loss_0=0.0, s0=None, dyn_dec_tup=None):
     # indicator for the first target word (<b>)
     if dyn_dec_tup is not None:
         beam[0].append((loss_0, dyn_dec_tup, s0, BOS, 0))
-    elif wargs.length_norm == 2:
+    elif wargs.len_norm == 2:
         beam[0].append((loss_0, None, s0, BOS, 0))
     else:
         beam[0].append((loss_0, s0, BOS, 0))
 
 def back_tracking(beam, best_sample_endswith_eos, attent_probs=None):
-    # (0.76025655120611191, [29999], 0, 7)
-    if wargs.len_norm: best_loss, accum, w, bp, endi = best_sample_endswith_eos
-    else: best_loss, w, bp, endi = best_sample_endswith_eos
+    # (0.76, 0.55, [29999], 0, 7)
+    best_loss, _, w, bp, endi = best_sample_endswith_eos
     # starting from bp^{th} item in previous {end-1}_{th} beam of eos beam, w is <eos>
     seq = []
     attent_matrix = [] if attent_probs is not None else None
@@ -589,17 +588,17 @@ def ids2Tensor(list_wids, bos_id=None, eos_id=None):
     return tc.LongTensor(list_idx)
 
 def lp_cp(bp, bidx, beam):
-
+    print wargs.beta_cover_penalty
     ys_pi = []
     for i in reversed(xrange(1, bidx)):
         _, p_im1, _, w, bp = beam[i][bp]
         ys_pi.append(p_im1)
     if len(ys_pi) == 0: return 1.0, 0.0
     ys_pi = tc.stack(ys_pi, dim=0).sum(0)   # (part_trg_len, src_len) -> (src_len, )
-    m = (ys_pi > 1.0).float()
-    ys_pi = ys_pi * (1. - m) + m
-    lp = ((5+bidx-1) ** wargs.length_norm) / ((5+1)**wargs.length_norm)
-    cp = wargs.cover_penalty * (ys_pi.log().sum().data[0])
+    m = ( ys_pi > 1.0 ).float()
+    ys_pi = ys_pi * ( 1. - m ) + m
+    lp = ( ( 5 + bidx - 1 ) ** wargs.alpha_len_norm ) / ( (5 + 1) ** wargs.alpha_len_norm )
+    cp = wargs.beta_cover_penalty * ( ys_pi.log().sum().data[0] )
 
     return lp, cp
 

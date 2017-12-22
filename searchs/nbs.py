@@ -306,10 +306,11 @@ class Nbs(object):
                     if wargs.dynamic_cyk_decoding is True:
                         dyn_tup = [batch_adj_list[bp], c_attend_sidx[bp], btg_xs_mask[:, bp]]
                         self.beam[i].append((b[0], ) + (dyn_tup, ) + b[-3:])
-                    #else: self.beam[i].append(b)
                     else:
-                        if wargs.len_norm == 2: self.beam[i].append((score[0], alpha_ij[:, bp]) + b[1:])
-                        else: self.beam[i].append((score[0], ) + b[1:])
+                        if wargs.len_norm == 2: self.beam[i].append((b[0], alpha_ij[:, bp]) + b[1:])
+                        else: self.beam[i].append(b)
+                        #if wargs.len_norm == 2: self.beam[i].append((score[0], alpha_ij[:, bp]) + b[1:])
+                        #else: self.beam[i].append((score[0], ) + b[1:])
 
             if wargs.dynamic_cyk_decoding is True:
                 #self.batch_adj_list = rm_elems_byid(self.batch_adj_list, delete_idx)
@@ -343,12 +344,12 @@ class Nbs(object):
             debug('No early stop, no hyp ending with EOS, select one length {} '.format(self.maxL))
             best_hyp = self.beam[self.maxL][0]
             if wargs.len_norm == 0:
-                best_hyp = (best_hyp[0], ) + best_hyp[-2:] + (self.maxL, )
+                best_hyp = (best_hyp[0], None) + best_hyp[-2:] + (self.maxL, )
             elif wargs.len_norm == 1:
                 best_hyp = (best_hyp[0]/self.maxL, best_hyp[0], ) + best_hyp[-2:] + (self.maxL, )
             elif wargs.len_norm == 2:
                 lp, cp = lp_cp(0, self.maxL+1, self.beam)
-                best_hyp = (best_hyp[0]/lp - cp, best_hyp[0], ) + best_hyp[-2:] + (self.maxL, )
+                best_hyp = (best_hyp[0]/lp + cp, best_hyp[0], ) + best_hyp[-2:] + (self.maxL, )
         else:
             debug('No early stop, no enough {} hyps ending with EOS, select the best '
                   'one from {} hyps.'.format(self.k, len(self.hyps)))
