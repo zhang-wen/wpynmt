@@ -79,13 +79,13 @@ sort_k_batches = 10
 
 # Data path
 dir_data = 'data/'
-train_src = dir_data + 'train.src'
-train_trg = dir_data + 'train.trg'
+train_prefix = 'train'
+train_src_suffix = 'src'
+train_trg_suffix = 'trg'
+dev_max_seq_len = 10000000
 
 # Dictionary
 word_piece = True
-src_vocab_from = train_src
-trg_vocab_from = train_trg
 src_dict_size = 30000
 trg_dict_size = 30000
 src_dict = dir_data + 'src.dict.tcf'

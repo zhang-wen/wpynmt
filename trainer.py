@@ -35,9 +35,9 @@ class Trainer(object):
         if wargs.save_one_model: model_file = '{}.pt'.format(wargs.model_prefix)
         else: model_file = '{}_e{}_upd{}.pt'.format(wargs.model_prefix, eid, bid)
         tc.save(state_dict, model_file)
+        wlog('Saving temporary model in {}'.format(model_file))
 
         self.model.eval()
-        #self.model.classifier.eval()
 
         tor0 = Translator(self.model, self.sv, self.tv, print_att=wargs.print_att)
         bleu = tor0.trans_eval(self.valid_data, eid, bid, model_file, self.tests_data)
@@ -93,7 +93,8 @@ class Trainer(object):
                 batch_idx = shuffled_batch_idx[k] if epoch >= wargs.epoch_shuffle_minibatch else k
 
                 # (max_slen_batch, batch_size)
-                _, srcs, trgs, slens, srcs_m, trgs_m = self.train_data[batch_idx]
+                _, srcs, ttrgs_for_files, slens, srcs_m, trg_mask_for_files = self.train_data[batch_idx]
+                trgs, trgs_m = ttrgs_for_files[0], trg_mask_for_files[0]
 
                 self.model.zero_grad()
                 # (max_tlen_batch - 1, batch_size, out_size)

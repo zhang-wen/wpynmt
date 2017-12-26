@@ -13,6 +13,7 @@ import torch as tc
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
+from wargs import *
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
@@ -31,12 +32,18 @@ PAD_WORD = '<pad>'
 UNK_WORD = 'unk'
 BOS_WORD = '<b>'
 EOS_WORD = '<e>'
-# Reserved tokens for things like padding and EOS symbols.
-RESERVED_TOKENS = [PAD_WORD, BOS_WORD, EOS_WORD]
+if wargs.word_piece is True:
+    # Reserved tokens for things like padding and EOS symbols.
+    RESERVED_TOKENS = [PAD_WORD, BOS_WORD, EOS_WORD]
+else:
+    RESERVED_TOKENS = [PAD_WORD, UNK_WORD, BOS_WORD, EOS_WORD]
+
 NUM_RESERVED_TOKENS = len(RESERVED_TOKENS)
 PAD = RESERVED_TOKENS.index(PAD_WORD)  # Normally 0
-BOS = RESERVED_TOKENS.index(BOS_WORD)  # Normally 1
-EOS = RESERVED_TOKENS.index(EOS_WORD)  # Normally 2
+# Normally None of 1
+UNK = RESERVED_TOKENS.index(UNK_WORD) if UNK_WORD in RESERVED_TOKENS else None
+BOS = RESERVED_TOKENS.index(BOS_WORD)  # Normally 1 or 2
+EOS = RESERVED_TOKENS.index(EOS_WORD)  # Normally 2 or 3
 
 epsilon = 1e-20
 

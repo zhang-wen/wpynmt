@@ -8,18 +8,20 @@ from torch.autograd import Variable
 
 class Input(object):
 
-    def __init__(self, src_tlst, trg_tlst, batch_size, volatile=False, batch_sort=True):
+    def __init__(self, src_tlst, trg_tlst, batch_size, volatile=False, batch_sort=False):
 
+        assert isinstance(src_tlst[0], tc.LongTensor), 'Require only one file in source side.'
         self.src_tlst = src_tlst
-
         cnt_sent = len(src_tlst)
 
         if trg_tlst is not None:
-            self.trg_tlst = trg_tlst
+            self.trgs_tlst_for_files = trg_tlst
+            assert isinstance(trg_tlst[0], list), 'Require file >=1 in target side.'
+            # [sent0:[ref0, ref1, ...], sent1:[ref0, ref1, ... ], ...]
             assert cnt_sent == len(trg_tlst)
             wlog('Build bilingual Input, Batch size {}, Sort in batch? {}'.format(batch_size, batch_sort))
         else:
-            self.trg_tlst = None
+            self.trgs_tlst_for_files = None
             wlog('Build monolingual Input, Batch size {}, Sort in batch? {}'.format(batch_size, batch_sort))
 
         self.batch_size = batch_size
@@ -36,22 +38,36 @@ class Input(object):
 
     def handle_batch(self, batch, right_align=False):
 
-        lens = [ts.size(0) for ts in batch]
+        multi_files = True if isinstance(batch[0], list) else False
+        if isinstance(batch[0], list):
+            # [[ref00, ref01, ...], [ref10, ref11, ... ], ...]
+            # -> [[ref00, ref10, ...], [ref01, ref11, ... ], ...]
+            batch_for_files = [[one_sent_refs[ref_idx] for one_sent_refs in batch] \
+                    for ref_idx in range(len(batch[0]))]
+        else:
+            # [src0, src1, ...] -> [ [src0, src1, ...] ]
+            batch_for_files = [batch]
 
-        self.this_batch_size = len(batch)
-        max_len_batch = max(lens)
+        pad_batch_for_files, lens_for_files = [], []
+        for batch in batch_for_files:   # a batch for one source/target file
+            lens = [ts.size(0) for ts in batch]
+            self.this_batch_size = len(batch)
+            max_len_batch = max(lens)
 
-        # 80 * 40
-        pad_batch = tc.Tensor(self.this_batch_size, max_len_batch).long()
-        pad_batch.fill_(PAD)
+            # (B, L)
+            pad_batch = tc.Tensor(self.this_batch_size, max_len_batch).long()
+            pad_batch.fill_(PAD)
 
-        for idx in range(self.this_batch_size):
-            length = lens[idx]
-            offset = max_len_batch - length if right_align else 0
-            # modify Tensor pad_batch
-            pad_batch[idx].narrow(0, offset, length).copy_(batch[idx])
+            for idx in range(self.this_batch_size):
+                length = lens[idx]
+                offset = max_len_batch - length if right_align else 0
+                # modify Tensor pad_batch
+                pad_batch[idx].narrow(0, offset, length).copy_(batch[idx])
 
-        return pad_batch, lens
+            pad_batch_for_files.append(pad_batch)
+            lens_for_files.append(lens)
+
+        return pad_batch_for_files, lens_for_files
 
     def __getitem__(self, idx):
 
@@ -61,45 +77,59 @@ class Input(object):
         src_batch = self.src_tlst[idx * self.batch_size : (idx + 1) * self.batch_size]
 
         srcs, slens = self.handle_batch(src_batch)
+        srcs, slens = srcs[0], slens[0]
 
-        if self.trg_tlst is not None:
-
-            trg_batch = self.trg_tlst[idx * self.batch_size : (idx + 1) * self.batch_size]
-            trgs, tlens = self.handle_batch(trg_batch)
+        if self.trgs_tlst_for_files is not None:
+            # [sent0:[ref0, ref1, ...], sent1:[ref0, ref1, ... ], ...]
+            trg_batch = self.trgs_tlst_for_files[idx * self.batch_size : (idx + 1) * self.batch_size]
+            trgs_for_files, tlens_for_files = self.handle_batch(trg_batch)
 
         # sort the source and target sentence
         idxs = range(self.this_batch_size)
 
         if self.batch_sort is True:
-            if self.trg_tlst is None:
+            if self.trgs_tlst_for_files is None:
                 zipb = zip(idxs, srcs, slens)
                 idxs, srcs, slens = zip(*sorted(zipb, key=lambda x: x[-1]))
             else:
-                zipb = zip(idxs, srcs, trgs, slens)
+                assert len(trgs_for_files) == 1, 'Unsupport to sort validation in one batch.'
+                zipb = zip(idxs, srcs, trgs_for_files[0], slens)
                 idxs, srcs, trgs, slens = zip(*sorted(zipb, key=lambda x: x[-1]))
+                trgs_for_files = [trgs]
 
         lengths = tc.IntTensor(slens).view(1, -1)   # (1, batch_size)
         lengths = Variable(lengths, volatile=self.volatile)
 
-        def tuple2Tenser(tx):
+        def tuple2Tenser(x):
 
-            if tx is None: return tx
-
+            if x is None: return x
             # (max_len_batch, batch_size)
-            tx = tc.stack(tx, dim=0).t().contiguous()
-            if wargs.gpu_id: tx = tx.cuda()    # push into GPU
+            x = tc.stack(x, dim=0).t().contiguous()
+            if wargs.gpu_id: x = x.cuda()    # push into GPU
 
-            return Variable(tx, volatile=self.volatile)
+            return Variable(x, volatile=self.volatile)
 
         tsrcs = tuple2Tenser(srcs)
         src_mask = tsrcs.ne(0).float()
 
-        if self.trg_tlst is not None:
+        if self.trgs_tlst_for_files is not None:
 
-            ttrgs = tuple2Tenser(trgs)
-            trg_mask = ttrgs.ne(0).float()
+            ttrgs_for_files = [tuple2Tenser(trgs) for trgs in trgs_for_files]
+            trg_mask_for_files = [ttrgs.ne(0).float() for ttrgs in ttrgs_for_files]
 
-            return idxs, tsrcs, ttrgs, lengths, src_mask, trg_mask
+            '''
+                [list] idxs: sorted idx by ascending order of source lengths in one batch
+                [Variable] tsrcs: padded source batch, Variable (max_len_batch, batch_size)
+                [list] ttrgs_for_files: list of Variables (padded target batch),
+                            [Variable (max_len_batch, batch_size), ..., ]
+                            each item in this list for one target reference file one batch
+                [intTensor] lengths: sorted source lengths by ascending order, (1, batch_size)
+                [Variable] src_mask: 0/1 Variable (0 for padding) (max_len_batch, batch_size)
+                [list] trg_mask_for_files: list of 0/1 Variables (0 for padding)
+                            [Variable (max_len_batch, batch_size), ..., ]
+                            each item in this list for one target reference file one batch
+            '''
+            return idxs, tsrcs, ttrgs_for_files, lengths, src_mask, trg_mask_for_files
 
         else:
 
@@ -108,9 +138,9 @@ class Input(object):
 
     def shuffle(self):
 
+        assert len(self.trgs_tlst_for_files) == 1, 'Unsupport to shuffle the whole validation set.'
         data = list(zip(self.src_tlst, self.trg_tlst))
         self.src_tlst, self.trg_tlst = zip(*[data[i] for i in tc.randperm(len(data))])
-
 
 
 
