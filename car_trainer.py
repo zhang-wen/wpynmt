@@ -292,7 +292,7 @@ class Trainer:
                 start_bat_bleu_hist, start_bat_bleu_new, start_bat_bleu))
 
             wlog('Model selection and testing ... ')
-            #self.mt_eval(eid, 0, [self.optim_G, self.optim_D])
+            self.mt_eval(eid, 0, [self.optim_G, self.optim_D])
             if start_bat_bleu > 0.9:
                 wlog('Better BLEU ... go to next data history ...')
                 return
