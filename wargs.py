@@ -53,7 +53,7 @@ val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
 #val_tst_dir = './data/'
 
 #val_prefix = 'wmt17.dev'
-val_prefix = 'nist02'
+val_prefix = 'nist03'
 #val_prefix = 'devset1_2.lc'
 #val_prefix = 'newstest2014.tc'
 val_src_suffix = 'src'
@@ -64,8 +64,9 @@ val_ref_suffix = 'ref.plain_'
 #val_ref_suffix = 'de'
 ref_cnt = 4
 
+dev_prefix = 'nist02'
 #tests_prefix = ['nist02', 'nist03', 'nist04', 'nist05', 'nist06', 'nist08', 'wmt17.tst']
-tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
+tests_prefix = ['nist02', 'nist04', 'nist05', 'nist06', 'nist08', '900']
 #tests_prefix = ['data2', 'data3', 'test']
 #tests_prefix = ['devset3.lc', '900']
 #tests_prefix = ['devset3.lc']

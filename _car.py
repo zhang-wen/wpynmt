@@ -251,11 +251,11 @@ def main():
     '''
 
     batch_dev = None
-    assert wargs.val_prefix is not None, 'Requires development to tuning.'
-    dev_src_file = '{}{}.{}'.format(wargs.val_tst_dir, wargs.val_prefix, wargs.val_src_suffix)
-    dev_trg_file = '{}{}.{}'.format(wargs.val_tst_dir, wargs.val_prefix, wargs.val_ref_suffix)
+    assert wargs.dev_prefix is not None, 'Requires development to tuning.'
+    dev_src_file = '{}{}.{}'.format(wargs.val_tst_dir, wargs.dev_prefix, wargs.val_src_suffix)
+    dev_trg_file = '{}{}.{}'.format(wargs.val_tst_dir, wargs.dev_prefix, wargs.val_ref_suffix)
     wlog('\nPreparing dev set from {} and {} ... '.format(dev_src_file, dev_trg_file))
-    valid_src_tlst, valid_trg_tlst = wrap_data(wargs.val_tst_dir, wargs.val_prefix,
+    valid_src_tlst, valid_trg_tlst = wrap_data(wargs.val_tst_dir, wargs.dev_prefix,
                                                wargs.val_src_suffix, wargs.val_ref_suffix,
                                                src_vocab, trg_vocab,
                                                shuffle=True, sort_data=True,
