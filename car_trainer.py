@@ -3,17 +3,18 @@ import torch as tc
 from torch.autograd import Variable
 
 import wargs
-from wtools.bleu import *
-from wtools.utils import *
-from wtools.optimizer import Optim
+from tools.bleu import *
+from tools.utils import *
+from tools.optimizer import Optim
 from translate import Translator
 
-from train import memory_efficient
-from train import mt_eval
+#from train import memory_efficient
+#from train import mt_eval
 
 class Trainer:
 
-    def __init__(self, nmtModel, sv, tv, optim, trg_dict_size, n_critic=1):
+    def __init__(self, model, sv, tv, optim, trg_dict_size,
+                 valid_data=None, tests_data=None, n_critic=1):
 
         self.lamda = 5
         self.eps = 1e-20
@@ -23,35 +24,57 @@ class Trainer:
         self.beta_RLBatch = 0.2
         self.gumbeling = False
 
-        self.nmtModel = nmtModel
+        self.model = model
+        self.decoder = model.decoder
         self.sv = sv
         self.tv = tv
-        self.optim = optim
         self.trg_dict_size = trg_dict_size
 
-        self.n_critic = 1#n_critic
+        self.n_critic = 1
 
-        self.translator_sample = Translator(self.nmtModel, sv, tv, k=1, noise=False)
-        #self.translator = Translator(nmtModel, sv, tv, k=10)
-
+        self.translator_sample = Translator(self.model, sv, tv, k=1, noise=False)
+        #self.translator = Translator(model, sv, tv, k=10)
         self.optim_G = Optim(
             'adam', 10e-05, wargs.max_grad_norm,
             learning_rate_decay=wargs.learning_rate_decay,
             start_decay_from=wargs.start_decay_from,
             last_valid_bleu=wargs.last_valid_bleu
         )
+        self.optim_G.init_optimizer(self.model.parameters())
+        self.optim_D = optim
+        self.optim = [self.optim_G, self.optim_D]
 
+        '''
         self.optim_RL = Optim(
             'adadelta', 1.0, wargs.max_grad_norm,
             learning_rate_decay=wargs.learning_rate_decay,
             start_decay_from=wargs.start_decay_from,
             last_valid_bleu=wargs.last_valid_bleu
         )
+        self.optim_RL.init_optimizer(self.model.parameters())
+        '''
+        self.maskSoftmax = MaskSoftmax()
+        self.valid_data = valid_data
+        self.tests_data = tests_data
 
-        self.softmax = tc.nn.Softmax()
+    def mt_eval(self, eid, bid, optim=None):
 
-        #self.optim_G.init_optimizer(self.nmtModel.parameters())
-        #self.optim_RL.init_optimizer(self.nmtModel.parameters())
+        if optim: self.optim = optim
+        state_dict = { 'model': self.model.state_dict(), 'epoch': eid, 'batch': bid, 'optim': self.optim }
+
+        if wargs.save_one_model: model_file = '{}.pt'.format(wargs.model_prefix)
+        else: model_file = '{}_e{}_upd{}.pt'.format(wargs.model_prefix, eid, bid)
+        tc.save(state_dict, model_file)
+        wlog('Saving temporary model in {}'.format(model_file))
+
+        self.model.eval()
+
+        tor0 = Translator(self.model, self.sv, self.tv, print_att=wargs.print_att)
+        BLEU = tor0.trans_eval(self.valid_data, eid, bid, model_file, self.tests_data)
+
+        self.model.train()
+
+        return BLEU
 
     # p1: (max_tlen_batch, batch_size, vocab_size)
     def distance(self, p1, p2, y_masks, type='JS', y_gold=None):
@@ -117,25 +140,6 @@ class Trainer:
 
         return sent_batch_dist, word_level_dist0, word_level_dist1
 
-    def save_model(self, eid, bid):
-
-        model_state_dict = self.nmtModel.state_dict()
-        model_state_dict = {k: v for k, v in model_state_dict.items() if 'classifier' not in k}
-        class_state_dict = self.nmtModel.classifier.state_dict()
-        model_dict = {
-            'model': model_state_dict,
-            'class': class_state_dict,
-            'epoch': eid,
-            'batch': bid,
-            'optim': self.optim
-        }
-
-        if wargs.save_one_model:
-            model_file = '{}.pt'.format(wargs.model_prefix)
-        else:
-            model_file = '{}_e{}_upd{}.pt'.format(wargs.model_prefix, eid, bid)
-        tc.save(model_dict, model_file)
-
     def hyps_padding_dist(self, B, hyps_L, y_maxL, p_y_hyp):
 
         hyps_dist = [None] * B
@@ -160,7 +164,7 @@ class Trainer:
     def gumbel_sampling(self, B, y_maxL, feed_gold_out, noise=False):
 
         # feed_gold_out (L * B, V)
-        logit = self.nmtModel.classifier.get_a(feed_gold_out, noise=noise)
+        logit = self.decoder.classifier.get_a(feed_gold_out, noise=noise)
 
         if logit.is_cuda: logit = logit.cpu()
         hyps = tc.max(logit, 1)[1]
@@ -236,38 +240,35 @@ class Trainer:
 
         return hyps, hyps_mask, hyps_L
 
-    def train(self, dh, train_data, k, valid_data=None, tests_data=None,
-              merge=False, name='default', percentage=0.1):
+    def train(self, dh, dev_input, k, merge=False, name='default', percentage=0.1):
 
-        #if (k + 1) % 1 == 0 and valid_data and tests_data:
+        #if (k + 1) % 1 == 0 and self.valid_data and self.tests_data:
         #    wlog('Evaluation on dev ... ')
-        #    mt_eval(valid_data, self.nmtModel, self.sv, self.tv,
-        #            0, 0, [self.optim, self.optim_RL, self.optim_G], tests_data)
+        #    mt_eval(valid_data, self.model, self.sv, self.tv,
+        #            0, 0, [self.optim, self.optim_RL, self.optim_G], self.tests_data)
 
-        batch_count = len(train_data)
-        self.nmtModel.train()
-
-        self.optim_G.init_optimizer(self.nmtModel.parameters())
-        self.optim_RL.init_optimizer(self.nmtModel.parameters())
+        batch_count = len(dev_input)
+        self.model.train()
 
         for eid in range(wargs.start_epoch, wargs.max_epochs + 1):
 
-            #self.optim_G.init_optimizer(self.nmtModel.parameters())
-            #self.optim_RL.init_optimizer(self.nmtModel.parameters())
+            #self.optim_G.init_optimizer(self.model.parameters())
+            #self.optim_RL.init_optimizer(self.model.parameters())
 
             size = int(percentage * batch_count)
             shuffled_batch_idx = tc.randperm(batch_count)
 
+            wlog('{} NEW Epoch {}'.format('-' * 20, '-' * 20))
             wlog('{}, Epo:{:>2}/{:>2} start, random {}/{}({:.2%}) calc BLEU '.format(
                 name, eid, wargs.max_epochs, size, batch_count, percentage), False)
-            wlog('-' * 20)
             param_1, param_2, param_3, param_4, param_5, param_6 = [], [], [], [], [], []
             for k in range(size):
                 bid, half_size = shuffled_batch_idx[k], wargs.batch_size
 
                 # srcs: (max_sLen_batch, batch_size, emb), trgs: (max_tLen_batch, batch_size, emb)
-                if merge is False: _, srcs, trgs, slens, srcs_m, trgs_m = train_data[bid]
-                else: _, srcs, trgs, slens, srcs_m, trgs_m = dh.merge_batch(train_data[bid])[0]
+                if merge is False: _, srcs, trgs, slens, srcs_m, trgs_m = dev_input[bid]
+                else: _, srcs, trgs, slens, srcs_m, trgs_m = dh.merge_batch(dev_input[bid])[0]
+                trgs, trgs_m = trgs[0], trgs_m[0]   # we only use the first dev reference
 
                 hyps, hyps_mask, hyps_L = self.beamsearch_sampling(srcs, srcs_m, trgs, 100)
 
@@ -284,40 +285,40 @@ class Trainer:
                 param_6.append(LBtensor_to_Str(trgs[1:, half_size:].cpu(),
                                                trgs_m[1:, half_size:].cpu().data.numpy().sum(0).tolist()))
 
-            start_bat_bleu_hist = bleu('\n'.join(param_3), ['\n'.join(param_4)])
-            start_bat_bleu_new = bleu('\n'.join(param_5), ['\n'.join(param_6)])
-            start_bat_bleu = bleu('\n'.join(param_1), ['\n'.join(param_2)])
+            start_bat_bleu_hist = bleu('\n'.join(param_3), ['\n'.join(param_4)], logfun=debug)
+            start_bat_bleu_new = bleu('\n'.join(param_5), ['\n'.join(param_6)], logfun=debug)
+            start_bat_bleu = bleu('\n'.join(param_1), ['\n'.join(param_2)], logfun=debug)
             wlog('Random BLEU on history {}, new {}, mix {}'.format(
                 start_bat_bleu_hist, start_bat_bleu_new, start_bat_bleu))
 
             wlog('Model selection and testing ... ')
-            mt_eval(valid_data, self.nmtModel, self.sv, self.tv,
-                    eid, 0, [self.optim, self.optim_RL, self.optim_G], tests_data)
+            #self.mt_eval(eid, 0, [self.optim_G, self.optim_D])
             if start_bat_bleu > 0.9:
                 wlog('Better BLEU ... go to next data history ...')
                 return
 
-            s_kl_seen, w_kl_seen0, w_kl_seen1, rl_gen_seen, rl_rho_seen, rl_bat_seen, w_mle_seen, s_mle_seen, \
-                    ppl_seen = 0., 0., 0., 0., 0., 0., 0., 0., 0.
+            s_kl_seen, w_kl_seen0, w_kl_seen1, rl_gen_seen, rl_rho_seen, rl_bat_seen, w_mle_seen, \
+                    s_mle_seen, ppl_seen = 0., 0., 0., 0., 0., 0., 0., 0., 0.
             for bid in range(batch_count):
 
-                if merge is False: _, srcs, trgs, slens, srcs_m, trgs_m = train_data[bid]
-                else: _, srcs, trgs, slens, srcs_m, trgs_m = dh.merge_batch(train_data[bid])[0]
+                if merge is False: _, srcs, trgs, slens, srcs_m, trgs_m = dev_input[bid]
+                else: _, srcs, trgs, slens, srcs_m, trgs_m = dh.merge_batch(dev_input[bid])[0]
+                trgs, trgs_m = trgs[0], trgs_m[0]
                 gold_feed, gold_feed_mask = trgs[:-1], trgs_m[:-1]
                 gold, gold_mask = trgs[1:], trgs_m[1:]
                 B, y_maxL = srcs.size(1), gold_feed.size(0)
                 N = gold.data.ne(PAD).sum()
-                wlog('{} {} {}'.format(B, y_maxL, N))
+                wlog('B:{} y_maxL:{} N:{}'.format(B, y_maxL, N))
 
                 trgs_list = LBtensor_to_StrList(trgs.cpu(), trgs_m.cpu().data.numpy().sum(0).tolist())
 
                 ###################################################################################
                 debug('Optimizing KL distance ................................ {}'.format(name))
-                #self.nmtModel.zero_grad()
-                self.optim.zero_grad()
+                #self.model.zero_grad()
+                self.optim_G.zero_grad()
 
-                feed_gold_out = self.nmtModel(srcs, gold_feed, srcs_m, gold_feed_mask)
-                p_y_gold = self.nmtModel.classifier.logit_to_prob(feed_gold_out)
+                feed_gold_out, _ = self.model(srcs, gold_feed, srcs_m, gold_feed_mask)
+                p_y_gold = self.decoder.classifier.logit_to_prob(feed_gold_out)
                 # p_y_gold: (gold_max_len - 1, B, trg_dict_size)
 
                 if self.gumbeling is True:
@@ -325,8 +326,8 @@ class Trainer:
                 else:
                     hyps, hyps_mask, hyps_L = self.beamsearch_sampling(srcs, srcs_m, trgs, y_maxL + 1)
 
-                o_hyps = self.nmtModel(srcs, hyps[:-1], srcs_m, hyps_mask[:-1])
-                p_y_hyp = self.nmtModel.classifier.logit_to_prob(o_hyps)
+                o_hyps, _checks = self.model(srcs, hyps[:-1], srcs_m, hyps_mask[:-1])
+                p_y_hyp = self.decoder.classifier.logit_to_prob(o_hyps)
                 p_y_hyp0 = self.hyps_padding_dist(B, hyps_L, y_maxL, p_y_hyp)
                 #B_KL_loss = self.distance(p_y_gold, p_y_hyp0, hyps_mask[1:], type='KL', y_gold=gold)
                 S_KL_loss, W_KL_loss0, W_KL_loss1 = self.distance(p_y_gold, p_y_hyp0, hyps_mask[1:], type='KL', y_gold=gold)
@@ -345,8 +346,9 @@ class Trainer:
 
                 hyps_list = LBtensor_to_StrList(hyps.cpu(), hyps_L)
                 bleus_sampling = []
-                for hyp, ref in zip(hyps_list, trgs_list): bleus_sampling.append(bleu(hyp, [ref]))
-                bleus_sampling = to_Var(bleus_sampling)
+                for hyp, ref in zip(hyps_list, trgs_list):
+                    bleus_sampling.append(bleu(hyp, [ref], logfun=debug))
+                bleus_sampling = toVar(bleus_sampling, wargs.gpu_id)
 
                 p_y_hyp = p_y_hyp0.gather(2, hyps[1:][:, :, None])[:, :, 0]
                 p_y_hyp = ((p_y_hyp + self.eps).log() * hyps_mask[1:]).sum(0) / hyps_mask[1:].sum(0)
@@ -365,7 +367,7 @@ class Trainer:
                 param_1 = LBtensor_to_Str(hyps[1:].cpu(), [l-1 for l in hyps_L])
                 param_2 = LBtensor_to_Str(trgs[1:].cpu(),
                                           trgs_m[1:].cpu().data.numpy().sum(0).tolist())
-                rl_bat_bleu = bleu(param_1, [param_2])
+                rl_bat_bleu = bleu(param_1, [param_2], logfun=debug)
 
                 p_y_hyp = p_y_hyp0.gather(2, hyps[1:][:, :, None])[:, :, 0]
                 p_y_hyp = ((p_y_hyp + self.eps).log() * hyps_mask[1:]).sum(0) / hyps_mask[1:].sum(0)
@@ -377,14 +379,14 @@ class Trainer:
 
                 #p_y_hyp = p_y_hyp.exp()
                 #p_y_hyp = (p_y_hyp * self.lamda / 3).exp()
-                #p_y_hyp = self.softmax(p_y_hyp)
+                #p_y_hyp = self.maskSoftmax(p_y_hyp)
                 p_y_hyp = p_y_hyp[None, :]
                 p_y_hyp_T = p_y_hyp.t().expand(B, B)
                 p_y_hyp = p_y_hyp.expand(B, B)
                 p_y_hyp_sum = p_y_hyp_T + p_y_hyp + self.eps
 
                 #bleus_sampling = bleus_sampling[None, :].exp()
-                bleus_sampling = self.softmax(self.lamda * bleus_sampling[None, :])
+                bleus_sampling = self.maskSoftmax(self.lamda * bleus_sampling[None, :])
                 bleus_T = bleus_sampling.t().expand(B, B)
                 bleus = bleus_sampling.expand(B, B)
                 bleus_sum = bleus_T + bleus + self.eps
@@ -393,8 +395,8 @@ class Trainer:
                 RL_Batch_loss = p_y_hyp / p_y_hyp_sum * tc.log(bleus_T / bleus_sum) + \
                         p_y_hyp_T / p_y_hyp_sum * tc.log(bleus / bleus_sum)
 
-                #RL_Batch_loss = tc.sum(-RL_Batch_loss * to_Var(1 - tc.eye(B))).div(B)
-                RL_Batch_loss = tc.sum(-RL_Batch_loss * to_Var(1 - tc.eye(B)))
+                #RL_Batch_loss = tc.sum(-RL_Batch_loss * toVar(1 - tc.eye(B))).div(B)
+                RL_Batch_loss = tc.sum(-RL_Batch_loss * toVar(1 - tc.eye(B), wargs.gpu_id))
 
                 wlog('RL(Batch) Mean BLEU: {}, rl_batch_loss: {}, rl_rho: {}, Bat BLEU: {}'.format(
                     rl_avg_bleu, RL_Batch_loss.data[0], rl_rho.data[0], rl_bat_bleu))
@@ -402,30 +404,34 @@ class Trainer:
                 del hyps, hyps_mask, p_y_hyp, bleus_sampling, bleus, \
                         rl_rho, p_y_hyp_T, p_y_hyp_sum, bleus_T, bleus_sum
 
+                '''
                 (self.beta_KL * S_KL_loss + self.beta_RLGen * RL_Gen_loss + \
                         self.beta_RLBatch * RL_Batch_loss).backward(retain_graph=True)
 
-                ###################################################################################
                 mle_loss, grad_output, _ = memory_efficient(
-                    feed_gold_out, gold, gold_mask, self.nmtModel.classifier)
+                    feed_gold_out, gold, gold_mask, self.model.classifier)
                 feed_gold_out.backward(grad_output)
 
                 '''
-                mle_loss, _ = self.nmtModel.classifier(feed_gold_out, gold, gold_mask)
-                mle_loss = mle_loss.div(B)
 
-                (self.beta_KL * KL_loss + self.beta_RLGen * RL_Gen_loss + \
-                        self.beta_RLBatch * RL_Batch_loss + mle_loss).backward()
-                '''
+                (self.beta_KL * S_KL_loss + self.beta_RLGen * RL_Gen_loss + \
+                        self.beta_RLBatch * RL_Batch_loss).backward(retain_graph=True)
+                self.optim_G.step()
 
+                ###################################################### discrimitor
+                self.optim_D.zero_grad()
+                #mle_loss, _ = self.decoder.classifier(feed_gold_out, gold, gold_mask)
+                mle_loss, _, _ = self.decoder.classifier.snip_back_prop(feed_gold_out, gold, gold_mask)
+                #mle_loss = mle_loss.div(B)
+                self.optim_D.step()
+
+                #mle_loss = mle_loss.data[0]
                 w_mle_seen += mle_loss / N
                 s_mle_seen += mle_loss / B
                 ppl_seen += math.exp(mle_loss/N)
                 wlog('Epo:{:>2}/{:>2}, Bat:[{}/{}], W-MLE:{:4.2f}, W-ppl:{:4.2f}, '
                      'S-MLE:{:4.2f}'.format(eid, wargs.max_epochs, bid, batch_count,
                                             mle_loss/N, math.exp(mle_loss/N), mle_loss/B))
-
-                self.optim_G.step()
 
                 del S_KL_loss, W_KL_loss0, W_KL_loss1, RL_Gen_loss, RL_Batch_loss, feed_gold_out
 

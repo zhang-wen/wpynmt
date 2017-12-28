@@ -172,7 +172,7 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix,
 
     if shuffle is True:
 
-        assert len(trgFs) == 1, 'Unsupport to shuffle validation set.'
+        #assert len(trgFs) == 1, 'Unsupport to shuffle validation set.'
         wlog('Shuffling the whole dataset ... ', False)
         rand_idxs = tc.randperm(train_size).tolist()
         srcs = [srcs[k] for k in rand_idxs]
@@ -183,7 +183,7 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix,
 
     if sort_data is True:
 
-        assert len(trgFs) == 1, 'Unsupport to sort validation set in k batches.'
+        #assert len(trgFs) == 1, 'Unsupport to sort validation set in k batches.'
         final_srcs, final_trgs = [], []
 
         if wargs.sort_k_batches == 0:

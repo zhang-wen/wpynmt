@@ -74,7 +74,7 @@ tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
 
 # Training data
 train_shuffle = True
-batch_size = 80
+batch_size = 10
 sort_k_batches = 20
 
 # Data path
@@ -85,7 +85,7 @@ train_trg_suffix = 'trg'
 dev_max_seq_len = 10000000
 
 # Dictionary
-word_piece = True
+word_piece = False
 src_dict_size = 30000
 trg_dict_size = 30000
 src_dict = dir_data + 'src.dict.tcf'
@@ -117,15 +117,15 @@ start_epoch = 1
 model_prefix = dir_model + '/model'
 best_model = dir_valid + '/best.model.pt' if dir_valid else 'best.model.pt'
 # pretrained model
-pre_train = None
-#pre_train = best_model
-fix_pre_params = True
+#pre_train = None
+pre_train = best_model
+fix_pre_params = False
 
 # decoder hype-parameters
 search_mode = 1
 with_batch = 1
 ori_search = 0
-beam_size = 4
+beam_size = 10
 vocab_norm = 1  # softmax
 len_norm = 2    # 0: no noraml, 1: length normal, 2: alpha-beta
 with_mv = 0
@@ -203,7 +203,8 @@ self_norm_alpha = None
 nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [3]
+gpu_id = [2]
 #gpu_id = None
+
 
 

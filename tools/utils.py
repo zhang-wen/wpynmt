@@ -73,15 +73,23 @@ def _load_model(model_path):
     wlog(optim)
     return rst
 
-def toVar(x, isCuda=None):
+def toVar(x, isCuda=None, volatile=False):
 
     if not isinstance(x, tc.autograd.variable.Variable):
-        if isinstance(x, int): x = tc.Tensor([x]).long()
-        elif isinstance(x, list): x = tc.Tensor(x).long()
+        if isinstance(x, int): x = tc.Tensor([x])
+        elif isinstance(x, list): x = tc.Tensor(x)
+        x = Variable(x, requires_grad=False, volatile=volatile)
         if isCuda is not None: x = x.cuda()
-        x = Variable(x, requires_grad=False, volatile=True)
 
     return x
+
+def clip(x, rate=0.):
+
+    b1 = (x < 1 - rate).float()
+    b2 = (x > 1 + rate).float()
+    b3 = (((1 - rate <= x) + (x <= 1 + rate)) > 1).float()
+
+    return b1 * (1 - rate) + b2 * (1 + rate) + b3 * x
 
 def rm_elems_byid(l, ids):
 
@@ -104,13 +112,18 @@ def rm_elems_byid(l, ids):
     return l
 
 # x, y are torch Tensors
-def cor_coef(x, y):
+def cor_coef(a, b, eps=1e-20):
 
-    E_x, E_y = tc.mean(x), tc.mean(y)
-    E_x_2, E_y_2 = tc.mean(x * x), tc.mean(y * y)
-    rho = tc.mean(x * y) - E_x * E_y
-    D_x, D_y = E_x_2 - E_x * E_x, E_y_2 - E_y * E_y
-    return rho / math.sqrt(D_x * D_y) + eps
+    E_a, E_b = tc.mean(a), tc.mean(b)
+    E_a_2, E_b_2 = tc.mean(a * a), tc.mean(b * b)
+    rl_rho = tc.mean(a * b) - E_a * E_b
+    #print 'a',rl_rho.data[0]
+    D_a, D_b = E_a_2 - E_a * E_a, E_b_2 - E_b * E_b
+
+    rl_rho = rl_rho / ( tc.sqrt(D_a * D_b) + eps )  # number stable
+    del E_a, E_b, E_a_2, E_b_2, D_a, D_b
+
+    return rl_rho
 
 def format_time(time):
     '''
@@ -607,5 +620,42 @@ def lp_cp(bp, bidx, beam):
     cp = wargs.beta_cover_penalty * ( ys_pi.log().sum().data[0] )
 
     return lp, cp
+
+class MaskSoftmax(nn.Module):
+
+    def __init__(self):
+
+        super(MaskSoftmax, self).__init__()
+
+    def forward(self, x, mask=None, dim=-1):
+
+        # input torch tensor or variable, take max for numerical stability
+        x_max = tc.max(x, dim=dim, keepdim=True)[0]
+        x_minus = x - x_max
+        x_exp = tc.exp(x_minus)
+        if mask is not None: x_exp = x_exp * mask
+        x = x_exp / ( tc.sum( x_exp, dim=dim, keepdim=True ) + epsilon )
+
+        return x
+
+class MyLogSoftmax(nn.Module):
+
+    def __init__(self, self_norm_alpha=None):
+
+        super(MyLogSoftmax, self).__init__()
+        self.sna = self_norm_alpha
+
+    def forward(self, x):
+
+        # input torch tensor or variable
+        x_max = tc.max(x, dim=-1, keepdim=True)[0]  # take max for numerical stability
+        log_norm = tc.log( tc.sum( tc.exp( x - x_max ), dim=-1, keepdim=True ) + epsilon ) + x_max
+        # get log softmax
+        x = x - log_norm
+
+        # Sum_( log(P(xi)) - alpha * square( log(Z(xi)) ) )
+        if self.sna is not None: x = x - self.sna * tc.pow(log_norm, 2)
+
+        return log_norm, x
 
 

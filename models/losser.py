@@ -4,26 +4,6 @@ import torch.nn as nn
 import wargs
 from tools.utils import *
 
-class MyLogSoftmax(nn.Module):
-
-    def __init__(self, self_norm_alpha=None):
-
-        super(MyLogSoftmax, self).__init__()
-        self.sna = self_norm_alpha
-
-    def forward(self, x):
-
-        # input torch tensor or variable
-        x_max = tc.max(x, dim=-1, keepdim=True)[0]  # take max for numerical stability
-        log_norm = tc.log( tc.sum( tc.exp( x - x_max ), dim=-1, keepdim=True ) + epsilon ) + x_max
-        # get log softmax
-        x = x - log_norm
-
-        # Sum_( log(P(xi)) - alpha * square( log(Z(xi)) ) )
-        if self.sna is not None: x = x - self.sna * tc.pow(log_norm, 2)
-
-        return log_norm, x
-
 class Classifier(nn.Module):
 
     def __init__(self, input_size, output_size, trg_lookup_table=None):
@@ -45,7 +25,7 @@ class Classifier(nn.Module):
         self.criterion = nn.NLLLoss(weight, size_average=False, ignore_index=PAD)
 
         self.output_size = output_size
-        self.softmax = nn.Softmax()
+        self.softmax = MaskSoftmax()
 
     def get_a(self, logit, noise=False):
 

@@ -307,7 +307,8 @@ class Translator(object):
         #mteval_bleu = bleu_file(out_fname + '.seg.plain', ref_fpaths)
         os.rename(out_fname, "{}_{}.txt".format(out_fname, mteval_bleu))
 
-        return mteval_bleu_opost if wargs.with_postproc is True else mteval_bleu
+        return mteval_bleu  # always use the the bleu of proc results to select model
+        #return mteval_bleu_opost if wargs.with_postproc is True else mteval_bleu
 
     def ai_write_file_eval(self, out_fname, trans, data_prefix):
 
@@ -346,6 +347,7 @@ class Translator(object):
 
         for _, test_prefix in zip(tests_data, wargs.tests_prefix):
 
+            if test_prefix == wargs.val_prefix: continue
             wlog('\nTranslating test dataset {}'.format(test_prefix))
             label_fname = '{}{}/{}.label'.format(wargs.val_tst_dir, wargs.seg_val_tst_dir,
                                                  test_prefix) if wargs.segments else None

@@ -8,23 +8,6 @@ from gru import GRU
 from tools.utils import *
 from models.losser import *
 
-class MaskSoftmax(nn.Module):
-
-    def __init__(self):
-
-        super(MaskSoftmax, self).__init__()
-
-    def forward(self, x, mask=None, dim=-1):
-
-        # input torch tensor or variable, take max for numerical stability
-        x_max = tc.max(x, dim=dim, keepdim=True)[0]
-        x_minus = x - x_max
-        x_exp = tc.exp(x_minus)
-        if mask is not None: x_exp = x_exp * mask
-        x = x_exp / ( tc.sum( x_exp, dim=dim, keepdim=True ) + epsilon )
-
-        return x
-
 class NMT(nn.Module):
 
     def __init__(self, src_vocab_size, trg_vocab_size):

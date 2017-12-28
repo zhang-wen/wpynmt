@@ -1,15 +1,23 @@
 from __future__ import division
 
+import numpy as np
 import torch as tc
 from torch import cuda
 
 import wargs
-from utils import *
-
+from inputs_handler import *
 from tools.inputs import Input
-from tools.utils import init_dir, wlog, sent_filter, load_pytorch_model
 from tools.optimizer import Optim
-from tools.data_handler import *
+from tools.utils import init_dir, wlog, _load_model
+
+if wargs.model == 0: from models.groundhog import *
+elif wargs.model == 1: from models.rnnsearch import *
+elif wargs.model == 2: from models.rnnsearch_ia import *
+elif wargs.model == 3: from models.ran_agru import *
+elif wargs.model == 4: from models.rnnsearch_rn import *
+elif wargs.model == 5: from models.nmt_sru import *
+elif wargs.model == 6: from models.nmt_cyk import *
+elif wargs.model == 7: from models.non_local import *
 
 from translate import Translator
 from car_trainer import Trainer
@@ -47,20 +55,20 @@ class DataHisto():
             sample_ys.append(self.chunk_Ds[1][k])
         '''
         ids = np.random.randint(0, self.size, (wargs.batch_size,))
-        for idx in ids:
+        for idx in ids: # firstly we randomly select a batch data from the history large dataset
             sample_xs.append(self.chunk_Ds[0][idx])
             sample_ys.append(self.chunk_Ds[1][idx])
 
         batch_src, batch_trg = [], []
         #shuf_idx = tc.randperm(new_batch[1].size(1))
         #for idx in range(new_batch[1].size(1) / 2):
-        for idx in range(new_batch[1].size(1)):
+        for idx in range(new_batch[1].size(1)):  # add another new batch data
             src = tc.Tensor(sent_filter(new_batch[1][:, idx].data.tolist()))
-            trg = tc.Tensor(sent_filter(new_batch[2][:, idx].data.tolist()))
+            trg = tc.Tensor(sent_filter(new_batch[2][0][:, idx].data.tolist()))
             sample_xs.append(src)
-            sample_ys.append(trg)
+            sample_ys.append([trg])
 
-        return Input(sample_xs, sample_ys, wargs.batch_size * 2)
+        return Input(sample_xs, sample_ys, wargs.batch_size * 2, batch_sort=True, printlog=False)
 
 def main():
 
@@ -76,12 +84,8 @@ def main():
 
     init_dir(wargs.dir_model)
     init_dir(wargs.dir_valid)
-    init_dir(wargs.dir_tests)
-    for prefix in wargs.tests_prefix:
-        if not prefix == wargs.val_prefix: init_dir(wargs.dir_tests + '/' + prefix)
 
-    wlog('Preparing data ... ', 0)
-
+    '''
     train_srcD_file = wargs.dir_data + 'train.10k.zh5'
     wlog('\nPreparing source vocabulary from {} ... '.format(train_srcD_file))
     src_vocab = extract_vocab(train_srcD_file, wargs.src_dict, wargs.src_dict_size)
@@ -99,36 +103,94 @@ def main():
     src_vocab_size, trg_vocab_size = src_vocab.size(), trg_vocab.size()
     wlog('Vocabulary size: |source|={}, |target|={}'.format(src_vocab_size, trg_vocab_size))
     batch_train = Input(train_src_tlst, train_trg_tlst, wargs.batch_size)
+    '''
 
-    tests_data = None
-    if wargs.tests_prefix is not None:
-        tests_data = {}
-        for prefix in wargs.tests_prefix:
-            test_file = wargs.val_tst_dir + prefix + '.src'
-            test_src_tlst, _ = val_wrap_data(test_file, src_vocab)
-            # we select best model by nist03 testing data
-            if prefix == wargs.val_prefix:
-                wlog('\nPreparing model-select set from {} ... '.format(test_file))
-                batch_valid = Input(test_src_tlst, None, 1, volatile=True, prefix=prefix)
-            else:
-                wlog('\nPreparing test set from {} ... '.format(test_file))
-                tests_data[prefix] = Input(test_src_tlst, None, 1, volatile=True)
-
-    nmtModel = NMT()
-    classifier = Classifier(wargs.out_size, trg_vocab_size)
-
-    if wargs.pre_train:
-
-        model_dict, class_dict, eid, bid, optim = load_pytorch_model(wargs.pre_train)
-        if isinstance(optim, list): _, _, optim = optim
-        # initializing parameters of interactive attention model
-        for p in nmtModel.named_parameters(): p[1].data = model_dict[p[0]]
-        for p in classifier.named_parameters(): p[1].data = class_dict[p[0]]
-        #wargs.start_epoch = eid + 1
+    src = os.path.join(wargs.dir_data, '{}.{}'.format(wargs.train_prefix, wargs.train_src_suffix))
+    trg = os.path.join(wargs.dir_data, '{}.{}'.format(wargs.train_prefix, wargs.train_trg_suffix))
+    vocabs = {}
+    if wargs.word_piece is True:
+        wlog('\n[w/Subword] Preparing source vocabulary from {} ... '.format(src))
+        src_vocab = get_or_generate_vocab(src, wargs.src_dict)
+        wlog('\n[w/Subword] Preparing target vocabulary from {} ... '.format(trg))
+        trg_vocab = get_or_generate_vocab(trg, wargs.trg_dict)
     else:
+        wlog('\n[o/Subword] Preparing source vocabulary from {} ... '.format(src))
+        src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size)
+        wlog('\n[o/Subword] Preparing target vocabulary from {} ... '.format(trg))
+        trg_vocab = extract_vocab(trg, wargs.trg_dict, wargs.trg_dict_size)
+    src_vocab_size, trg_vocab_size = src_vocab.size(), trg_vocab.size()
+    wlog('Vocabulary size: |source|={}, |target|={}'.format(src_vocab_size, trg_vocab_size))
+    vocabs['src'], vocabs['trg'] = src_vocab, trg_vocab
 
-        for p in nmtModel.parameters(): init_params(p, uniform=True)
-        for p in classifier.parameters(): init_params(p, uniform=True)
+    wlog('\nPreparing training set from {} and {} ... '.format(src, trg))
+    trains = {}
+    train_src_tlst, train_trg_tlst = wrap_data(wargs.dir_data, wargs.train_prefix,
+                                               wargs.train_src_suffix, wargs.train_trg_suffix,
+                                               src_vocab, trg_vocab, max_seq_len=wargs.max_seq_len)
+    '''
+    list [torch.LongTensor (sentence), torch.LongTensor, torch.LongTensor, ...]
+    no padding
+    '''
+    batch_train = Input(train_src_tlst, train_trg_tlst, wargs.batch_size, batch_sort=True)
+    wlog('Sentence-pairs count in training data: {}'.format(len(train_src_tlst)))
+
+    batch_valid = None
+    if wargs.val_prefix is not None:
+        val_src_file = '{}{}.{}'.format(wargs.val_tst_dir, wargs.val_prefix, wargs.val_src_suffix)
+        val_trg_file = '{}{}.{}'.format(wargs.val_tst_dir, wargs.val_prefix, wargs.val_ref_suffix)
+        wlog('\nPreparing validation set from {} and {} ... '.format(val_src_file, val_trg_file))
+        valid_src_tlst, valid_trg_tlst = wrap_data(wargs.val_tst_dir, wargs.val_prefix,
+                                                   wargs.val_src_suffix, wargs.val_ref_suffix,
+                                                   src_vocab, trg_vocab,
+                                                   shuffle=False, sort_data=False,
+                                                   max_seq_len=wargs.dev_max_seq_len)
+        batch_valid = Input(valid_src_tlst, valid_trg_tlst, 1, volatile=True, batch_sort=False)
+
+    batch_tests = None
+    if wargs.tests_prefix is not None:
+        assert isinstance(wargs.tests_prefix, list), 'Test files should be list.'
+        init_dir(wargs.dir_tests)
+        batch_tests = {}
+        for prefix in wargs.tests_prefix:
+            init_dir(wargs.dir_tests + '/' + prefix)
+            test_file = '{}{}.{}'.format(wargs.val_tst_dir, prefix, wargs.val_src_suffix)
+            wlog('\nPreparing test set from {} ... '.format(test_file))
+            test_src_tlst, _ = wrap_tst_data(test_file, src_vocab)
+            batch_tests[prefix] = Input(test_src_tlst, None, 1, volatile=True, batch_sort=False)
+    wlog('\n## Finish to Prepare Dataset ! ##\n')
+
+    nmtModel = NMT(src_vocab_size, trg_vocab_size)
+    if wargs.pre_train is not None:
+
+        assert os.path.exists(wargs.pre_train)
+
+        _dict = _load_model(wargs.pre_train)
+        # initializing parameters of interactive attention model
+        class_dict = None
+        if len(_dict) == 4: model_dict, eid, bid, optim = _dict
+        elif len(_dict) == 5:
+            model_dict, class_dict, eid, bid, optim = _dict
+        for name, param in nmtModel.named_parameters():
+            if name in model_dict:
+                param.requires_grad = not wargs.fix_pre_params
+                param.data.copy_(model_dict[name])
+                wlog('{:7} -> grad {}\t{}'.format('Model', param.requires_grad, name))
+            elif name.endswith('map_vocab.weight'):
+                if class_dict is not None:
+                    param.requires_grad = not wargs.fix_pre_params
+                    param.data.copy_(class_dict['map_vocab.weight'])
+                    wlog('{:7} -> grad {}\t{}'.format('Model', param.requires_grad, name))
+            elif name.endswith('map_vocab.bias'):
+                if class_dict is not None:
+                    param.requires_grad = not wargs.fix_pre_params
+                    param.data.copy_(class_dict['map_vocab.bias'])
+                    wlog('{:7} -> grad {}\t{}'.format('Model', param.requires_grad, name))
+            else: init_params(param, name, True)
+
+        wargs.start_epoch = eid + 1
+
+    else:
+        for n, p in nmtModel.named_parameters(): init_params(p, n, True)
         optim = Optim(
             wargs.opt_mode, wargs.learning_rate, wargs.max_grad_norm,
             learning_rate_decay=wargs.learning_rate_decay,
@@ -137,35 +199,33 @@ def main():
         )
 
     if wargs.gpu_id:
-        wlog('Push model onto GPU ... ')
         nmtModel.cuda()
-        classifier.cuda()
+        wlog('Push model onto GPU[{}] ... '.format(wargs.gpu_id[0]))
     else:
-        wlog('Push model onto CPU ... ')
         nmtModel.cpu()
-        classifier.cuda()
+        wlog('Push model onto CPU ... ')
 
-    nmtModel.classifier = classifier
     wlog(nmtModel)
+    wlog(optim)
     pcnt1 = len([p for p in nmtModel.parameters()])
     pcnt2 = sum([p.nelement() for p in nmtModel.parameters()])
     wlog('Parameters number: {}/{}'.format(pcnt1, pcnt2))
 
     optim.init_optimizer(nmtModel.parameters())
 
-    #tor = Translator(nmtModel, src_vocab.idx2key, trg_vocab.idx2key)
-    #tor.trans_tests(tests_data, pre_dict['epoch'], pre_dict['batch'])
+    trainer = Trainer(nmtModel, src_vocab.idx2key, trg_vocab.idx2key, optim, trg_vocab_size,
+                      valid_data=batch_valid, tests_data=batch_tests)
 
-    trainer = Trainer(nmtModel, src_vocab.idx2key, trg_vocab.idx2key, optim, trg_vocab_size)
+    # add 1000 to train
+    train_all_chunks = (train_src_tlst, train_trg_tlst)
+    dh = DataHisto(train_all_chunks)
 
+    '''
     dev_src0 = wargs.dir_data + 'dev.1k.zh0'
     dev_trg0 = wargs.dir_data + 'dev.1k.en0'
     wlog('\nPreparing dev set for tuning from {} and {} ... '.format(dev_src0, dev_trg0))
     dev_src0, dev_trg0 = wrap_data(dev_src0, dev_trg0, src_vocab, trg_vocab)
     wlog(len(train_src_tlst))
-    # add 1000 to train
-    train_all_chunks = (train_src_tlst, train_trg_tlst)
-    dh = DataHisto(train_all_chunks)
 
     dev_src1 = wargs.dir_data + 'dev.1k.zh1'
     dev_trg1 = wargs.dir_data + 'dev.1k.en1'
@@ -187,8 +247,23 @@ def main():
     wlog('\nPreparing dev set for tuning from {} and {} ... '.format(dev_src4, dev_trg4))
     dev_src4, dev_trg4 = wrap_data(dev_src4, dev_trg4, src_vocab, trg_vocab)
     wlog(len(dev_src4+dev_src3+dev_src2+dev_src1+dev_src0))
-    dev_input = Input(dev_src4+dev_src3+dev_src2+dev_src1+dev_src0, dev_trg4+dev_trg3+dev_trg2+dev_trg1+dev_trg0, wargs.batch_size)
-    trainer.train(dh, dev_input, 0, batch_valid, tests_data, merge=True, name='DH_{}'.format('dev'))
+    batch_dev = Input(dev_src4+dev_src3+dev_src2+dev_src1+dev_src0, dev_trg4+dev_trg3+dev_trg2+dev_trg1+dev_trg0, wargs.batch_size)
+    '''
+
+    batch_dev = None
+    assert wargs.val_prefix is not None, 'Requires development to tuning.'
+    dev_src_file = '{}{}.{}'.format(wargs.val_tst_dir, wargs.val_prefix, wargs.val_src_suffix)
+    dev_trg_file = '{}{}.{}'.format(wargs.val_tst_dir, wargs.val_prefix, wargs.val_ref_suffix)
+    wlog('\nPreparing dev set from {} and {} ... '.format(dev_src_file, dev_trg_file))
+    valid_src_tlst, valid_trg_tlst = wrap_data(wargs.val_tst_dir, wargs.val_prefix,
+                                               wargs.val_src_suffix, wargs.val_ref_suffix,
+                                               src_vocab, trg_vocab,
+                                               shuffle=True, sort_data=True,
+                                               max_seq_len=wargs.dev_max_seq_len)
+    batch_dev = Input(valid_src_tlst, valid_trg_tlst, wargs.batch_size, batch_sort=True)
+
+
+    trainer.train(dh, batch_dev, 0, merge=True, name='DH_{}'.format('dev'))
 
     '''
     chunk_size = 1000
@@ -208,46 +283,16 @@ def main():
     chunk_D0 = train_chunks[0]
     dh = DataHisto(chunk_D0)
     c0_input = Input(chunk_D0[0], chunk_D0[1], wargs.batch_size)
-    trainer.train(dh, c0_input, 0, batch_valid, tests_data, merge=False, name='DH_{}'.format(0))
+    trainer.train(dh, c0_input, 0, batch_valid, batch_tests, merge=False, name='DH_{}'.format(0))
     for k in range(1, len(train_chunks)):
         wlog('*' * 30, False)
         wlog(' Next Data {} '.format(k), False)
         wlog('*' * 30)
         chunk_Dk = train_chunks[k]
         ck_input = Input(chunk_Dk[0], chunk_Dk[1], wargs.batch_size)
-        trainer.train(dh, ck_input, k, batch_valid, tests_data, merge=True, name='DH_{}'.format(k))
+        trainer.train(dh, ck_input, k, batch_valid, batch_tests, merge=True, name='DH_{}'.format(k))
         dh.add_batch_data(chunk_Dk)
     '''
-
-    if tests_data and wargs.final_test:
-
-        bestModel = NMT()
-        classifier = Classifier(wargs.out_size, trg_vocab_size)
-
-        assert os.path.exists(wargs.best_model)
-        model_dict = tc.load(wargs.best_model)
-
-        best_model_dict = model_dict['model']
-        best_model_dict = {k: v for k, v in best_model_dict.items() if 'classifier' not in k}
-
-        bestModel.load_state_dict(best_model_dict)
-        classifier.load_state_dict(model_dict['class'])
-
-        if wargs.gpu_id:
-            wlog('Push NMT model onto GPU ... ')
-            bestModel.cuda()
-            classifier.cuda()
-        else:
-            wlog('Push NMT model onto CPU ... ')
-            bestModel.cpu()
-            classifier.cpu()
-
-        bestModel.classifier = classifier
-
-        tor = Translator(bestModel, src_vocab.idx2key, trg_vocab.idx2key)
-        tor.trans_tests(tests_data, model_dict['epoch'], model_dict['batch'])
-
-
 
 
 

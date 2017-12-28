@@ -5,11 +5,7 @@ import math
 import re
 import sys
 import numpy
-
-def wlog(obj, newline=1):
-
-    if newline: sys.stderr.write('{}\n'.format(obj))
-    else: sys.stderr.write('{}'.format(obj))
+from tools.utils import *
 
 '''
 convert some code of Moses mteval-v11b.pl into python code
@@ -27,7 +23,7 @@ def token(s):
 
     # language-dependent part:
     s = ' ' + s + ' '
-    s = s.lower()   # lowercase all characters
+    s = s.lower()   # lowercase all characters (Case-insensitive BLEU)
 
     # tokenize punctuation
     s, n = re.subn('([\{-\~\[-\` -\&\(-\+\:-\@\/])', lambda x: ' ' + x.group(0) + ' ', s)
@@ -81,7 +77,7 @@ def sentence2dict(sentence, n):
                 result[gram] = 1
     return result
 
-def bleu(hypo_c, refs_c, n=4):
+def bleu(hypo_c, refs_c, n=4, logfun=wlog):
     '''
         Calculate BLEU score given translation and references.
 
@@ -156,26 +152,26 @@ def bleu(hypo_c, refs_c, n=4):
     result = 0.
     bleu_n = [0.] * n
     #if correctgram_count[0] == 0: return 0.
-    wlog('Total words count, ref {}, hyp {}'.format(ref_length, hypo_length))
+    logfun('Total words count, ref {}, hyp {}'.format(ref_length, hypo_length))
     for i in range(n):
-        wlog('{}-gram, ref {}, match {}'.format(i+1, ngram_count[i], correctgram_count[i]), 0)
+        logfun('{}-gram, ref {}, match {}'.format(i+1, ngram_count[i], correctgram_count[i]), 0)
         if correctgram_count[i] == 0:
             #correctgram_count[i] += 1
             #ngram_count[i] += 1
-            wlog('')
+            logfun('')
             return 0.
         bleu_n[i] = correctgram_count[i] / ngram_count[i]
-        wlog('\tPrecision: {}'.format(bleu_n[i]))
+        logfun('\tPrecision: {}'.format(bleu_n[i]))
         result += math.log(bleu_n[i]) / n
 
-    bp = 1
+    bp = 1.
     #bleu = geometric_mean(precisions) * bp     # same with mean function ?
 
     # there are no brevity penalty in mteval-v11b.pl, so with bp BLEU is a little lower
     if hypo_length < ref_length: bp = math.exp(1 - ref_length / hypo_length)
 
     BLEU = bp * math.exp(result)
-    wlog('bp {} | bp_exp {} | {}-gram BLEU {}'.format(1 - ref_length / hypo_length, bp, n, BLEU))
+    logfun('bp {} | bp_exp {} | {}-gram BLEU {}'.format(1 - ref_length / hypo_length, bp, n, BLEU))
 
     return BLEU
 

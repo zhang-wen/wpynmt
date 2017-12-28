@@ -8,7 +8,8 @@ from torch.autograd import Variable
 
 class Input(object):
 
-    def __init__(self, src_tlst, trg_tlst, batch_size, volatile=False, batch_sort=False):
+    def __init__(self, src_tlst, trg_tlst, batch_size, volatile=False,
+                 batch_sort=False, prefix=None, printlog=True):
 
         assert isinstance(src_tlst[0], tc.LongTensor), 'Require only one file in source side.'
         self.src_tlst = src_tlst
@@ -19,7 +20,10 @@ class Input(object):
             assert isinstance(trg_tlst[0], list), 'Require file >=1 in target side.'
             # [sent0:[ref0, ref1, ...], sent1:[ref0, ref1, ... ], ...]
             assert cnt_sent == len(trg_tlst)
-            wlog('Build bilingual Input, Batch size {}, Sort in batch? {}'.format(batch_size, batch_sort))
+            if printlog is True:
+                wlog('Build bilingual Input, Batch size {}, Sort in batch? {}'.format(batch_size, batch_sort))
+            else:
+                debug('Build bilingual Input, Batch size {}, Sort in batch? {}'.format(batch_size, batch_sort))
         else:
             self.trgs_tlst_for_files = None
             wlog('Build monolingual Input, Batch size {}, Sort in batch? {}'.format(batch_size, batch_sort))
@@ -30,6 +34,7 @@ class Input(object):
         self.batch_sort = batch_sort
 
         self.num_of_batches = int(math.ceil(cnt_sent / self.batch_size))
+        self.prefix = prefix    # the prefix of data file, such as 'nist02' or 'nist03'
 
     def __len__(self):
 
@@ -39,9 +44,9 @@ class Input(object):
     def handle_batch(self, batch, right_align=False):
 
         multi_files = True if isinstance(batch[0], list) else False
-        if isinstance(batch[0], list):
-            # [[ref00, ref01, ...], [ref10, ref11, ... ], ...]
-            # -> [[ref00, ref10, ...], [ref01, ref11, ... ], ...]
+        if multi_files is True:
+            # [sent_0:[ref0, ref1, ...], sent_1:[ref0, ref1, ... ], ...]
+            # -> [ref_0:[sent_0, sent_1, ...], ref_1:[sent_0, sent_1, ... ], ...]
             batch_for_files = [[one_sent_refs[ref_idx] for one_sent_refs in batch] \
                     for ref_idx in range(len(batch[0]))]
         else:
@@ -77,12 +82,14 @@ class Input(object):
         src_batch = self.src_tlst[idx * self.batch_size : (idx + 1) * self.batch_size]
 
         srcs, slens = self.handle_batch(src_batch)
+        assert len(srcs) == 1, 'Requires only one in source side.'
         srcs, slens = srcs[0], slens[0]
 
         if self.trgs_tlst_for_files is not None:
-            # [sent0:[ref0, ref1, ...], sent1:[ref0, ref1, ... ], ...]
+            # [sent_0:[ref0, ref1, ...], sent_1:[ref0, ref1, ... ], ...]
             trg_batch = self.trgs_tlst_for_files[idx * self.batch_size : (idx + 1) * self.batch_size]
             trgs_for_files, tlens_for_files = self.handle_batch(trg_batch)
+            # -> [ref_0:[sent_0, sent_1, ...], ref_1:[sent_0, sent_1, ... ], ...]
 
         # sort the source and target sentence
         idxs = range(self.this_batch_size)
@@ -92,10 +99,15 @@ class Input(object):
                 zipb = zip(idxs, srcs, slens)
                 idxs, srcs, slens = zip(*sorted(zipb, key=lambda x: x[-1]))
             else:
-                assert len(trgs_for_files) == 1, 'Unsupport to sort validation in one batch.'
-                zipb = zip(idxs, srcs, trgs_for_files[0], slens)
+                #assert len(trgs_for_files) == 1, 'Unsupport to sort validation in one batch.'
+                #zipb = zip(idxs, srcs, trgs_for_files[0], slens)
+                #zipb = zip(idxs, srcs, tc.stack(trgs_for_files).permute(1, 0, 2), slens)
+                # max length in different refs may differ, so can not tc.stack
+                zipb = zip(idxs, srcs, zip(*trgs_for_files), slens)
                 idxs, srcs, trgs, slens = zip(*sorted(zipb, key=lambda x: x[-1]))
-                trgs_for_files = [trgs]
+                #trgs_for_files = [trgs]
+                #trgs_for_files = list(tc.stack(trgs).permute(1, 0, 2))
+                trgs_for_files = [tc.stack(ref) for ref in zip(*list(trgs))]
 
         lengths = tc.IntTensor(slens).view(1, -1)   # (1, batch_size)
         lengths = Variable(lengths, volatile=self.volatile)
