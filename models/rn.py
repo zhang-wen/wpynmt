@@ -7,86 +7,53 @@ import wargs
 
 class ConvLayer(nn.Module):
 
-    def __init__(self, in_feats_num, ffs, fws):
+    def __init__(self, d_in_chn, d_out_chn, n_windows=3, dense=False):
 
         super(ConvLayer, self).__init__()
-
-        self.conv1 = nn.Conv1d(in_feats_num, ffs[0], kernel_size=fws[0], stride=1, padding=(fws[0]-1)/2)
-        self.lr1 = nn.LeakyReLU(0.1)
-        self.bn1 = nn.BatchNorm1d(ffs[0])
-
-        #nn.Conv1d(in_channels=ffs[i], out_channels=ffs[i], kernel_size=fws[i], stride=2, padding=1),
-        self.conv2 = nn.Conv1d(ffs[0], ffs[0], kernel_size=fws[0], stride=1, padding=(fws[0]-1)/2)
-        self.lr2 = nn.LeakyReLU(0.1)
-        self.bn2 = nn.BatchNorm1d(ffs[0])
-
-        #nn.Conv1d(in_channels=ffs[i], out_channels=ffs[i], kernel_size=fws[i], stride=2, padding=1),
-        self.conv3 = nn.Conv1d(ffs[0], ffs[0], kernel_size=fws[0], stride=1, padding=(fws[0]-1)/2)
-        self.lr3 = nn.LeakyReLU(0.1)
-        self.bn3 = nn.BatchNorm1d(ffs[0])
-
-        #nn.Conv1d(in_channels=ffs[i], out_channels=ffs[i], kernel_size=fws[i], stride=2, padding=1),
-        self.conv4 = nn.Conv1d(ffs[0], ffs[0], kernel_size=fws[0], stride=1, padding=(fws[0]-1)/2)
-        self.lr4 = nn.LeakyReLU(0.1)
-        self.bn4 = nn.BatchNorm1d(ffs[0])
+        self.conv = nn.Conv1d(d_in_chn, d_out_chn, kernel_size=n_windows, stride=1,
+                              padding=(n_windows -1 )/2)
+        self.leakyRelu = nn.LeakyReLU(0.1)
+        self.batchNorm = nn.BatchNorm1d(d_out_chn)
+        self.dense = dense
 
     def forward(self, x):
-
-        """convolution"""
-        # (B, enc_size, L) -> (B, feats_size[i], L)
-        #x = [(self.cnns[_i](x)) for _i in range(self.n_layers)]
-        #x = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in x]
-        #x = tc.cat(x, dim=1)
-        # (B, sum_feats_size, L')
-        x = self.conv1(x)
-        x = self.lr1(x)
-        x = self.bn1(x)
-
-        x = self.conv2(x)
-        x = self.lr2(x)
-        x = self.bn2(x)
-
-        x = self.conv3(x)
-        x = self.lr3(x)
-        x = self.bn3(x)
-
-        x = self.conv4(x)
-        x = self.lr4(x)
-        x = self.bn4(x)
-
-        return x
+        # (B, n_in_feats, L) -> (B, n_out_feats, L) or (B, n_in_feats+n_out_feats, L)
+        y = self.conv(x)
+        y = self.leakyRelu(y)
+        y = self.batchNorm(y)
+        return tc.cat([x, y], dim=1) if self.dense is True else y
 
 class RelationLayer_new(nn.Module):
 
-    def __init__(self, input_size, output_size, filter_window_size, filter_feats_size, mlp_size=128):
+    def __init__(self, d_in, d_out, n_windows, d_chn, d_mlp=128):
 
         super(RelationLayer, self).__init__()
 
         self.C_in = input_size
 
-        self.fws = filter_window_size
-        self.ffs = filter_feats_size
+        self.fws = n_windows
+        self.ffs = d_chn
         self.N = len(self.fws)
-        self.mlp_size = mlp_size
+        self.d_mlp = d_mlp
 
-        self.convLayer = ConvLayer(input_size, filter_feats_size, filter_window_size)
+        self.convLayer = ConvLayer(input_size, d_chn, n_windows)
         cnn_feats_size = sum([k for k in self.ffs])
 
         self.g_mlp = nn.Sequential(
-            nn.Linear(2 * (cnn_feats_size+2) + wargs.enc_hid_size, mlp_size),
+            nn.Linear(2 * (cnn_feats_size+2) + wargs.enc_hid_size, d_mlp),
             nn.LeakyReLU(0.1),
-            nn.Linear(mlp_size, mlp_size),
+            nn.Linear(d_mlp, d_mlp),
             nn.LeakyReLU(0.1),
-            nn.Linear(mlp_size, mlp_size),
+            nn.Linear(d_mlp, d_mlp),
             nn.LeakyReLU(0.1),
-            nn.Linear(mlp_size, mlp_size),
+            nn.Linear(d_mlp, d_mlp),
             nn.LeakyReLU(0.1)
         )
 
         self.f_mlp = nn.Sequential(
-            nn.Linear(mlp_size, mlp_size),
+            nn.Linear(d_mlp, d_mlp),
             nn.LeakyReLU(0.1),
-            nn.Linear(mlp_size, wargs.dec_hid_size),
+            nn.Linear(d_mlp, wargs.dec_hid_size),
             nn.LeakyReLU(0.1)
         )
 
@@ -142,7 +109,7 @@ class RelationLayer_new(nn.Module):
         x = self.g_mlp(x)
         #if xs_mask is not None: xs_h = xs_h * xs_mask[:, :, None]
 
-        x = x.view(B, L*L, self.mlp_size)    # (B, L*L, mlp_size)
+        x = x.view(B, L*L, self.d_mlp)    # (B, L*L, d_mlp)
         x = x.sum(1).squeeze()
 
         ''' MLP Layer '''
@@ -151,92 +118,47 @@ class RelationLayer_new(nn.Module):
 
 class RelationLayer(nn.Module):
 
-    def __init__(self, input_size, output_size, filter_window_size, filter_feats_size, mlp_size=128):
+    def __init__(self, d_in, d_out, n_windows, d_chns, d_mlp=128, n_conv_layers=4, dense=False):
 
         super(RelationLayer, self).__init__()
 
-        #self.C_in = 1
-
-        self.fws = filter_window_size
-        self.ffs = filter_feats_size
+        self.fws = n_windows
+        self.d_chns = d_chns
         self.N = len(self.fws)
-
-        '''
-            nn.Sequential(
-                nn.Conv1d(self.C_in, self.ffs[i], kernel_size=output_size*self.fws[i],
-                          padding=((self.fws[i]-1)/2) * output_size, stride=output_size),
-                nn.BatchNorm2d(self.ffs[i]),
-                nn.LeakyReLU(0.1),
-                nn.Conv1d(self.ffs[i], self.ffs[i], kernel_size=output_size*self.fws[i],
-                          padding=((self.fws[i]-1)/2) * output_size, stride=output_size),
-                nn.BatchNorm2d(self.ffs[i]),
-                nn.LeakyReLU(0.1),
-                nn.Conv1d(self.ffs[i], self.ffs[i], kernel_size=output_size*self.fws[i],
-                          padding=((self.fws[i]-1)/2) * output_size, stride=output_size),
-                nn.BatchNorm2d(self.ffs[i]),
-                nn.LeakyReLU(0.1),
-                nn.Conv1d(self.ffs[i], self.ffs[i], kernel_size=output_size*self.fws[i],
-                          padding=((self.fws[i]-1)/2) * output_size, stride=output_size),
-                nn.BatchNorm2d(self.ffs[i]),
-                nn.LeakyReLU(0.1)
-            )
-        '''
-        #self.cnnlayer = nn.ModuleList([nn.Conv2d(self.C_in, self.C_out, (k, input_size),
-        #                                      padding=((k-1)/2, 0)) for k in kernels])
-        #self.cnnlayer = nn.ModuleList([nn.Conv1d(self.C_in, self.ffs[i],
-        #                                         kernel_size=output_size*self.fws[i],
-        #                                         padding=((self.fws[i]-1)/2) * output_size,
-        #                                         stride=output_size) for i in range(self.N)])
-        # (B, in_channels, enc_size * L) -> (B, feats_size[i], L)
-        #self.cnnlayer = nn.ModuleList(modules)
-
-        #self.cnnlayer = nn.ModuleList([nn.Conv1d(input_size, self.ffs[i],
-        #                                         kernel_size=self.fws[i],
-        #                                         padding=((self.fws[i]-1)/2),
-        #                                         stride=1) for i in range(self.N)])
-        #self.bns = nn.ModuleList([nn.BatchNorm1d(self.ffs[i]) for i in range(self.N)])
-        #self.leakyRelu = nn.LeakyReLU(0.1)
-        #self.bn = nn.BatchNorm1d(mlp_dim)
 
         self.cnnlayer = nn.ModuleList(
             [
-                nn.Sequential(
-                    nn.Conv1d(in_channels=input_size, out_channels=self.ffs[i],
-                              kernel_size=self.fws[i], stride=1, padding=((self.fws[i]-1)/2)),
-                    nn.BatchNorm2d(self.ffs[i]),
-                    nn.LeakyReLU(0.1),
-                    nn.Conv1d(in_channels=self.ffs[i], out_channels=self.ffs[i],
-                              kernel_size=self.fws[i], stride=1, padding=((self.fws[i]-1)/2)),
-                    nn.BatchNorm2d(self.ffs[i]),
-                    nn.LeakyReLU(0.1),
-                    nn.Conv1d(in_channels=self.ffs[i], out_channels=self.ffs[i],
-                              kernel_size=self.fws[i], stride=1, padding=((self.fws[i]-1)/2)),
-                    nn.BatchNorm2d(self.ffs[i]),
-                    nn.LeakyReLU(0.1),
-                    nn.Conv1d(in_channels=self.ffs[i], out_channels=self.ffs[i],
-                              kernel_size=self.fws[i], stride=1, padding=((self.fws[i]-1)/2)),
-                    nn.BatchNorm2d(self.ffs[i]),
-                    nn.LeakyReLU(0.1)
-                ) for i in range(self.N)
+                nn.Sequential(*[
+                    ConvLayer(d_in_chn=(d_in if i == 0 else (d_in + i * self.d_chns[k])),
+                              d_out_chn=self.d_chns[k], n_windows=self.fws[k],
+                              dense=False if i == n_conv_layers - 1 else dense) \
+                    for i in range(n_conv_layers)
+                ])
+                for k in range(self.N)
             ]
         )
-        self.cnn_feats_size = sum([k for k in self.ffs])
+
+        self.d_chn = sum([k for k in self.d_chns])
+        #self.mlp = nn.Sequential(
+        #    *[nn.Linear(2 * self.d_chn if i == 0 else d_mlp, d_mlp), nn.LeakyReLU(0.1) \
+        #      for i in range(n_mlp_layers)]
+        #)
 
         self.mlp = nn.Sequential(
-            nn.Linear(2 * self.cnn_feats_size, mlp_size),
+            nn.Linear(2 * self.d_chn, d_mlp),
             nn.LeakyReLU(0.1),
-            nn.Linear(mlp_size, mlp_size),
+            nn.Linear(d_mlp, d_mlp),
             nn.LeakyReLU(0.1),
-            nn.Linear(mlp_size, mlp_size),
+            nn.Linear(d_mlp, d_mlp),
             nn.LeakyReLU(0.1),
-            nn.Linear(mlp_size, mlp_size),
+            nn.Linear(d_mlp, d_mlp),
             nn.LeakyReLU(0.1)
         )
 
         self.mlp_layer = nn.Sequential(
-            nn.Linear(mlp_size, mlp_size),
+            nn.Linear(d_mlp, d_mlp),
             nn.LeakyReLU(0.1),
-            nn.Linear(mlp_size, output_size),
+            nn.Linear(d_mlp, d_out),
             nn.LeakyReLU(0.1)
         )
 
@@ -247,15 +169,7 @@ class RelationLayer(nn.Module):
         #x = x.permute(1, 0, 2)    # (B, L, E)
 
         ''' CNN Layer '''
-        # (B, 1, L, E)
-        #x = x[:, None, :, :].expand((B, self.C_in, L, E))
         # (B, L, E) -> (B, E*L) -> (B, 1, E*L)
-        #x = x.contiguous().view(B, -1)[:, None, :]
-
-        # (B, feats_size[i], L, 1) -> (B, feats_size[i], L)
-        #x = [self.leakyRelu(conv(x)).squeeze(3) for conv in self.cnnlayer]
-        # (B, in, enc_size * L) -> (B, feats_size[i], L)
-        #x = [self.leakyRelu(self.bns[i](self.cnnlayer[i](x))) for i in range(self.N)]
         x = [self.cnnlayer[i](x) for i in range(self.N)]
 
         #x = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in x]
@@ -266,7 +180,7 @@ class RelationLayer(nn.Module):
 
         ''' Graph Propagation Layer '''
         #if xs_mask is not None: xs_h = xs_h * xs_mask[:, :, None]
-        x = x[None, :, :, :].expand(L, L, B, self.cnn_feats_size)
+        x = x[None, :, :, :].expand(L, L, B, self.d_chn)
         x = tc.cat([x, x.transpose(0, 1)], dim=-1)
 
         x = self.mlp(x).sum(0)

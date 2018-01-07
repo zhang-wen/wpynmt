@@ -35,7 +35,7 @@ class NMT(nn.Module):
 
     def init(self, xs, xs_mask=None, test=False):
 
-        if test:  # for decoding
+        if test is True:  # for decoding
             if wargs.gpu_id and not xs.is_cuda: xs = xs.cuda()
             xs = Variable(xs, requires_grad=False, volatile=True)
 
@@ -78,12 +78,12 @@ class Encoder(nn.Module):
 
         #self.relay0 = RelationLayer(output_size, output_size, wargs.filter_window_size,
         #                            wargs.filter_feats_size, wargs.mlp_size)
-        #self.laynorm0 = LayerNormalization(wargs.enc_hid_size)
+        self.laynorm0 = Layer_Norm(wargs.enc_hid_size)
 
         self.back_gru = GRU(output_size, output_size, with_ln=with_ln, prefix=f('Back'))
 
         self.rn = RelationLayer(output_size, output_size, wargs.filter_window_size,
-                                wargs.filter_feats_size, wargs.mlp_size)
+                                wargs.filter_feats_size, wargs.mlp_size, dense=True)
         #self.laynorm1 = LayerNormalization(wargs.enc_hid_size)
         #self.dropout = nn.Dropout(0.1)
 
@@ -137,11 +137,12 @@ class Encoder(nn.Module):
 
         #x = layer_prepostprocess(x, handle_type='n', norm_type='layer')
         #print x
-
         y = self.rn(x, xs_mask)
         #print y
-        x = layer_prepostprocess(y, x, handle_type='da', training=(not test))
-        #print x
+        #y = self.laynorm0(y)
+        y = layer_prepostprocess(y, handle_type='n', normlizer=self.laynorm0)
+        x = layer_prepostprocess(y, x, handle_type='da',
+                                 dropout_rate=wargs.drop_rate, training=(not test))
 
         return x
 
