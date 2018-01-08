@@ -1,3 +1,4 @@
+from __future__ import division
 import sys
 import os
 import re
@@ -21,8 +22,8 @@ def str1(content, encoding='utf-8'):
     return json.dumps(content, encoding=encoding, ensure_ascii=False, indent=4)
     pass
 
-#DEBUG = True
-DEBUG = False
+DEBUG = True
+#DEBUG = False
 #PAD = 0
 #UNK = 1
 #BOS = 2
@@ -167,7 +168,7 @@ def get_gumbel(LB, V, eps=1e-30):
     return Variable(
         -tc.log(-tc.log(tc.Tensor(LB, V).uniform_(0, 1) + eps) + eps), requires_grad=False)
 
-def LBtensor_to_StrList(x, xs_L):
+def LBtensor_to_StrList_old(x, xs_L):
 
     B = x.size(1)
     x = x.data.numpy().T
@@ -210,6 +211,19 @@ def init_params(p, name='what', uniform=False):
             p.data.zero_()
             wlog('{:7}-> grad {}\t{}'.format('Zero', p.requires_grad, name))
 
+def LBtensor_to_StrList(x, Ls):
+
+    B = x.size(1)
+    x = x.data.numpy().T
+    xs = []
+    for bidx in range(B):
+        x_one = x[bidx][:Ls[bidx]]
+        #x_one = str(x_one.astype('S10'))[1:-1].replace('\n', '')
+        x_one = str(x_one.astype('S10')).replace('\n', '')
+        #x_one = x_one.__str__().replace('  ', ' ')[2:-1]
+        xs.append(x_one)
+    return xs
+
 def init_dir(dir_name, delete=False):
 
     if not dir_name == '':
@@ -232,7 +246,8 @@ def part_sort(vec, num):
 
     '''
     put k-min numbers before the _th position and get indexes of the k-min numbers in vec (unsorted)
-    idx = np.argpartition(vec, 5)[:5]:
+    k-min vals:    [ 1,  0,  2, 3,  3,  ...]
+    idx = np.argpartition(vec, 5)[:4]:
         [ 4, 10,  8,  0,  5]
     '''
 
@@ -263,7 +278,7 @@ def part_sort(vec, num):
 
 
 # beam search
-def init_beam(beam, cnt=50, score_0=0.0, loss_0=0.0, s0=None, dyn_dec_tup=None):
+def init_beam(beam, s0=None, cnt=50, score_0=0.0, loss_0=0.0, hs0=None, dyn_dec_tup=None):
     del beam[:]
     for i in range(cnt + 1):
         ibeam = []  # one beam [] for one char besides start beam
@@ -272,26 +287,26 @@ def init_beam(beam, cnt=50, score_0=0.0, loss_0=0.0, s0=None, dyn_dec_tup=None):
     if dyn_dec_tup is not None:
         beam[0].append((loss_0, dyn_dec_tup, s0, BOS, 0))
     elif wargs.len_norm == 2:
-        beam[0].append((loss_0, None, s0, BOS, 0))
+        beam[0] = [[ (loss_0, None, s0[i], i, BOS, 0) ] for i in range(s0.size(0))]
     else:
-        beam[0].append((loss_0, s0, BOS, 0))
+        beam[0] = [[ (loss_0, s0[i], i, BOS, 0) ] for i in range(s0.size(0))]
 
-def back_tracking(beam, best_sample_endswith_eos, attent_probs=None):
-    # (0.76, 0.55, [29999], 0, 7)
-    best_loss, _, w, bp, endi = best_sample_endswith_eos
+def back_tracking(beam, bidx, best_sample_endswith_eos, attent_probs=None):
+    # (0.76025655120611191, [29999], 0, 7)
+    best_loss, accum, _, w, bp, endi = best_sample_endswith_eos
     # starting from bp^{th} item in previous {end-1}_{th} beam of eos beam, w is <eos>
     seq = []
     attent_matrix = [] if attent_probs is not None else None
-    check = (len(beam[0][0]) == 4)
+    check = (len(beam[0][0][0]) == 5)
     #print len(attent_probs), endi
-    for i in reversed(xrange(1, endi)): # [1, endi-1], not <bos> 0 and <eos> endi
+    for i in reversed(xrange(0, endi)): # [1, endi-1], not <bos> 0 and <eos> endi==self.maxL
         # the best (minimal sum) loss which is the first one in the last beam,
         # then use the back pointer to find the best path backward
         # <eos> is in pos endi, we do not keep <eos>
         if check is True:
-            _, _, w, backptr = beam[i][bp]
-        else:
-            _, _, _, w, backptr = beam[i][bp]
+            _, _, aa, w, backptr = beam[i][bidx][bp]
+            if isinstance(aa, int): assert aa == bidx
+        else: _, _, _, _, w, backptr = beam[i][bidx][bp]
         seq.append(w)
         bp = backptr
         # ([first word, ..., last word]) not bos and eos
@@ -359,28 +374,6 @@ def dec_conf():
          )
     )
 
-def memory_efficient(outputs, gold, gold_mask, classifier):
-
-    batch_loss, batch_correct_num = 0, 0
-    outputs = Variable(outputs.data, requires_grad=True, volatile=False)
-    cur_batch_count = outputs.size(1)
-
-    os_split = tc.split(outputs, wargs.snip_size)
-    gs_split = tc.split(gold, wargs.snip_size)
-    ms_split = tc.split(gold_mask, wargs.snip_size)
-
-    for i, (o_split, g_split, m_split) in enumerate(zip(os_split, gs_split, ms_split)):
-
-        loss, correct_num = classifier(o_split, g_split, m_split)
-        batch_loss += loss.data[0]
-        batch_correct_num += correct_num.data[0]
-        loss.div(cur_batch_count).backward()
-        del loss, correct_num
-
-    grad_output = None if outputs.grad is None else outputs.grad.data
-
-    return batch_loss, grad_output, batch_correct_num
-
 def print_attention_text(attention_matrix, source_tokens, target_tokens, threshold=0.9, isP=False):
     """
     Return the alignment string from the attention matrix.
@@ -394,9 +387,9 @@ def print_attention_text(attention_matrix, source_tokens, target_tokens, thresho
     #assert attention_matrix.shape[0] == len(target_tokens)
 
     if isP is True:
-        sys.stdout.write("  ")
-        for j in target_tokens: sys.stdout.write("---")
-        sys.stdout.write("\n")
+        wlog('  ', 0)
+        for j in target_tokens: wlog('---', 0)
+        wlog('')
 
     alnList = []
     src_max_ids, src_max_p = attention_matrix.argmax(1) + 1, attention_matrix.max(1)
@@ -411,25 +404,24 @@ def print_attention_text(attention_matrix, source_tokens, target_tokens, thresho
                 #if maxP >= 0.5:
                 #    alnList.append('{}:{}/{:.2f}'.format(i + 1, maxJ + 1, maxP))    # start from 1 here
             if isP is True:
-                if align_prob > threshold: sys.stdout.write("(*)")
-                elif align_prob > 0.4: sys.stdout.write("(?)")
-                else: sys.stdout.write("   ")
+                if align_prob > threshold: wlog('(*)', 0)
+                elif align_prob > 0.4: wlog('(?)', 0)
+                else: wlog('   ', 0)
             #if align_prob > maxP: maxJ, maxP = j, align_prob
 
-        if isP is True: sys.stdout.write(" | %s\n" % f_i)
+        if isP is True: wlog(' | {}'.format(f_i))
 
     if isP is True:
-        sys.stdout.write("  ")
-        for j in target_tokens:
-            sys.stdout.write("---")
-        sys.stdout.write("\n")
+        wlog('  ', 0)
+        for j in target_tokens: wlog('---', 0)
+        wlog('')
         for k in range(max(map(len, target_tokens))):
-            sys.stdout.write("  ")
+            wlog('  ', 0)
             for word in target_tokens:
                 letter = word[k] if len(word) > k else " "
-                sys.stdout.write(" %s " % letter)
-            sys.stdout.write("\n")
-        sys.stdout.write("\n")
+                wlog(' {} '.format(letter))
+            wlog('')
+        wlog('')
 
     return ' '.join(alnList)
 
@@ -499,42 +491,6 @@ def plot_attention(attention_matrix, source_tokens, target_tokens, filename):
     #plt.savefig(filename)
     wlog("Saved alignment visualization to " + filename)
 
-def schedule_sample_word(_h, _g, ss_eps, y_tm1_gold, y_tm1_hypo):
-
-    if y_tm1_hypo is None: return y_tm1_gold
-
-    return y_tm1_hypo * _h + y_tm1_gold * _g
-
-def schedule_sample(ss_eps, y_tm1_gold, y_tm1_hypo):
-
-    if y_tm1_hypo is None: return y_tm1_gold
-
-    return y_tm1_hypo if random.random() > ss_eps else y_tm1_gold
-
-def schedule_sample_eps_decay(i):
-
-    ss_type, k = wargs.ss_type, wargs.ss_k
-    if ss_type == 1:
-        # Linear decay
-        ss = wargs.ss_eps_begin - ( wargs.ss_decay_rate * i )
-        if ss < wargs.ss_eps_end:
-            eps_i = wargs.ss_eps_end
-        else:
-            eps_i = ss
-            wlog('[Linear] decay schedule sampling value to {}'.format(eps_i))
-
-    elif ss_type == 2:
-        # Exponential decay
-        eps_i = numpy.power(k, i)
-        wlog('[Exponential] decay schedule sampling value to {}'.format(eps_i))
-
-    elif ss_type == 3:
-        # Inverse sigmoid decay
-        eps_i = k / (k + numpy.exp( (i/k) ))
-        wlog('[Inverse] decay schedule sampling value to {}'.format(eps_i))
-
-    return eps_i
-
 def ids2Tensor(list_wids, bos_id=None, eos_id=None):
     # input: list of int for one sentence
     list_idx = [bos_id] if bos_id else []
@@ -542,16 +498,17 @@ def ids2Tensor(list_wids, bos_id=None, eos_id=None):
     list_idx.extend([eos_id] if eos_id else [])
     return tc.LongTensor(list_idx)
 
-def lp_cp(bp, bidx, beam):
+def lp_cp(bp, beam_idx, bidx, beam):
     ys_pi = []
-    for i in reversed(xrange(1, bidx)):
-        _, p_im1, _, w, bp = beam[i][bp]
+    assert len(beam[0][0][0]) == 6, 'require attention prob for alpha'
+    for i in reversed(xrange(1, beam_idx)):
+        _, p_im1, _, _, w, bp = beam[i][bidx][bp]
         ys_pi.append(p_im1)
     if len(ys_pi) == 0: return 1.0, 0.0
     ys_pi = tc.stack(ys_pi, dim=0).sum(0)   # (part_trg_len, src_len) -> (src_len, )
     m = ( ys_pi > 1.0 ).float()
     ys_pi = ys_pi * ( 1. - m ) + m
-    lp = ( ( 5 + bidx - 1 ) ** wargs.alpha_len_norm ) / ( (5 + 1) ** wargs.alpha_len_norm )
+    lp = ( ( 5 + beam_idx - 1 ) ** wargs.alpha_len_norm ) / ( (5 + 1) ** wargs.alpha_len_norm )
     cp = wargs.beta_cover_penalty * ( ys_pi.log().sum().data[0] )
 
     return lp, cp
@@ -641,6 +598,102 @@ def layer_prepostprocess(pre_layer_out, pre_layer_in=None, handle_type=None, nor
       else: wlog('Unknown handle type {}'.format(c))
     return pre_layer_out
 
+def schedule_sample_word(_h, _g, ss_eps, y_tm1_gold, y_tm1_hypo):
 
+    if y_tm1_hypo is None: return y_tm1_gold
 
+    return y_tm1_hypo * _h + y_tm1_gold * _g
+
+def schedule_sample(ss_eps, y_tm1_gold, y_tm1_hypo):
+
+    if y_tm1_hypo is None: return y_tm1_gold
+
+    return y_tm1_hypo if random.random() > ss_eps else y_tm1_gold
+
+def schedule_sample_eps_decay(i):
+
+    ss_type, k = wargs.ss_type, wargs.ss_k
+    if ss_type == 1:
+        # Linear decay
+        ss = wargs.ss_eps_begin - ( wargs.ss_decay_rate * i )
+        if ss < wargs.ss_eps_end:
+            eps_i = wargs.ss_eps_end
+        else:
+            eps_i = ss
+            wlog('[Linear] decay schedule sampling value to {}'.format(eps_i))
+
+    elif ss_type == 2:
+        # Exponential decay
+        eps_i = numpy.power(k, i)
+        wlog('[Exponential] decay schedule sampling value to {}'.format(eps_i))
+
+    elif ss_type == 3:
+        # Inverse sigmoid decay
+        eps_i = k / ( k + numpy.exp( ( i / k ) ) )
+        wlog('[Inverse] decay schedule sampling value to {}'.format(eps_i))
+
+    return eps_i
+
+from tools.bleu import *
+def batch_search_oracle(B_hypos_list, y_LB, y_mask_LB):
+
+    #print B_hypos_list
+    #y_Ls contains the <s> and <e> of each sentence in one batch
+    y_maxL, y_Ls = y_mask_LB.size(0), y_mask_LB.sum(0).data.int().tolist()
+    #print y_maxL, y_Ls
+    #for bidx, hypos_list in enumerate(B_hypos_list):
+    #    for hypo in hypos_list:
+    #        hypo += [PAD] * (y_maxL - y_Ls[bidx])
+    #print B_hypos_list
+    # B_hypos_list: [[[w0, w1, w2, ..., ], [w0, w1]], [sent0, sent1], [...]]
+    oracles = []
+    B_ys_list = LBtensor_to_StrList(y_LB.cpu(), [l-1 for l in y_Ls]) # remove <s> and <e>
+    for bidx, (hyps, gold) in enumerate(zip(B_hypos_list, B_ys_list)):
+        oracle, max_bleu = hyps[0], 0.
+        for h in hyps:
+            h_ = str(numpy.array(h[1:]).astype('S10')).replace('\n', '')
+            # do not consider <s> and <e> when calculating BLEU
+            assert len(h_.split(' ')) == len(gold.split(' '))
+            BLEU = bleu(h_, [gold], logfun=debug)
+            if BLEU > max_bleu:
+                max_bleu = BLEU
+                oracle = h
+        oracles.append(oracle + [EOS] + [PAD] * (y_maxL - y_Ls[bidx]))
+        # same with y_LB
+    oracles = Variable(tc.Tensor(oracles).long().t(), requires_grad=False)
+
+    return oracles
+
+def grad_checker(model, _checks=None):
+
+    _grad_nan = False
+    for n, p in model.named_parameters():
+        if p.grad is None:
+            debug('grad None | {}'.format(n))
+            continue
+        tmp_grad = p.grad.data.cpu().numpy()
+        if numpy.isnan(tmp_grad).any(): # we check gradient here for vanishing Gradient
+            wlog("grad contains 'nan' | {}".format(n))
+            #wlog("gradient\n{}".format(tmp_grad))
+            _grad_nan = True
+        if n == 'decoder.l_f1_0.weight' or n == 's_init.weight' or n=='decoder.l_f1_1.weight' \
+           or n == 'decoder.l_conv.0.weight' or n == 'decoder.l_f2.weight':
+            debug('grad zeros |{:5} {}'.format(str(not numpy.any(tmp_grad)), n))
+
+    if _grad_nan is True and wargs.dynamic_cyk_decoding is True and _checks is not None:
+        for _i, items in enumerate(_checks):
+            wlog('step {} Variable----------------:'.format(_i))
+            #for item in items: wlog(item.cpu().data.numpy())
+            wlog('wen _check_tanh_sa ---------------')
+            wlog(items[0].cpu().data.numpy())
+            wlog('wen _check_a1_weight ---------------')
+            wlog(items[1].cpu().data.numpy())
+            wlog('wen _check_a1 ---------------')
+            wlog(items[2].cpu().data.numpy())
+            wlog('wen alpha_ij---------------')
+            wlog(items[3].cpu().data.numpy())
+            wlog('wen before_mask---------------')
+            wlog(items[4].cpu().data.numpy())
+            wlog('wen after_mask---------------')
+            wlog(items[5].cpu().data.numpy())
 

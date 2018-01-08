@@ -35,6 +35,7 @@ cudnn.enabled = True
 
 def main():
 
+    if wargs.ss_type is not None: assert wargs.model == 1, 'Only rnnsearch support schedule sample'
     init_dir(wargs.dir_model)
     init_dir(wargs.dir_valid)
 

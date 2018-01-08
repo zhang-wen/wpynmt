@@ -67,8 +67,8 @@ ref_cnt = 16
 #tests_prefix = ['nist02', 'nist03', 'nist04', 'nist05', 'nist06', 'nist08', 'wmt17.tst']
 #tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08']
 #tests_prefix = ['data2', 'data3', 'test']
-#tests_prefix = ['devset3.lc', '900']
-tests_prefix = ['devset3.lc']
+tests_prefix = ['devset3.lc', '900']
+#tests_prefix = ['devset3.lc']
 #tests_prefix = ['newstest2015.tc', 'newstest2016.tc', 'newstest2017.tc']
 #tests_prefix = None
 
@@ -175,7 +175,7 @@ with_postproc = False
 copy_trg_emb = False
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet, 7: non-local
-model = 4
+model = 1
 
 # convolutional layer
 #filter_window_size = [1, 3, 5]   # windows size
@@ -189,12 +189,12 @@ dynamic_cyk_decoding = False
 print_att = True
 
 # Scheduled Sampling of Samy bengio's paper
-ss_type = 1     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
+ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
 ss_eps_begin = 1   # set None for no scheduled sampling
 ss_eps_end = 1
 #ss_decay_rate = 0.005
 ss_decay_rate = (ss_eps_begin - ss_eps_end) / 10.
-ss_k = 0.98     # k < 1 for exponential decay, k >= 1 for inverse sigmoid decay
+ss_k = 12.     # k < 1 for exponential decay, k >= 1 for inverse sigmoid decay
 
 # free parameter for self-normalization
 # 0 is equivalent to the standard neural network objective function.
@@ -203,7 +203,7 @@ self_norm_alpha = None
 nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [3]
+gpu_id = [0]
 #gpu_id = None
 
 

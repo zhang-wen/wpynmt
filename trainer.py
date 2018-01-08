@@ -19,6 +19,7 @@ class Trainer(object):
     def __init__(self, model, train_data, vocab_data, optim, valid_data=None, tests_data=None):
 
         self.model = model
+        self.classifier = model.decoder.classifier
         self.train_data = train_data
         self.sv = vocab_data['src'] if wargs.word_piece else vocab_data['src'].idx2key
         self.tv = vocab_data['trg'] if wargs.word_piece else vocab_data['trg'].idx2key
@@ -52,28 +53,22 @@ class Trainer(object):
         assert wargs.sample_size < wargs.batch_size, 'Batch size < sample count'
         # [low, high)
         batch_count = len(self.train_data)
-        batch_start_sample = tc.randperm(batch_count)[0]
+        batch_start_sample = tc.randperm(batch_count)[-1]
         wlog('Randomly select {} samples in the {}th/{} batch'.format(wargs.sample_size, batch_start_sample, batch_count))
         bidx, eval_cnt, ss_eps_cur = 0, [0], wargs.ss_eps_begin
         wlog('Self-normalization alpha -> {}'.format(wargs.self_norm_alpha))
+        tor_hook = Translator(self.model, self.sv, self.tv)
 
         train_start = time.time()
-        wlog('')
-        wlog('#' * 120)
-        wlog('#' * 30, False)
-        wlog(' Start Training ', False)
-        wlog('#' * 30)
-        wlog('#' * 120)
+        wlog('\n' + '#' * 120 + '\n' + '#' * 30 + ' Start Training ' + '#' * 30 + '\n' + '#' * 120)
 
         for epoch in range(wargs.start_epoch, wargs.max_epochs + 1):
 
             epoch_start = time.time()
 
             # train for one epoch on the training data
-            wlog('')
-            wlog('$' * 30, False)
-            wlog(' Epoch [{}/{}] '.format(epoch, wargs.max_epochs), False)
-            wlog('$' * 30)
+            wlog('\n' + '$' * 30, 0)
+            wlog(' Epoch [{}/{}] '.format(epoch, wargs.max_epochs) + '$' * 30)
             wlog('Schedule sampling value {}'.format(ss_eps_cur))
 
             if wargs.epoch_shuffle and epoch > wargs.epoch_shuffle_minibatch: self.train_data.shuffle()
@@ -86,6 +81,8 @@ class Trainer(object):
             sample_spend, eval_spend, epoch_bidx = 0, 0, 0
             show_start = time.time()
 
+            from searchs.nbs import Nbs
+            self.sampler = Nbs(self.model, self.tv, k=3, noise=False, print_att=False, batch_sample=True)
             for k in range(batch_count):
 
                 bidx += 1
@@ -95,52 +92,28 @@ class Trainer(object):
                 # (max_slen_batch, batch_size)
                 _, srcs, ttrgs_for_files, slens, srcs_m, trg_mask_for_files = self.train_data[batch_idx]
                 trgs, trgs_m = ttrgs_for_files[0], trg_mask_for_files[0]
+                #wlog(trgs)
+                batch_oracles = None
+                if ss_eps_cur < 1.:
+                    batch_beam_trgs = self.sampler.beam_search_trans(srcs, srcs_m, trgs_m)
+                    batch_beam_trgs = [list(zip(*b)[0]) for b in batch_beam_trgs]
+                    #wlog(batch_beam_trgs)
+                    batch_oracles = batch_search_oracle(batch_beam_trgs, trgs[1:], trgs_m[1:])
+                    #wlog(batch_oracles)
+                    batch_oracles = batch_oracles[:-1].cuda()
 
                 self.model.zero_grad()
                 # (max_tlen_batch - 1, batch_size, out_size)
-                outputs = self.model(srcs, trgs[:-1], srcs_m, trgs_m[:-1], ss_eps=ss_eps_cur)
+                outputs = self.model(srcs, trgs[:-1], srcs_m, trgs_m[:-1],
+                                     ss_eps=ss_eps_cur, oracles=batch_oracles)
                 if len(outputs) == 2: (outputs, _checks) = outputs
                 this_bnum = outputs.size(1)
 
-                #batch_loss, grad_output, batch_correct_num = memory_efficient(
-                #    outputs, trgs[1:], trgs_m[1:], self.model.classifier)
-                batch_loss, batch_correct_num, batch_log_norm = self.model.decoder.classifier.snip_back_prop(
+                batch_loss, batch_correct_num, batch_log_norm = self.classifier.snip_back_prop(
                     outputs, trgs[1:], trgs_m[1:], wargs.snip_size)
 
-                _grad_nan = False
-                for n, p in self.model.named_parameters():
-                    if p.grad is None:
-                        debug('grad None | {}'.format(n))
-                        continue
-                    tmp_grad = p.grad.data.cpu().numpy()
-                    if numpy.isnan(tmp_grad).any(): # we check gradient here for vanishing Gradient
-                        wlog("grad contains 'nan' | {}".format(n))
-                        #wlog("gradient\n{}".format(tmp_grad))
-                        _grad_nan = True
-                    if n == 'decoder.l_f1_0.weight' or n == 's_init.weight' or n=='decoder.l_f1_1.weight' \
-                       or n == 'decoder.l_conv.0.weight' or n == 'decoder.l_f2.weight':
-                        debug('grad zeros |{:5} {}'.format(str(not np.any(tmp_grad)), n))
-
-                if _grad_nan is True and wargs.dynamic_cyk_decoding is True:
-                    for _i, items in enumerate(_checks):
-                        wlog('step {} Variable----------------:'.format(_i))
-                        #for item in items: wlog(item.cpu().data.numpy())
-                        wlog('wen _check_tanh_sa ---------------')
-                        wlog(items[0].cpu().data.numpy())
-                        wlog('wen _check_a1_weight ---------------')
-                        wlog(items[1].cpu().data.numpy())
-                        wlog('wen _check_a1 ---------------')
-                        wlog(items[2].cpu().data.numpy())
-                        wlog('wen alpha_ij---------------')
-                        wlog(items[3].cpu().data.numpy())
-                        wlog('wen before_mask---------------')
-                        wlog(items[4].cpu().data.numpy())
-                        wlog('wen after_mask---------------')
-                        wlog(items[5].cpu().data.numpy())
-
-                #outputs.backward(grad_output)
                 self.optim.step()
-                #del outputs, grad_output
+                grad_checker(self.model, _checks)
 
                 batch_src_words = srcs.data.ne(PAD).sum()
                 assert batch_src_words == slens.data.sum()
@@ -180,13 +153,10 @@ class Trainer(object):
 
                     sample_start = time.time()
                     self.model.eval()
-                    #self.model.classifier.eval()
-                    tor = Translator(self.model, self.sv, self.tv)
-
                     # (max_len_batch, batch_size)
                     sample_src_tensor = srcs.t()[:sample_size]
                     sample_trg_tensor = trgs.t()[:sample_size]
-                    tor.trans_samples(sample_src_tensor, sample_trg_tensor)
+                    tor_hook.trans_samples(sample_src_tensor, sample_trg_tensor)
                     wlog('')
                     sample_spend = time.time() - sample_start
                     self.model.train()

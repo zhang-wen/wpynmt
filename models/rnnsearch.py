@@ -33,7 +33,7 @@ class NMT(nn.Module):
 
     def init(self, xs, xs_mask=None, test=True):
 
-        if test is True and not isinstance(xs, tc.autograd.variable.Variable):  # for decoding
+        if test is True and not isinstance(xs, Variable):  # for decoding
             if wargs.gpu_id and not xs.is_cuda: xs = xs.cuda()
             xs = Variable(xs, requires_grad=False, volatile=True)
 
@@ -43,11 +43,13 @@ class NMT(nn.Module):
         uh = self.ha(xs)
         return s0, xs, uh
 
-    def forward(self, srcs, trgs, srcs_m, trgs_m, isAtt=False, test=False, ss_eps=1.):
+    def forward(self, srcs, trgs, srcs_m, trgs_m, isAtt=False, test=False,
+                ss_eps=1., oracles=None):
         # (max_slen_batch, batch_size, enc_hid_size)
         s0, srcs, uh = self.init(srcs, srcs_m, test)
 
-        return self.decoder(s0, srcs, trgs, uh, srcs_m, trgs_m, isAtt=isAtt, ss_eps=ss_eps)
+        return self.decoder(s0, srcs, trgs, uh, srcs_m, trgs_m,
+                            isAtt=isAtt, ss_eps=ss_eps, oracles=oracles)
 
 class Encoder(nn.Module):
 
@@ -270,14 +272,14 @@ class Decoder(nn.Module):
     def step(self, s_tm1, xs_h, uh, y_tm1,
              btg_xs_h=None, btg_uh=None, btg_xs_mask=None, xs_mask=None, y_mask=None):
 
-        if not isinstance(y_tm1, tc.autograd.variable.Variable):
+        if not isinstance(y_tm1, Variable):
             if isinstance(y_tm1, int): y_tm1 = tc.Tensor([y_tm1]).long()
             elif isinstance(y_tm1, list): y_tm1 = tc.Tensor(y_tm1).long()
             if wargs.gpu_id: y_tm1 = y_tm1.cuda()
             y_tm1 = Variable(y_tm1, requires_grad=False, volatile=True)
             y_tm1 = self.trg_lookup_table(y_tm1)
 
-        if xs_mask is not None and not isinstance(xs_mask, tc.autograd.variable.Variable):
+        if xs_mask is not None and not isinstance(xs_mask, Variable):
             xs_mask = Variable(xs_mask, requires_grad=False, volatile=True)
             if wargs.gpu_id: xs_mask = xs_mask.cuda()
 
@@ -303,7 +305,7 @@ class Decoder(nn.Module):
         return attend, s_t, y_tm1, alpha_ij, _check_tanh_sa, _check_a1_weight, _check_a1
         #return attend, s_t, y_tm1, alpha_ij
 
-    def forward(self, s_tm1, xs_h, ys, uh, xs_mask, ys_mask, isAtt=False, ss_eps=1.):
+    def forward(self, s_tm1, xs_h, ys, uh, xs_mask, ys_mask, isAtt=False, ss_eps=1., oracles=None):
 
         tlen_batch_s, tlen_batch_y, tlen_batch_c = [], [], []
         _checks = []
@@ -327,12 +329,11 @@ class Decoder(nn.Module):
         sent_logit, y_tm1_hypo = [], ys_e[0]
         for k in range(y_Lm1):
 
-            if wargs.dynamic_cyk_decoding is True:
-                #uh = self.ha(xs_h)
-                btg_uh = self.ha_btg(btg_xs_h)
-                #btg_uh = self.ha_btg(xs_h)
+            if wargs.dynamic_cyk_decoding is True: btg_uh = self.ha_btg(btg_xs_h)
 
             if ss_eps < 1:
+                oracles = oracles if oracles.dim() == 3 else self.trg_lookup_table(oracles)
+                y_tm1_hypo = oracles[k]
                 uval = tc.rand(b_size, 1)    # different word and differet batch
                 if wargs.gpu_id: uval = uval.cuda()
                 _h = Variable((uval > ss_eps).float(), requires_grad=False)
@@ -363,11 +364,11 @@ class Decoder(nn.Module):
             logit = self.step_out(s_tm1, y_tm1, attend)
             sent_logit.append(logit)
 
-            if ss_eps < 1:
+            #if ss_eps < 1:
                 #logit = self.map_vocab(logit)
-                logit = self.classifier.get_a(logit, noise=True)
-                y_tm1_hypo = logit.max(-1)[1]
-                y_tm1_hypo = self.trg_lookup_table(y_tm1_hypo)
+                #logit = self.classifier.get_a(logit, noise=True)
+                #y_tm1_hypo = logit.max(-1)[1]
+                #y_tm1_hypo = self.trg_lookup_table(y_tm1_hypo)
 
             #tlen_batch_c.append(attend)
             #tlen_batch_y.append(y_tm1)
