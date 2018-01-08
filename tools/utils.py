@@ -48,19 +48,6 @@ EOS = RESERVED_TOKENS.index(EOS_WORD)  # Normally 2 or 3
 
 epsilon = 1e-20
 
-def log_prob(x, self_norm_alpha=None):
-
-    # input torch tensor or variable
-    x_max = tc.max(x, dim=-1, keepdim=True)[0]  # take max for numerical stability
-    log_norm = tc.log( tc.sum( tc.exp( x - x_max ), dim=-1, keepdim=True ) + epsilon ) + x_max
-    # get log softmax
-    x = x - log_norm
-
-    # Sum_( log(P(xi)) - alpha * square( log(Z(xi)) ) )
-    if self_norm_alpha is not None: x = x - self_norm_alpha * tc.pow(log_norm, 2)
-
-    return log_norm, x
-
 def _load_model(model_path):
     state_dict = tc.load(model_path, map_location=lambda storage, loc: storage)
     if len(state_dict) == 4:
@@ -542,8 +529,7 @@ class MyLogSoftmax(nn.Module):
         # input torch tensor or variable
         x_max = tc.max(x, dim=-1, keepdim=True)[0]  # take max for numerical stability
         log_norm = tc.log( tc.sum( tc.exp( x - x_max ), dim=-1, keepdim=True ) + epsilon ) + x_max
-        # get log softmax
-        x = x - log_norm
+        x = x - log_norm    # get log softmax
 
         # Sum_( log(P(xi)) - alpha * square( log(Z(xi)) ) )
         if self.sna is not None: x = x - self.sna * tc.pow(log_norm, 2)
