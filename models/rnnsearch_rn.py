@@ -47,7 +47,8 @@ class NMT(nn.Module):
 
         return s0, xs, uh
 
-    def forward(self, srcs, trgs, srcs_m, trgs_m, isAtt=False, test=False, ss_eps=1.):
+    def forward(self, srcs, trgs, srcs_m, trgs_m, isAtt=False, test=False,
+                ss_eps=1., oracles=None):
         # (max_slen_batch, batch_size, enc_hid_size)
         s0, srcs, uh = self.init(srcs, srcs_m, False)
 
@@ -140,7 +141,7 @@ class Encoder(nn.Module):
         y = self.rn(x, xs_mask)
         #print y
         #y = self.laynorm0(y)
-        y = layer_prepostprocess(y, handle_type='n', normlizer=self.laynorm0)
+        #y = layer_prepostprocess(y, handle_type='n', normlizer=self.laynorm0)
         x = layer_prepostprocess(y, x, handle_type='da',
                                  dropout_rate=wargs.drop_rate, training=(not test))
 

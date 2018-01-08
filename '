@@ -179,15 +179,15 @@ class RelationLayer(nn.Module):
         if xs_mask is not None: x = x * xs_mask[:, :, None]
         x1 = x[:, None, :, :].repeat(1, L, 1, 1)
         x2 = x[None, :, :, :].repeat(L, 1, 1, 1)
-        x = tc.cat([x1, x2], dim=-1)    # (L, _L, B, d_out_chn_sum)
+        x = tc.cat([x1, x2], dim=-1)    # (L, L, B, d_out_chn_sum)
 
-        x = self.mlp(x)
+        x = self.mlp(x).mean(1)
         if xs_mask is not None: x = x * xs_mask[:, None, :, None]
-        x = x.mean(dim=1)
+        if xs_mask is not None: xs_h = xs_h * xs_mask[:, :, None]
 
-        # MLP Layer
+        ''' MLP Layer '''
         x = self.mlp_layer(x)
-        if xs_mask is not None: x = x * xs_mask[:, :, None]
+        if xs_mask is not None: xs_h = xs_h * xs_mask[:, :, None]
 
         return x
 
