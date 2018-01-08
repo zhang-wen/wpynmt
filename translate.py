@@ -64,20 +64,27 @@ class Translator(object):
 
     def trans_samples(self, srcs, trgs):
 
-        if isinstance(srcs, Variable): srcs = srcs.data
-        if isinstance(trgs, Variable): trgs = trgs.data
+        if isinstance(srcs, tc.autograd.variable.Variable): srcs = srcs.data
+        if isinstance(trgs, tc.autograd.variable.Variable): trgs = trgs.data
 
         # srcs: (sample_size, max_sLen)
         for idx in range(len(srcs)):
 
             s_filter = sent_filter(list(srcs[idx]))
             src_sent = idx2sent(s_filter, self.svcb_i2w)
+            if len(src_sent) == 2: src_sent, ori_src_toks = src_sent
             wlog('\n[{:3}] {}'.format('Src', src_sent))
             t_filter = sent_filter(list(trgs[idx]))
-            wlog('[{:3}] {}'.format('Ref', idx2sent(t_filter, self.tvcb_i2w)))
+            ref_sent = idx2sent(t_filter, self.tvcb_i2w)
+            if len(ref_sent) == 2: ref_sent, ori_ref_toks = ref_sent
+            wlog('[{:3}] {}'.format('Ref', ref_sent))
 
-            trans, _, attent_matrix = self.trans_onesent(s_filter)
-            src_toks, trg_toks = src_sent.split(' '), trans.split(' ')
+            trans, ids, attent_matrix = self.trans_onesent(s_filter)
+            if len(trans) == 2:
+                trans, trg_toks = trans
+                trans_subwords = '###'.join(trg_toks)
+                wlog('[{:3}] {}'.format('Sub', trans_subwords))
+            else: src_toks, trg_toks = src_sent.split(' '), trans.split(' ')
 
             if wargs.with_bpe is True:
                 wlog('[{:3}] {}'.format('Bpe', trans))
@@ -85,10 +92,15 @@ class Translator(object):
                 trans = re.sub('(@@ )|(@@ ?$)', '', trans)
 
             if self.print_att is True:
-                src_toks = [self.svcb_i2w[wid] for wid in src_toks]
+                if isinstance(vcb_i2w, dict):
+                    src_toks = [self.svcb_i2w[wid] for wid in s_filter]
+                else:
+                    src = self.svcb_i2w.decode(s_filter)
+                    if len(src) == 2: src_sent, src_toks = src
                 print_attention_text(attent_matrix, src_toks, trg_toks, isP=True)
                 plot_attention(attent_matrix, src_toks, trg_toks, 'att.svg')
 
+            #trans = re.sub('( ##AT##)|(##AT## )', '', trans)
             wlog('[{:3}] {}'.format('Out', trans))
 
     def force_decoding(self, batch_tst_data):
@@ -123,6 +135,7 @@ class Translator(object):
         total_trans = []
         total_aligns = [] if self.print_att is True else None
         sent_no, words_cnt = 0, 0
+        if wargs.word_piece is True: total_trans_subwords = []
 
         fd_attent_matrixs, trgs = None, None
         if batch_tst_data is not None:
@@ -137,6 +150,7 @@ class Translator(object):
             for no in range(batch_srcs_LB.size(1)): # batch size, 1 for valid
                 s_filter = sent_filter(list(batch_srcs_LB[:,no].data))
 
+                if wargs.word_piece is True: trans_subwords = []
                 if src_labels_fname is not None:
                     assert self.print_att is None, 'split sentence does not suport print attention'
                     # split by segment labels file
@@ -144,16 +158,23 @@ class Translator(object):
                     trans = []
                     for seg in segs:
                         seg_trans, ids, _ = self.trans_onesent(seg)
+                        if len(seg_trans) == 2:
+                            seg_trans, seg_subwords = seg_trans
+                            trans_subwords.append('###'.join(seg_subwords))
+                        else: _ = seg_trans.split(' ')
                         words_cnt += len(ids)
                         trans.append(seg_trans)
                     # merge by order
                     trans = ' '.join(trans)
+                    if wargs.word_piece is True: trans_subwords = '###'.join(trans_subwords)
                 else:
                     trans, ids, attent_matrix = self.trans_onesent(s_filter)
-                    trg_toks = trans.split(' ')
+                    if len(trans) == 2:
+                        trans, trg_toks = trans
+                        trans_subwords = '###'.join(trg_toks)
+                    else: trg_toks = trans.split(' ')
                     if trans == '': wlog('What ? null translation ... !')
                     words_cnt += len(ids)
-
                     if fd_attent_matrixs is not None:
                         # attention: feed previous word -> get the alignment of next word !!!
                         attent_matrix = fd_attent_matrixs[bid] # do not remove <b>
@@ -166,12 +187,20 @@ class Translator(object):
                         # maybe generate null translation, fault-tolerant here
                         if isinstance(attent_matrix, list) and len(attent_matrix) == 0: alnStr = ''
                         else:
-                            src_toks = [self.svcb_i2w[wid] for wid in s_filter]
+                            if isinstance(self.svcb_i2w, dict):
+                                src_toks = [self.svcb_i2w[wid] for wid in s_filter]
+                            else:
+                                #print type(self.svcb_i2w)
+                                # <class 'tools.text_encoder.SubwordTextEncoder'>
+                                src_toks = self.svcb_i2w.decode(s_filter)
+                                if len(src_toks) == 2: _, src_toks = src_toks
+                                #print src_toks
                             # attent_matrix: (trgL, srcL) numpy
                             alnStr = print_attention_text(attent_matrix, src_toks, trg_toks)
                         total_aligns.append(alnStr)
 
                 total_trans.append(trans)
+                if wargs.word_piece is True: total_trans_subwords.append(trans_subwords)
                 if numpy.mod(sent_no + 1, point_every) == 0: wlog('.', False)
                 if numpy.mod(sent_no + 1, number_every) == 0: wlog('{}'.format(sent_no + 1), False)
 
@@ -198,7 +227,8 @@ class Translator(object):
 
         wlog('Done ...')
         if total_aligns is not None: total_aligns = '\n'.join(total_aligns) + '\n'
-        return '\n'.join(total_trans) + '\n', total_aligns
+        total_trans_subwords = '\n'.join(total_trans_subwords) if wargs.word_piece else None
+        return '\n'.join(total_trans) + '\n', total_aligns, total_trans_subwords
 
     def segment_src(self, src_list, labels_list):
 
@@ -222,12 +252,17 @@ class Translator(object):
 
         return segments
 
-    def write_file_eval(self, out_fname, trans, data_prefix, alns=None):
+    def write_file_eval(self, out_fname, trans, data_prefix, alns=None, subw=None):
 
         if alns is not None:
             fout_aln = open('{}.aln'.format(out_fname), 'w')    # valids/trans
             fout_aln.writelines(alns)
             fout_aln.close()
+
+        if subw is not None:
+            fout_subw = open('{}.subword'.format(out_fname), 'w')    # valids/trans
+            fout_subw.writelines(subw)
+            fout_subw.close()
 
         fout = open(out_fname, 'w')    # valids/trans
         fout.writelines(trans)
@@ -249,6 +284,9 @@ class Translator(object):
             os.system("sed -r 's/(@@ )|(@@ ?$)//g' {}.bpe > {}".format(out_fname, out_fname))
             wlog("sed -r 's/(@@ )|(@@ ?$)//g' {}.bpe > {}".format(out_fname, out_fname))
 
+        # Luong: remove "rich-text format" --> rich ##AT##-##AT## text format
+        #os.system("sed -r -i 's/( ##AT##)|(##AT## )//g' {}".format(out_fname))
+        #wlog("sed -r -i 's/( ##AT##)|(##AT## )//g' {}".format(out_fname))
         if wargs.with_postproc is True:
             opost_name = '{}.opost'.format(out_fname)
             os.system('cp {} {}'.format(out_fname, opost_name))
@@ -258,58 +296,12 @@ class Translator(object):
             mteval_bleu_opost = bleu_file(opost_name, ref_fpaths)
             os.rename(opost_name, "{}_{}.txt".format(opost_name, mteval_bleu_opost))
 
-        '''
-        os.system('cp {} {}.bpe'.format(out_fname, out_fname))
-	wlog('cp {} {}.bpe'.format(out_fname, out_fname))
-        os.system("sed -r 's/(@@ )|(@@ ?$)//g' {}.bpe > {}".format(out_fname, out_fname))
-	wlog("sed -r 's/(@@ )|(@@ ?$)//g' {}.bpe > {}".format(out_fname, out_fname))
-        src_sgm = '{}/{}.src.sgm'.format(wargs.val_tst_dir, data_prefix)
-        os.system('./scripts/wrap_xml.pl zh {} {} < {} > {}.sgm'.format(src_sgm, data_prefix, out_fname, out_fname))
-	wlog('./scripts/wrap_xml.pl zh {} {} < {} > {}.sgm'.format(src_sgm, data_prefix, out_fname, out_fname))
-        os.system('./scripts/chi_char_segment.pl -t xml < {}.sgm > {}.seg.sgm'.format(out_fname, out_fname))
-	wlog('./scripts/chi_char_segment.pl -t xml < {}.sgm > {}.seg.sgm'.format(out_fname, out_fname))
-        os.system('./scripts/de-xml.pl < {}.seg.sgm > {}.seg.plain'.format(out_fname, out_fname))
-	wlog('./scripts/de-xml.pl < {}.seg.sgm > {}.seg.plain'.format(out_fname, out_fname))
-        '''
         mteval_bleu = bleu_file(out_fname, ref_fpaths)
         #mteval_bleu = bleu_file(out_fname + '.seg.plain', ref_fpaths)
         os.rename(out_fname, "{}_{}.txt".format(out_fname, mteval_bleu))
 
-        return mteval_bleu  # always use the the bleu of proc results to select model
+        return mteval_bleu
         #return mteval_bleu_opost if wargs.with_postproc is True else mteval_bleu
-
-    def ai_write_file_eval(self, out_fname, trans, data_prefix):
-
-        fout = open(out_fname, 'w')    # valids/trans
-        fout.writelines(trans)
-        fout.close()
-
-        src_sgm = '{}/{}.src.sgm'.format(wargs.val_tst_dir, data_prefix)
-        os.system('./scripts/wrap_xml.pl zh {} {} < {} > {}.sgm'.format(src_sgm, data_prefix, out_fname, out_fname))
-        os.system('./scripts/chi_char_segment.pl -t xml < {}.sgm > {}.seg.sgm'.format(out_fname, out_fname))
-
-        #de_xml_cmd = './scripts/de-xml.pl < {}.seg.xml > {}.seg.plain'.format(out_fname, out_fname)
-        #os.system(de_xml_cmd)
-
-        # calc BLEU/NIST score
-        bleu_cmd = './scripts/mteval-v11b.pl -s {} -r {}/{}.ref.seg.sgm -t {}.seg.sgm -c > {}.bleu'.format(
-            src_sgm, wargs.val_tst_dir, data_prefix, out_fname, out_fname)
-        os.system(bleu_cmd)
-
-        # get bleu: NIST score = 5.5073  BLEU score = 0.2902 for system "DemoSystem"
-        try:
-            raw_bleu = ' '.join(open(out_fname + '.bleu', 'r').readlines()).replace('\n', ' ')
-            gps = re.search( r'NIST score = (?P<NIST>[\d\.]+)  BLEU score = (?P<BLEU>[\d\.]+) ' , raw_bleu )
-            if gps:
-                bleu_score = gps.group('BLEU')
-            else:
-                print >> sys.stderr, "ERROR: unable to get bleu and nist score"
-                sys.exit(1)
-        except:
-            print >> sys.stderr, "ERROR: exception during calculating bleu score"
-        os.rename(out_fname, "{}_{}.txt".format(out_fname, bleu_score))
-
-        return bleu_score
 
     def trans_tests(self, tests_data, eid, bid):
 
@@ -373,3 +365,7 @@ if __name__ == "__main__":
     import sys
     res = valid_bleu(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
     wlog(res)
+
+
+
+
