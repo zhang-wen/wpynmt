@@ -67,8 +67,8 @@ ref_cnt = 16
 #tests_prefix = ['nist02', 'nist03', 'nist04', 'nist05', 'nist06', 'nist08', 'wmt17.tst']
 #tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08']
 #tests_prefix = ['data2', 'data3', 'test']
-tests_prefix = ['devset3.lc', '900']
-#tests_prefix = ['devset3.lc']
+#tests_prefix = ['devset3.lc', '900']
+tests_prefix = ['devset3.lc']
 #tests_prefix = ['newstest2015.tc', 'newstest2016.tc', 'newstest2017.tc']
 #tests_prefix = None
 
@@ -189,7 +189,7 @@ dynamic_cyk_decoding = False
 print_att = True
 
 # Scheduled Sampling of Samy bengio's paper
-ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
+ss_type = None     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
 ss_eps_begin = 1   # set None for no scheduled sampling
 ss_eps_end = 1
 #ss_decay_rate = 0.005

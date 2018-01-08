@@ -22,8 +22,8 @@ def str1(content, encoding='utf-8'):
     return json.dumps(content, encoding=encoding, ensure_ascii=False, indent=4)
     pass
 
-DEBUG = True
-#DEBUG = False
+#DEBUG = True
+DEBUG = False
 #PAD = 0
 #UNK = 1
 #BOS = 2
@@ -596,9 +596,10 @@ def schedule_sample(ss_eps, y_tm1_gold, y_tm1_hypo):
 
     return y_tm1_hypo if random.random() > ss_eps else y_tm1_gold
 
-def schedule_sample_eps_decay(i):
+def schedule_sample_eps_decay(i, ss_eps_cur):
 
     ss_type, k = wargs.ss_type, wargs.ss_k
+    if ss_type is None: return ss_eps_cur
     if ss_type == 1:
         # Linear decay
         ss = wargs.ss_eps_begin - ( wargs.ss_decay_rate * i )

@@ -82,7 +82,8 @@ class Trainer(object):
             show_start = time.time()
 
             from searchs.nbs import Nbs
-            self.sampler = Nbs(self.model, self.tv, k=3, noise=False, print_att=False, batch_sample=True)
+            if wargs.ss_type is not None and ss_eps_cur < 1.:
+                self.sampler = Nbs(self.model, self.tv, k=3, noise=False, print_att=False, batch_sample=True)
             for k in range(batch_count):
 
                 bidx += 1
@@ -93,8 +94,8 @@ class Trainer(object):
                 _, srcs, ttrgs_for_files, slens, srcs_m, trg_mask_for_files = self.train_data[batch_idx]
                 trgs, trgs_m = ttrgs_for_files[0], trg_mask_for_files[0]
                 #wlog(trgs)
-                batch_oracles = None
-                if ss_eps_cur < 1.:
+                batch_oracles, _checks = None, None
+                if wargs.ss_type is not None and ss_eps_cur < 1.:
                     batch_beam_trgs = self.sampler.beam_search_trans(srcs, srcs_m, trgs_m)
                     batch_beam_trgs = [list(zip(*b)[0]) for b in batch_beam_trgs]
                     #wlog(batch_beam_trgs)
@@ -198,7 +199,7 @@ class Trainer(object):
             self.optim.update_learning_rate(mteval_bleu, epoch)
 
             # decay the probability value epslion of scheduled sampling per batch
-            ss_eps_cur = schedule_sample_eps_decay(epoch)   # start from 1
+            ss_eps_cur = schedule_sample_eps_decay(epoch, ss_eps_cur)   # start from 1
 
             epoch_time_consume = time.time() - epoch_start
             wlog('Consuming: {:4.2f}s'.format(epoch_time_consume))

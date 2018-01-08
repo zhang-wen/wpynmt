@@ -204,9 +204,10 @@ class Nbs(object):
                 btg_xs_mask = tc.stack([item[1][2] for item in prevb], dim=1)   # (L, n_remainings)
 
             debug(y_im1)
-            a_i, s_i, y_im1, alpha_ij, _, _, _ = self.decoder.step(
+            step_output = self.decoder.step(
                 s_im1, enc_src, uh, y_im1, btg_xs_h=btg_xs_h, btg_uh=btg_uh,
                 btg_xs_mask=btg_xs_mask)
+            a_i, s_i, y_im1, alpha_ij = step_output[:4]
             # (n_remainings*p, enc_hid_size), (n_remainings*p, dec_hid_size),
             # (n_remainings*p, trg_wemb_size), (x_maxL, n_remainings*p)
 

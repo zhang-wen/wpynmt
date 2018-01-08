@@ -310,26 +310,26 @@ class Translator(object):
             wlog('\nTranslating test dataset {}'.format(test_prefix))
             label_fname = '{}{}/{}.label'.format(wargs.val_tst_dir, wargs.seg_val_tst_dir,
                                                  test_prefix) if wargs.segments else None
-            trans, alns = self.single_trans_file(tests_data[test_prefix], label_fname)
+            trans, alns, subw = self.single_trans_file(tests_data[test_prefix], label_fname)
 
             outprefix = wargs.dir_tests + '/' + test_prefix + '/trans'
             test_out = "{}_e{}_upd{}_b{}m{}_bch{}".format(
                 outprefix, eid, bid, self.k, self.search_mode, wargs.with_batch)
 
-            _ = self.write_file_eval(test_out, trans, test_prefix, alns)
+            _ = self.write_file_eval(test_out, trans, test_prefix, alns, subw)
 
     def trans_eval(self, valid_data, eid, bid, model_file, tests_data):
 
         wlog('\nTranslating validation dataset {}{}.{}'.format(wargs.val_tst_dir, wargs.val_prefix, wargs.val_src_suffix))
         label_fname = '{}{}/{}.label'.format(wargs.val_tst_dir, wargs.seg_val_tst_dir,
                                              wargs.val_prefix) if wargs.segments else None
-        trans, alns = self.single_trans_file(valid_data, label_fname)
+        trans, alns, subw = self.single_trans_file(valid_data, label_fname)
 
         outprefix = wargs.dir_valid + '/trans'
         valid_out = "{}_e{}_upd{}_b{}m{}_bch{}".format(
             outprefix, eid, bid, self.k, self.search_mode, wargs.with_batch)
 
-        mteval_bleu = self.write_file_eval(valid_out, trans, wargs.val_prefix, alns)
+        mteval_bleu = self.write_file_eval(valid_out, trans, wargs.val_prefix, alns, subw)
 
         bleu_scores_fname = '{}/train_bleu.log'.format(wargs.dir_valid)
         bleu_scores = [0.]

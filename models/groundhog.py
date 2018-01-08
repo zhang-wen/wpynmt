@@ -36,7 +36,8 @@ class NMT(nn.Module):
 
         return s0, xs, uh
 
-    def forward(self, srcs, trgs, srcs_m, trgs_m, ss_eps=1.):
+    def forward(self, srcs, trgs, srcs_m, trgs_m, isAtt=False, test=False,
+                ss_eps=1., oracles=None):
 
         # (max_slen_batch, batch_size, enc_hid_size)
         s0, srcs, uh = self.init(srcs, srcs_m, False)
@@ -141,8 +142,8 @@ class Decoder(nn.Module):
         self.classifier = Classifier(wargs.out_size, trg_vocab_size,
                                      self.trg_lookup_table if wargs.copy_trg_emb is True else None)
 
-    def step(self, s_tm1, xs_h, uh, y_tm1, xs_mask=None, y_mask=None):
-
+    def step(self, s_tm1, xs_h, uh, y_tm1,
+             btg_xs_h=None, btg_uh=None, btg_xs_mask=None, xs_mask=None, y_mask=None):
         if not isinstance(y_tm1, tc.autograd.variable.Variable):
             if isinstance(y_tm1, int): y_tm1 = tc.Tensor([y_tm1]).long()
             elif isinstance(y_tm1, list): y_tm1 = tc.Tensor(y_tm1).long()

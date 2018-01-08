@@ -176,7 +176,7 @@ with_postproc = True
 copy_trg_emb = False
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 4
+model = 0
 
 # convolutional layer
 #filter_window_size = [1, 3, 5]   # windows size
@@ -190,7 +190,7 @@ dynamic_cyk_decoding = False
 print_att = True
 
 # Scheduled Sampling of Samy bengio's paper
-ss_type = 1     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
+ss_type = None     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
 ss_eps_begin = 1   # set None for no scheduled sampling
 ss_eps_end = 1
 #ss_decay_rate = 0.005
