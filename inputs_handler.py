@@ -22,7 +22,7 @@ EN_SPACE_TOK = 3
 ZH_SPACE_TOK = 16
 
 # 32768
-def get_or_generate_vocab(data_file, vocab_file, vocab_size=2**15):
+def get_or_generate_vocab(data_file, vocab_file, vocab_size=2**15, max_seq_len=50):
     """Inner implementation for vocab generators.
     Args:
     vocab_filename: relative filename where vocab file is stored
@@ -37,7 +37,7 @@ def get_or_generate_vocab(data_file, vocab_file, vocab_size=2**15):
       return vocab
 
     token_counts = defaultdict(int)
-    for item in genVcb(data_file):
+    for item in genVcb(data_file, max_seq_len):
       for tok in tokenizer.encode(text_encoder.native_to_unicode(item)):
           token_counts[tok] += 1
 
@@ -48,7 +48,7 @@ def get_or_generate_vocab(data_file, vocab_file, vocab_size=2**15):
     return vocab
 
 """Generate a vocabulary from the datasets in sources."""
-def genVcb(filepath):
+def genVcb(filepath, max_seq_len=50):
     wlog("Generating vocab from: {}".format(filepath))
     # Use Tokenizer to count the word occurrences.
     with open(filepath, 'r') as train_file:
@@ -61,11 +61,12 @@ def genVcb(filepath):
             else:
                 if file_byte_budget <= 0: break
                 line = line.strip()
+                if len(line.split()) > max_seq_len: continue
                 file_byte_budget -= len(line)
                 counter = 0
                 yield line
 
-def extract_vocab(data_file, vocab_file, max_vcb_size=30000):
+def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50):
 
     if os.path.exists(vocab_file) is True:
 
@@ -76,20 +77,21 @@ def extract_vocab(data_file, vocab_file, max_vcb_size=30000):
 
     else:
 
-        vocab = count_vocab(data_file, max_vcb_size)
+        vocab = count_vocab(data_file, max_vcb_size, max_seq_len)
         vocab.write_into_file(vocab_file)
         wlog('Save dictionary file into {}'.format(vocab_file))
 
     return vocab
 
-def count_vocab(data_file, max_vcb_size):
+def count_vocab(data_file, max_vcb_size, max_seq_len=50):
 
     vocab = Dictionary()
     with open(data_file, 'r') as f:
         for sent in f.readlines():
             sent = sent.strip()
-            for word in sent.split():
-                vocab.add(word)
+            words = sent.split()
+            if len(words) > max_seq_len: continue
+            for word in words: vocab.add(word)
 
     # vocab.write_into_file('all.vocab')
 
@@ -250,14 +252,14 @@ if __name__ == "__main__":
     vocabs = {}
     if wargs.word_piece is True:
         wlog('\n[w/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = get_or_generate_vocab(src, wargs.src_dict)
+        src_vocab = get_or_generate_vocab(src, wargs.src_dict, max_seq_len=wargs.max_seq_len)
         wlog('\n[w/Subword] Preparing target vocabulary from {} ... '.format(trg))
-        trg_vocab = get_or_generate_vocab(trg, wargs.trg_dict)
+        trg_vocab = get_or_generate_vocab(trg, wargs.trg_dict, max_seq_len=wargs.max_seq_len)
     else:
         wlog('\n[o/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size)
+        src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size, wargs.max_seq_len)
         wlog('\n[o/Subword] Preparing target vocabulary from {} ... '.format(trg))
-        trg_vocab = extract_vocab(trg, wargs.trg_dict, wargs.trg_dict_size)
+        trg_vocab = extract_vocab(trg, wargs.trg_dict, wargs.trg_dict_size, wargs.max_seq_len)
     src_vocab_size, trg_vocab_size = src_vocab.size(), trg_vocab.size()
     wlog('Vocabulary size: |source|={}, |target|={}'.format(src_vocab_size, trg_vocab_size))
     vocabs['src'], vocabs['trg'] = src_vocab, trg_vocab

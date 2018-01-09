@@ -44,14 +44,14 @@ def main():
     vocabs = {}
     if wargs.word_piece is True:
         wlog('\n[w/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = get_or_generate_vocab(src, wargs.src_dict)
+        src_vocab = get_or_generate_vocab(src, wargs.src_dict, max_seq_len=wargs.max_seq_len)
         wlog('\n[w/Subword] Preparing target vocabulary from {} ... '.format(trg))
-        trg_vocab = get_or_generate_vocab(trg, wargs.trg_dict)
+        trg_vocab = get_or_generate_vocab(trg, wargs.trg_dict, max_seq_len=wargs.max_seq_len)
     else:
         wlog('\n[o/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size)
+        src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size, wargs.max_seq_len)
         wlog('\n[o/Subword] Preparing target vocabulary from {} ... '.format(trg))
-        trg_vocab = extract_vocab(trg, wargs.trg_dict, wargs.trg_dict_size)
+        trg_vocab = extract_vocab(trg, wargs.trg_dict, wargs.trg_dict_size, wargs.max_seq_len)
     src_vocab_size, trg_vocab_size = src_vocab.size(), trg_vocab.size()
     wlog('Vocabulary size: |source|={}, |target|={}'.format(src_vocab_size, trg_vocab_size))
     vocabs['src'], vocabs['trg'] = src_vocab, trg_vocab
