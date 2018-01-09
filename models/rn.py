@@ -129,7 +129,8 @@ class RelationLayer(nn.Module):
         self.cnnlayer = nn.ModuleList(
             [
                 nn.Sequential(*[
-                    ConvLayer(d_in_chn=(d_in if i == 0 else (d_in + i * self.d_chns[k])),
+                    ConvLayer(d_in_chn=( d_in if i == 0 else ( (d_in + i * self.d_chns[k]) \
+                                        if dense is True else self.d_chns[k] ) ),
                               d_out_chn=self.d_chns[k], n_windows=self.fws[k],
                               dense=False if i == n_conv_layers - 1 else dense) \
                     for i in range(n_conv_layers)

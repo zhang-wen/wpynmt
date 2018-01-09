@@ -84,7 +84,7 @@ class Encoder(nn.Module):
         self.back_gru = GRU(output_size, output_size, with_ln=with_ln, prefix=f('Back'))
 
         self.rn = RelationLayer(output_size, output_size, wargs.filter_window_size,
-                                wargs.filter_feats_size, wargs.mlp_size, dense=True)
+                                wargs.filter_feats_size, wargs.mlp_size, dense=False)
         #self.laynorm1 = LayerNormalization(wargs.enc_hid_size)
         #self.dropout = nn.Dropout(0.1)
 

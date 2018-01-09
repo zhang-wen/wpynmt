@@ -75,8 +75,8 @@ tests_prefix = ['newstest2009', 'newstest2010', 'newstest2011', 'newstest2012', 
 
 # Training data
 train_shuffle = True
-batch_size = 80
-sort_k_batches = 20
+batch_size = 40
+sort_k_batches = 10
 
 # Data path
 dir_data = 'data/'
@@ -173,7 +173,7 @@ dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
 dec_layer_cnt = 4
 
 with_bpe = True
-with_postproc = True
+with_postproc = False
 copy_trg_emb = False
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
@@ -183,8 +183,8 @@ model = 4
 #filter_window_size = [1, 3, 5]   # windows size
 filter_window_size = [3]   # windows size
 #filter_feats_size = [32, 64, 96]
-filter_feats_size = [128]
-mlp_size = 128
+filter_feats_size = [256]
+mlp_size = 256
 
 # generate BTG tree when decoding
 dynamic_cyk_decoding = False
@@ -205,7 +205,7 @@ self_norm_alpha = None
 nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [3]
+gpu_id = [2]
 #gpu_id = None
 
 
