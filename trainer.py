@@ -19,7 +19,9 @@ class Trainer(object):
     def __init__(self, model, train_data, vocab_data, optim, valid_data=None, tests_data=None):
 
         self.model = model
-        self.classifier = model.decoder.classifier
+        if isinstance(model, tc.nn.DataParallel): self.classifier = model.module.decoder.classifier
+        else: self.classifier = model.decoder.classifier
+
         self.train_data = train_data
         self.sv = vocab_data['src'] if wargs.word_piece else vocab_data['src'].idx2key
         self.tv = vocab_data['trg'] if wargs.word_piece else vocab_data['trg'].idx2key
@@ -110,8 +112,14 @@ class Trainer(object):
                 if len(outputs) == 2: (outputs, _checks) = outputs
                 this_bnum = outputs.size(1)
 
-                batch_loss, batch_correct_num, batch_log_norm = self.classifier.snip_back_prop(
-                    outputs, trgs[1:], trgs_m[1:], wargs.snip_size)
+                batch_loss, batch_correct_num, batch_log_norm = self.classifier(outputs, trgs[1:], trgs_m[1:])
+                batch_loss.div(this_bnum).backward()
+
+                batch_loss = batch_loss.data[0]
+                batch_correct_num = batch_correct_num.data[0]
+                batch_log_norm = batch_log_norm.data[0]
+                #batch_loss, batch_correct_num, batch_log_norm = self.classifier.snip_back_prop(
+                #    outputs, trgs[1:], trgs_m[1:], wargs.snip_size)
 
                 self.optim.step()
                 grad_checker(self.model, _checks)
