@@ -8,7 +8,6 @@ from tools.optimizer import Optim
 from inputs_handler import *
 
 # Check if CUDA is available
-'''
 if cuda.is_available():
     wlog('CUDA is available, specify device by gpu_id argument (i.e. gpu_id=[3])')
 else:
@@ -17,7 +16,6 @@ else:
 if wargs.gpu_id:
     cuda.set_device(wargs.gpu_id[0])
     wlog('Using GPU {}'.format(wargs.gpu_id[0]))
-'''
 
 if wargs.model == 0: from models.groundhog import *
 elif wargs.model == 1: from models.rnnsearch import *
@@ -136,7 +134,7 @@ def main():
 
     if wargs.gpu_id is not None:
         #nmtModel.cuda()
-        nmtModel = tc.nn.DataParallel(nmtModel, device_ids=wargs.gpu_id, dim=1)
+        #nmtModel = tc.nn.DataParallel(nmtModel, device_ids=wargs.gpu_id, dim=1)
         nmtModel.cuda()
         wlog('Push model onto GPU {} ... '.format(wargs.gpu_id))
     else:
