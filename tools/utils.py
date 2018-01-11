@@ -291,8 +291,8 @@ def back_tracking(beam, bidx, best_sample_endswith_eos, attent_probs=None):
         # then use the back pointer to find the best path backward
         # <eos> is in pos endi, we do not keep <eos>
         if check is True:
-            _, _, aa, w, backptr = beam[i][bidx][bp]
-            if isinstance(aa, int): assert aa == bidx
+            _, _, true_bidx, w, backptr = beam[i][bidx][bp]
+            #if isinstance(true_bidx, int): assert true_bidx == bidx
         else: _, _, _, _, w, backptr = beam[i][bidx][bp]
         seq.append(w)
         bp = backptr
