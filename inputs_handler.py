@@ -93,8 +93,6 @@ def count_vocab(data_file, max_vcb_size, max_seq_len=50):
             if len(words) > max_seq_len: continue
             for word in words: vocab.add(word)
 
-    # vocab.write_into_file('all.vocab')
-
     words_cnt = sum(vocab.freq.itervalues())
     new_vocab, new_words_cnt = vocab.keep_vocab_size(max_vcb_size)
     wlog('|Final vocabulary| / |Original vocabulary| = {} / {} = {:4.2f}%'

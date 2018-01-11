@@ -109,7 +109,7 @@ class Attention(nn.Module):
 
     def forward(self, s_tm1, xs_h, uh, xs_mask=None):
 
-        d1, d2, d3 = uh.size()
+        #d1, d2, d3 = uh.size()
         # (b, dec_hid_size) -> (b, aln) -> (1, b, aln) -> (slen, b, aln) -> (slen, b)
         #print self.sa(s_tm1)[None, :, :].size(), uh.size()
         #print 'xs_mask: ', xs_mask
