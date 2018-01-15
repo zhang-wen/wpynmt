@@ -11,35 +11,35 @@ max_seq_len = 50
 Embedding layer
 '''
 # Size of word embedding of source word and target word
-#src_wemb_size = 500
-src_wemb_size = 512
-#trg_wemb_size = 500
-trg_wemb_size = 512
+src_wemb_size = 500
+#src_wemb_size = 512
+trg_wemb_size = 500
+#trg_wemb_size = 512
 
 '''
 Encoder layer
 '''
 # Size of hidden units in encoder
-#enc_hid_size = 1024
-enc_hid_size = 512
+enc_hid_size = 1024
+#enc_hid_size = 512
 
 '''
 Attention layer
 '''
 # Size of alignment vector
-align_size = 512
+align_size = 1024
 
 '''
 Decoder layer
 '''
 # Size of hidden units in decoder
-#dec_hid_size = 1024
-dec_hid_size = 512
+dec_hid_size = 1024
+#dec_hid_size = 512
 # Size of the output vector
 out_size = 512
 
-#drop_rate = 0.2
-drop_rate = 0.5
+drop_rate = 0.2
+#drop_rate = 0.5
 
 # Directory to save model, test output and validation output
 dir_model = 'wmodel'
@@ -52,31 +52,31 @@ val_shuffle = True
 #val_tst_dir = '/home5/wen/2.data/allnist_stanseg/'
 #val_tst_dir = '/home5/wen/2.data/segment_allnist_stanseg/'
 #val_tst_dir = '/home5/wen/2.data/segment_allnist_stanseg_low/'
-val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
+#val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
 #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
 #val_tst_dir = '/home/wen/3.corpus/segment_allnist_stanseg/'
-#val_tst_dir = '/home/wen/3.corpus/wmt16/rsennrich/devtst/'
+val_tst_dir = '/home/wen/3.corpus/wmt16/rsennrich/devtst/'
 #val_tst_dir = '/home/wen/3.corpus/wmt14/en-de-Luong/'
 #val_tst_dir = './data/'
 
 #val_prefix = 'wmt17.dev'
-val_prefix = 'nist02'
+#val_prefix = 'nist02'
 #val_prefix = 'devset1_2.lc'
-#val_prefix = 'newstest2013'
-val_src_suffix = 'src'
-val_ref_suffix = 'ref.plain_'
+val_prefix = 'newstest2013'
+#val_src_suffix = 'src'
+#val_ref_suffix = 'ref.plain_'
 #val_src_suffix = 'zh'
 #val_ref_suffix = 'en'
-#val_src_suffix = 'en.16kbpe'
-#val_ref_suffix = 'de'
+val_src_suffix = 'en.89.5kbpe'
+val_ref_suffix = 'de'
 ref_cnt = 4
 
 #tests_prefix = ['nist02', 'nist03', 'nist04', 'nist05', 'nist06', 'nist08', 'wmt17.tst']
-tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
+#tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
 #tests_prefix = ['data2', 'data3', 'test']
 #tests_prefix = ['devset3.lc', '900']
 #tests_prefix = ['devset3.lc']
-#tests_prefix = ['newstest2009', 'newstest2010', 'newstest2011', 'newstest2012', 'newstest2014', 'newstest2015', 'newstest2016', 'newstest2017']
+tests_prefix = ['newstest2009', 'newstest2010', 'newstest2011', 'newstest2012', 'newstest2014', 'newstest2015', 'newstest2016', 'newstest2017']
 #tests_prefix = None
 
 # Training data
@@ -93,8 +93,8 @@ dev_max_seq_len = 10000000
 
 # Dictionary
 word_piece = False
-src_dict_size = 30000
-trg_dict_size = 30000
+src_dict_size = 78500
+trg_dict_size = 85000
 src_dict = dir_data + 'src.dict.tcf'
 trg_dict = dir_data + 'trg.dict.tcf'
 
@@ -106,7 +106,7 @@ max_epochs = 25
 epoch_shuffle = False
 epoch_shuffle_minibatch = 1
 
-small = True
+small = False
 eval_small = False
 
 display_freq = 10 if small else 1000
@@ -133,7 +133,7 @@ fix_pre_params = True
 search_mode = 1
 with_batch = 1
 ori_search = 0
-beam_size = 10
+beam_size = 12
 vocab_norm = 1  # softmax
 len_norm = 1    # 0: no noraml, 1: length normal, 2: alpha-beta
 with_mv = 0
@@ -211,7 +211,7 @@ self_norm_alpha = None
 nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [3]
+gpu_id = [0]
 #gpu_id = None
 
 

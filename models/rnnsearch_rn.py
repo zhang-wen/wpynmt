@@ -88,10 +88,10 @@ class Encoder(nn.Module):
         #self.laynorm1 = LayerNormalization(wargs.enc_hid_size)
         #self.dropout = nn.Dropout(0.1)
 
-        self.down0 = nn.Linear(2 * d_out, d_out)
-        self.down1 = nn.Linear(3 * d_out, d_out)
-        self.down2 = nn.Linear(4 * d_out, d_out)
-        self.down3 = nn.Linear(5 * d_out, d_out)
+        self.down0 = nn.Linear(d_in + d_out, d_out)
+        self.down1 = nn.Linear(d_in + 2 * d_out, d_out)
+        self.down2 = nn.Linear(d_in + 3 * d_out, d_out)
+        self.down3 = nn.Linear(d_in + 4 * d_out, d_out)
 
         #self.relation_layer2 = RelationLayer(wargs.enc_hid_size, wargs.enc_hid_size, 80)
         #self.relation_layer3 = RelationLayer(wargs.enc_hid_size, wargs.enc_hid_size, 80)
@@ -114,7 +114,7 @@ class Encoder(nn.Module):
             right.append(h)
 
         out_1 = tc.stack(right, dim=0)
-        out_1 = out_1 + xs_e
+        #out_1 = out_1 + xs_e
         in_2 = tc.cat([xs_e, out_1], dim=-1)
         in_2 = self.down0(in_2)
 
