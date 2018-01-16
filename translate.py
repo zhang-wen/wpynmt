@@ -355,7 +355,7 @@ class Translator(object):
         sfig_content = ('{} {} {} {} {}').format(eid, bid, self.search_mode, self.k, mteval_bleu)
         append_file(sfig, sfig_content)
 
-        if wargs.save_one_model:
+        if wargs.save_one_model and os.path.exists(model_file) is True:
             os.remove(model_file)
             wlog('Saving one model, so delete {}\n'.format(model_file))
 
