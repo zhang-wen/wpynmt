@@ -135,11 +135,13 @@ def main():
     if wargs.gpu_id is not None:
         #nmtModel.cuda()
         #nmtModel = tc.nn.DataParallel(nmtModel, device_ids=wargs.gpu_id, dim=1)
+        wlog('Push model onto GPU {} ... '.format(wargs.gpu_id), 0)
         nmtModel.cuda()
-        wlog('Push model onto GPU {} ... '.format(wargs.gpu_id))
+        wlog('done.')
     else:
+        wlog('Push model onto CPU ... ', 0)
         nmtModel.cpu()
-        wlog('Push model onto CPU ... ')
+        wlog('done.')
 
     wlog(nmtModel)
     wlog(optim)

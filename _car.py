@@ -40,7 +40,7 @@ class DataHisto():
                          self.chunk_Ds[1] + chunk_Dk[1])
         self.size += len(chunk_Dk[0])
 
-    def merge_batch(self, new_batch):
+    def merge_batch(self, new_batch, batch_sort=False):
 
         # fine selectly sampling from history training chunks
         sample_xs, sample_ys = [], []
@@ -63,12 +63,14 @@ class DataHisto():
         #shuf_idx = tc.randperm(new_batch[1].size(1))
         #for idx in range(new_batch[1].size(1) / 2):
         for idx in range(new_batch[1].size(1)):  # add another new batch data
-            src = tc.Tensor(sent_filter(new_batch[1][:, idx].data.tolist()))
-            trg = tc.Tensor(sent_filter(new_batch[2][0][:, idx].data.tolist()))
+            #src = tc.Tensor(sent_filter(new_batch[1][:, idx].data.tolist()))
+            #trg = tc.Tensor(sent_filter(new_batch[2][0][:, idx].data.tolist()))
+            src = tc.Tensor(new_batch[1][:, idx].data.tolist())
+            trg = tc.Tensor(new_batch[2][0][:, idx].data.tolist())
             sample_xs.append(src)
             sample_ys.append([trg])
 
-        return Input(sample_xs, sample_ys, wargs.batch_size * 2, batch_sort=True, printlog=False)
+        return Input(sample_xs, sample_ys, wargs.batch_size * 2, batch_sort=batch_sort, printlog=False)
 
 def main():
 
@@ -197,21 +199,21 @@ def main():
             start_decay_from=wargs.start_decay_from,
             last_valid_bleu=wargs.last_valid_bleu
         )
+        optim.init_optimizer(nmtModel.parameters())
 
     if wargs.gpu_id:
+        wlog('Push model onto GPU {} ... '.format(wargs.gpu_id), 0)
         nmtModel.cuda()
-        wlog('Push model onto GPU[{}] ... '.format(wargs.gpu_id[0]))
     else:
+        wlog('Push model onto CPU ... ', 0)
         nmtModel.cpu()
-        wlog('Push model onto CPU ... ')
 
+    wlog('done.')
     wlog(nmtModel)
     wlog(optim)
     pcnt1 = len([p for p in nmtModel.parameters()])
     pcnt2 = sum([p.nelement() for p in nmtModel.parameters()])
     wlog('Parameters number: {}/{}'.format(pcnt1, pcnt2))
-
-    optim.init_optimizer(nmtModel.parameters())
 
     trainer = Trainer(nmtModel, src_vocab.idx2key, trg_vocab.idx2key, optim, trg_vocab_size,
                       valid_data=batch_valid, tests_data=batch_tests)
@@ -261,7 +263,6 @@ def main():
                                                shuffle=True, sort_data=True,
                                                max_seq_len=wargs.dev_max_seq_len)
     batch_dev = Input(valid_src_tlst, valid_trg_tlst, wargs.batch_size, batch_sort=True)
-
 
     trainer.train(dh, batch_dev, 0, merge=True, name='DH_{}'.format('dev'))
 

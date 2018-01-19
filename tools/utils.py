@@ -49,6 +49,7 @@ EOS = RESERVED_TOKENS.index(EOS_WORD)  # Normally 2 or 3
 epsilon = 1e-20
 
 def _load_model(model_path):
+    wlog('Loading pre-trained model ... from {} '.format(model_path), 0)
     state_dict = tc.load(model_path, map_location=lambda storage, loc: storage)
     if len(state_dict) == 4:
         model_dict, eid, bid, optim = state_dict['model'], state_dict['epoch'], state_dict['batch'], state_dict['optim']
@@ -56,8 +57,7 @@ def _load_model(model_path):
     elif len(state_dict) == 5:
         model_dict, class_dict, eid, bid, optim = state_dict['model'], state_dict['class'], state_dict['epoch'], state_dict['batch'], state_dict['optim']
         rst = ( model_dict, class_dict, eid, bid, optim )
-    wlog('Loading pre-trained model from {} at epoch {} and batch {}'.format(model_path, eid, bid))
-    wlog('Loading optimizer from {}'.format(model_path))
+    wlog('at epoch {} and batch {}'.format(eid, bid))
     wlog(optim)
     return rst
 
@@ -155,31 +155,17 @@ def get_gumbel(LB, V, eps=1e-30):
     return Variable(
         -tc.log(-tc.log(tc.Tensor(LB, V).uniform_(0, 1) + eps) + eps), requires_grad=False)
 
-def LBtensor_to_StrList_old(x, xs_L):
+def BLToStrList(x, xs_L, return_list=False):
 
-    B = x.size(1)
-    x = x.data.numpy().T
-    xs = []
-    for bid in range(B):
-        x_one = x[bid][:int(xs_L[bid])]
+    x = x.data.tolist()
+    B, xs = len(x), []
+    for bidx in range(B):
+        x_one = numpy.asarray(x[bidx][:int(xs_L[bidx])])
         #x_one = str(x_one.astype('S10'))[1:-1].replace('\n', '')
         x_one = str(x_one.astype('S10')).replace('\n', '')
         #x_one = x_one.__str__().replace('  ', ' ')[2:-1]
         xs.append(x_one)
-    return xs
-
-def LBtensor_to_Str(x, xs_L):
-
-    B = x.size(1)
-    x = x.data.numpy().T
-    xs = []
-    for bid in range(B):
-        x_one = x[bid][:int(xs_L[bid])]
-        #x_one = str(x_one.astype('S10'))[1:-1].replace('\n', '')
-        x_one = str(x_one.astype('S10')).replace('\n', '')
-        #x_one = x_one.__str__().replace('  ', ' ')[2:-1]
-        xs.append(x_one)
-    return '\n'.join(xs)
+    return xs if return_list is True else '\n'.join(xs)
 
 def init_params(p, name='what', uniform=False):
 
@@ -197,19 +183,6 @@ def init_params(p, name='what', uniform=False):
         elif len(p.size()) == 1:
             p.data.zero_()
             wlog('{:7}-> grad {}\t{}'.format('Zero', p.requires_grad, name))
-
-def LBtensor_to_StrList(x, Ls):
-
-    B = x.size(1)
-    x = x.data.numpy().T
-    xs = []
-    for bidx in range(B):
-        x_one = x[bidx][:Ls[bidx]]
-        #x_one = str(x_one.astype('S10'))[1:-1].replace('\n', '')
-        x_one = str(x_one.astype('S10')).replace('\n', '')
-        #x_one = x_one.__str__().replace('  ', ' ')[2:-1]
-        xs.append(x_one)
-    return xs
 
 def init_dir(dir_name, delete=False):
 
@@ -634,11 +607,11 @@ def batch_search_oracle(B_hypos_list, y_LB, y_mask_LB):
     #print B_hypos_list
     # B_hypos_list: [[[w0, w1, w2, ..., ], [w0, w1]], [sent0, sent1], [...]]
     oracles = []
-    B_ys_list = LBtensor_to_StrList(y_LB.cpu(), [l-1 for l in y_Ls]) # remove <s> and <e>
+    B_ys_list = BLToStrList(y_LB.t(), [l-1 for l in y_Ls], True) # remove <s> and <e>
     for bidx, (hyps, gold) in enumerate(zip(B_hypos_list, B_ys_list)):
         oracle, max_bleu = hyps[0], 0.
         for h in hyps:
-            h_ = str(numpy.array(h[1:]).astype('S10')).replace('\n', '')
+            h_ = str(numpy.array(h[1:]).astype('S10')).replace('\n', '')    # remove bos
             # do not consider <s> and <e> when calculating BLEU
             assert len(h_.split(' ')) == len(gold.split(' '))
             BLEU = bleu(h_, [gold], logfun=debug)
