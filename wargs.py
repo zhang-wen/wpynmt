@@ -1,4 +1,4 @@
-dataset = 'small' # small for 40k, middle for 1.2M, large for wmt en-de
+dataset = 'middle' # small for 40k, middle for 1.2M, large for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
@@ -95,8 +95,8 @@ elif dataset == 'middle':
     align_size = 512
     dec_hid_size = 512
     out_size = 512
-    #val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
-    val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
+    val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
+    #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     val_prefix = 'nist02'
     dev_prefix = 'nist02'
     val_src_suffix = 'src'
@@ -136,8 +136,8 @@ start_epoch = 1
 model_prefix = dir_model + '/model'
 best_model = dir_valid + '/best.model.pt' if dir_valid else 'best.model.pt'
 # pretrained model
-#pre_train = None
-pre_train = best_model
+pre_train = None
+#pre_train = best_model
 fix_pre_params = False
 
 # decoder hype-parameters
@@ -188,7 +188,7 @@ dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
 dec_layer_cnt = 4
 
 with_bpe = False
-with_postproc = False
+with_postproc = True
 copy_trg_emb = False
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
@@ -206,12 +206,12 @@ dynamic_cyk_decoding = False
 print_att = True
 
 # Scheduled Sampling of Samy bengio's paper
-ss_type = None     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
+ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
 ss_eps_begin = 1   # set None for no scheduled sampling
 ss_eps_end = 1
 #ss_decay_rate = 0.005
 ss_decay_rate = (ss_eps_begin - ss_eps_end) / 10.
-ss_k = 0.98     # k < 1 for exponential decay, k >= 1 for inverse sigmoid decay
+ss_k = 12.     # k < 1 for exponential decay, k >= 1 for inverse sigmoid decay
 
 # free parameter for self-normalization
 # 0 is equivalent to the standard neural network objective function.
@@ -223,6 +223,6 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [3]
+gpu_id = [4]
 #gpu_id = None
 
