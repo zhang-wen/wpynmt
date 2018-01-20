@@ -72,7 +72,9 @@ class Trainer(object):
             wlog('\n' + '$' * 30, 0)
             wlog(' Epoch [{}/{}] '.format(epoch, wargs.max_epochs) + '$' * 30)
             wlog('Schedule sampling value {}'.format(ss_eps_cur))
-
+            from searchs.nbs import Nbs
+            if wargs.ss_type is not None and ss_eps_cur < 1. and bleu_sampling is True:
+                self.sampler = Nbs(self.model, self.tv, k=3, noise=False, print_att=False, batch_sample=True)
             if wargs.epoch_shuffle and epoch > wargs.epoch_shuffle_minibatch: self.train_data.shuffle()
             # shuffle the original batch
             shuffled_batch_idx = tc.randperm(batch_count)
@@ -83,9 +85,6 @@ class Trainer(object):
             sample_spend, eval_spend, epoch_bidx = 0, 0, 0
             show_start = time.time()
 
-            from searchs.nbs import Nbs
-            if wargs.ss_type is not None and ss_eps_cur < 1.:
-                self.sampler = Nbs(self.model, self.tv, k=3, noise=False, print_att=False, batch_sample=True)
             for k in range(batch_count):
 
                 bidx += 1
@@ -97,7 +96,7 @@ class Trainer(object):
                 trgs, trgs_m = ttrgs_for_files[0], trg_mask_for_files[0]
                 #wlog(trgs)
                 batch_oracles, _checks = None, None
-                if wargs.ss_type is not None and ss_eps_cur < 1.:
+                if wargs.ss_type is not None and ss_eps_cur < 1. and bleu_sampling is True:
                     batch_beam_trgs = self.sampler.beam_search_trans(srcs, srcs_m, trgs_m)
                     batch_beam_trgs = [list(zip(*b)[0]) for b in batch_beam_trgs]
                     #wlog(batch_beam_trgs)

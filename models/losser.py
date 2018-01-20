@@ -33,9 +33,10 @@ class Classifier(nn.Module):
         logit = self.map_vocab(logit)
 
         if noise is True:
-            g = get_gumbel(logit.size(0), logit.size(1))
-            if wargs.gpu_id and not g.is_cuda: g = g.cuda()
-            logit = (logit + g * 0.05) / 1.
+            logit.data.add_(
+                -tc.log(-tc.log(
+                    tc.Tensor(logit.size(0), logit.size(1)).cuda().uniform_(0, 1) + epsilon)
+                    + epsilon)) / 0.1
 
         return logit
 
