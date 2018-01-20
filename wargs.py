@@ -2,7 +2,7 @@ dataset = 'middle' # small for 40k, middle for 1.2M, large for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
-max_seq_len = 50
+max_seq_len = 80
 
 '''
 Embedding layer
@@ -60,6 +60,9 @@ trg_dict = dir_data + 'trg.dict.tcf'
 
 inputs_data = dir_data + 'inputs.pt'
 
+with_bpe = False
+with_postproc = False
+copy_trg_emb = False
 # Training
 max_epochs = 20
 epoch_shuffle = False
@@ -95,14 +98,15 @@ elif dataset == 'middle':
     align_size = 512
     dec_hid_size = 512
     out_size = 512
-    val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
-    #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
+    #val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
+    val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     val_prefix = 'nist02'
     dev_prefix = 'nist02'
-    val_src_suffix = 'src'
+    val_src_suffix = '8kbpe.src'
     val_ref_suffix = 'ref.plain_'
     ref_cnt = 4
     tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
+    with_bpe = True
     with_postproc = True
 elif dataset == 'large':
     src_wemb_size = 500
@@ -187,10 +191,6 @@ enc_layer_cnt = 4
 dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
 dec_layer_cnt = 4
 
-with_bpe = False
-with_postproc = True
-copy_trg_emb = False
-
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
 model = 1
 
@@ -223,6 +223,6 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [4]
+gpu_id = [2]
 #gpu_id = None
 

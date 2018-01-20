@@ -300,8 +300,8 @@ class Translator(object):
         #mteval_bleu = bleu_file(out_fname + '.seg.plain', ref_fpaths)
         os.rename(out_fname, "{}_{}.txt".format(out_fname, mteval_bleu))
 
-        #return mteval_bleu
-        return mteval_bleu_opost if wargs.with_postproc is True else mteval_bleu
+        return mteval_bleu
+        #return mteval_bleu_opost if wargs.with_postproc is True else mteval_bleu
 
     def trans_tests(self, tests_data, eid, bid):
 
