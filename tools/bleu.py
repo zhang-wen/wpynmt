@@ -10,7 +10,7 @@ from tools.utils import *
 '''
 convert some code of Moses mteval-v11b.pl into python code
 '''
-def token(s):
+def token(s, cased=False):
 
     # language-independent part:
     s, n = re.subn('<skipped>', '', s)    # strip "skipped" tags
@@ -23,7 +23,8 @@ def token(s):
 
     # language-dependent part:
     s = ' ' + s + ' '
-    s = s.lower()   # lowercase all characters (Case-insensitive BLEU)
+    # lowercase all characters (Case-insensitive BLEU)
+    if cased is False: s = s.lower()
 
     # tokenize punctuation
     s, n = re.subn('([\{-\~\[-\` -\&\(-\+\:-\@\/])', lambda x: ' ' + x.group(0) + ' ', s)
@@ -77,7 +78,7 @@ def sentence2dict(sentence, n):
                 result[gram] = 1
     return result
 
-def bleu(hypo_c, refs_c, n=4, logfun=wlog):
+def bleu(hypo_c, refs_c, n=4, logfun=wlog, cased=False):
     '''
         Calculate BLEU score given translation and references.
 
@@ -101,10 +102,10 @@ def bleu(hypo_c, refs_c, n=4, logfun=wlog):
     #print len(hypo_sen)
     for num in range(len(hypo_sen)):
         hypo = hypo_sen[num]
-        hypo = token(hypo)
+        hypo = token(hypo, cased)
         h_length = len(hypo.split(' '))
 
-        refs = [token(refs_sen[i][num]) for i in range(len(refs_c))]
+        refs = [token(refs_sen[i][num], cased) for i in range(len(refs_c))]
         ref_lengths = sorted([len(refs[i].split(' ')) for i in range(len(refs))])
 
         # problem is not the brevity penalty, mteval-v11.perl of Moses also has brevity penalty,
@@ -175,7 +176,7 @@ def bleu(hypo_c, refs_c, n=4, logfun=wlog):
 
     return BLEU
 
-def bleu_file(hypo, refs, ngram=4):
+def bleu_file(hypo, refs, ngram=4, cased=False):
 
     '''
         Calculate the BLEU score given translation files and reference files.
@@ -201,7 +202,7 @@ def bleu_file(hypo, refs, ngram=4):
     #print hypo.endswith('\n')
     #print type(refs)
     #print type(refs[0])
-    result = bleu(hypo, refs, ngram)
+    result = bleu(hypo, refs, ngram, cased=cased)
     result = float('%.2f' % (result * 100))
 
     return result

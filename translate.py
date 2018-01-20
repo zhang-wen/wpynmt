@@ -293,10 +293,10 @@ class Translator(object):
             wlog('cp {} {}'.format(out_fname, opost_name))
             os.system("sh postproc.sh {} {}".format(opost_name, out_fname))
             wlog("sh postproc.sh {} {}".format(opost_name, out_fname))
-            mteval_bleu_opost = bleu_file(opost_name, ref_fpaths)
+            mteval_bleu_opost = bleu_file(opost_name, ref_fpaths, cased=wargs.cased)
             os.rename(opost_name, "{}_{}.txt".format(opost_name, mteval_bleu_opost))
 
-        mteval_bleu = bleu_file(out_fname, ref_fpaths)
+        mteval_bleu = bleu_file(out_fname, ref_fpaths, cased=wargs.cased)
         #mteval_bleu = bleu_file(out_fname + '.seg.plain', ref_fpaths)
         os.rename(out_fname, "{}_{}.txt".format(out_fname, mteval_bleu))
 

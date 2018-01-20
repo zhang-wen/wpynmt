@@ -331,7 +331,6 @@ class Decoder(nn.Module):
             if wargs.dynamic_cyk_decoding is True: btg_uh = self.ha_btg(btg_xs_h)
             if ss_eps < 1.:
                 if oracles is not None: y_tm1_oracle = self.trg_lookup_table(oracles)[k]
-                else: y_tm1_oracle = self.trg_lookup_table(y_tm1_oracle)
 
                 uval = tc.rand(b_size, 1)    # different word and differet batch
                 if wargs.gpu_id: uval = uval.cuda()
@@ -368,6 +367,7 @@ class Decoder(nn.Module):
                 #logit = self.map_vocab(logit)
                 logit = self.classifier.get_a(logit, noise=False)
                 y_tm1_oracle = logit.max(-1)[1]
+                y_tm1_oracle = self.trg_lookup_table(y_tm1_oracle)
 
             #tlen_batch_c.append(attend)
             #tlen_batch_y.append(y_tm1)

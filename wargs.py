@@ -1,4 +1,4 @@
-dataset = 'middle' # small for 40k, middle for 1.2M, large for wmt en-de
+dataset = 'large' # small for 40k, middle for 1.2M, large for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
@@ -109,20 +109,23 @@ elif dataset == 'middle':
     with_bpe = True
     with_postproc = True
 elif dataset == 'large':
-    src_wemb_size = 500
-    trg_wemb_size = 500
-    enc_hid_size = 1024
-    align_size = 1024
-    dec_hid_size = 1024
-    out_size = 512
+    #src_wemb_size = 500
+    #trg_wemb_size = 500
+    #enc_hid_size = 1024
+    #align_size = 1024
+    #dec_hid_size = 1024
+    #out_size = 512
     #val_tst_dir = '/home/wen/3.corpus/wmt16/rsennrich/devtst/'
-    val_tst_dir = '/home/wen/3.corpus/wmt14/en-de-Luong/'
-    val_prefix = 'newstest2013'
-    val_src_suffix = 'en.89.5kbpe'
-    val_ref_suffix = 'de'
+    #val_tst_dir = '/home/wen/3.corpus/wmt14/en-de-Luong/'
+    val_tst_dir = '/home/wen/3.corpus/wmt2017/de-en/'
+    val_prefix = 'newstest2014'
+    #val_prefix = 'newstest2014.tc'
+    val_src_suffix = 'en.16kbpe'
+    val_ref_suffix = 'ori.de'
     ref_cnt = 1
-    tests_prefix = ['newstest2009', 'newstest2010', 'newstest2011', 'newstest2012', 'newstest2014', 'newstest2015', 'newstest2016', 'newstest2017']
-    drop_rate = 0.2
+    tests_prefix = ['newstest2014.2737', 'newstest2015', 'newstest2016', 'newstest2017']
+    #tests_prefix = ['newstest2009', 'newstest2010', 'newstest2011', 'newstest2012', 'newstest2014', 'newstest2015', 'newstest2016', 'newstest2017']
+    #drop_rate = 0.2
     src_dict_size = 50000
     trg_dict_size = 50000
     with_bpe = True
@@ -131,8 +134,8 @@ display_freq = 10 if small else 1000
 sampling_freq = 100 if small else 5000
 sample_size = 5
 if_fixed_sampling = False
-eval_valid_from = 50000 if eval_small else 50000
-eval_valid_freq = 10000 if eval_small else 10000
+eval_valid_from = 50000 if eval_small else 100000
+eval_valid_freq = 10000 if eval_small else 20000
 
 save_one_model = True
 start_epoch = 1
@@ -224,6 +227,7 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [2]
+cased = True    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
+gpu_id = [0]
 #gpu_id = None
 
