@@ -91,6 +91,7 @@ if dataset == 'small':
     max_epochs = 60
     epoch_eval = True
     small = True
+    cased = False
 elif dataset == 'middle':
     src_wemb_size = 512
     trg_wemb_size = 512
@@ -108,6 +109,7 @@ elif dataset == 'middle':
     tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
     with_bpe = True
     with_postproc = True
+    cased = False
 elif dataset == 'large':
     #src_wemb_size = 500
     #trg_wemb_size = 500
@@ -129,6 +131,7 @@ elif dataset == 'large':
     src_dict_size = 50000
     trg_dict_size = 50000
     with_bpe = True
+    cased = True    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
 
 display_freq = 10 if small else 1000
 sampling_freq = 100 if small else 5000
@@ -210,7 +213,7 @@ print_att = True
 
 # Scheduled Sampling of Samy bengio's paper
 bleu_sampling = False
-ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
+ss_type = None     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
 ss_eps_begin = 1   # set None for no scheduled sampling
 ss_eps_end = 1
 #ss_decay_rate = 0.005
@@ -227,7 +230,6 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-cased = True    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
 gpu_id = [0]
 #gpu_id = None
 
