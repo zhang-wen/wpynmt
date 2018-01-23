@@ -1,8 +1,8 @@
-dataset = 'large' # small for 40k, middle for 1.2M, large for wmt en-de
+dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
-max_seq_len = 80
+max_seq_len = 50
 
 '''
 Embedding layer
@@ -103,11 +103,12 @@ elif dataset == 'middle':
     val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     val_prefix = 'nist02'
     dev_prefix = 'nist02'
-    val_src_suffix = '8kbpe.src'
+    #@val_src_suffix = '8kbpe.src'
+    vl_src_suffix = 'src'
     val_ref_suffix = 'ref.plain_'
     ref_cnt = 4
     tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
-    with_bpe = True
+    with_bpe = False
     with_postproc = True
     cased = False
 elif dataset == 'large':
@@ -137,7 +138,7 @@ display_freq = 10 if small else 1000
 sampling_freq = 100 if small else 5000
 sample_size = 5
 if_fixed_sampling = False
-eval_valid_from = 50000 if eval_small else 100000
+eval_valid_from = 50000 if eval_small else 50000
 eval_valid_freq = 10000 if eval_small else 20000
 
 save_one_model = True
@@ -185,7 +186,7 @@ start_decay_from = None
 learning_rate_decay = 0.5
 last_valid_bleu = 0.
 
-snip_size = 1
+snip_size = 10
 file_tran_dir = 'wexp-gpu-nist03'
 laynorm = False
 segments = False
@@ -213,7 +214,7 @@ print_att = True
 
 # Scheduled Sampling of Samy bengio's paper
 bleu_sampling = False
-ss_type = None     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
+ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
 ss_eps_begin = 1   # set None for no scheduled sampling
 ss_eps_end = 1
 #ss_decay_rate = 0.005
