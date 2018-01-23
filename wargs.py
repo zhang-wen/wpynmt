@@ -73,7 +73,7 @@ eval_small = False
 epoch_eval = False
 final_test = False
 
-if dataset == 'small':
+if dataset == 'S':
     src_wemb_size = 256
     trg_wemb_size = 256
     enc_hid_size = 256
@@ -92,7 +92,7 @@ if dataset == 'small':
     epoch_eval = True
     small = True
     cased = False
-elif dataset == 'middle':
+elif dataset == 'M':
     src_wemb_size = 512
     trg_wemb_size = 512
     enc_hid_size = 512
@@ -111,7 +111,7 @@ elif dataset == 'middle':
     with_bpe = False
     with_postproc = True
     cased = False
-elif dataset == 'large':
+elif dataset == 'L':
     #src_wemb_size = 500
     #trg_wemb_size = 500
     #enc_hid_size = 1024
