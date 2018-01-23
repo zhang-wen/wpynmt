@@ -104,7 +104,7 @@ elif dataset == 'M':
     val_prefix = 'nist02'
     dev_prefix = 'nist02'
     #@val_src_suffix = '8kbpe.src'
-    vl_src_suffix = 'src'
+    val_src_suffix = 'src'
     val_ref_suffix = 'ref.plain_'
     ref_cnt = 4
     tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
