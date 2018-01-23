@@ -147,8 +147,8 @@ start_epoch = 1
 model_prefix = dir_model + '/model'
 best_model = dir_valid + '/best.model.pt' if dir_valid else 'best.model.pt'
 # pretrained model
-pre_train = None
-#pre_train = best_model
+#pre_train = None
+pre_train = best_model
 fix_pre_params = False
 
 # decoder hype-parameters
@@ -231,6 +231,6 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [0]
+gpu_id = [3]
 #gpu_id = None
 
