@@ -332,9 +332,10 @@ class Decoder(nn.Module):
             if wargs.ss_type is not None and ss_eps < 1.:
                 if oracles is not None:
                     _seed = tc.Tensor(b_size, 1).bernoulli_()
+                    _seed = Variable(_seed, requires_grad=False)
                     if wargs.gpu_id: _seed = _seed.cuda()
-                    #y_tm1_oracle = y_tm1_model * _seed + y_tm1_oracle * (1. - _seed)
-                    y_tm1_oracle = y_tm1_model.data.mul_(_seed) + y_tm1_oracle.data.mul_(1. - _seed)
+                    y_tm1_oracle = y_tm1_model * _seed + oracles[k] * (1. - _seed)
+                    #y_tm1_oracle = y_tm1_model.data.mul_(_seed) + y_tm1_oracle.data.mul_(1. - _seed)
                 else:
                     y_tm1_oracle = y_tm1_model
 
@@ -345,8 +346,10 @@ class Decoder(nn.Module):
                 _g = ss_eps * tc.ones(b_size, 1)
                 _g = tc.bernoulli(_g)   # pick gold with the probability of ss_eps
                 if wargs.gpu_id: _g = _g.cuda()
+                _g = Variable(_g, requires_grad=False)
+                y_tm1 = ys_e[k] * _g + y_tm1_oracle * (1. - _g)
                 #y_tm1 = schedule_sample_word(_h, _g, ss_eps, ys_e[k], y_tm1_oracle)
-                y_tm1 = ys_e[k].data.mul_(_g) + y_tm1_oracle.data.mul_(1. - _g)
+                #y_tm1 = ys_e[k].data.mul_(_g) + y_tm1_oracle.data.mul_(1. - _g)
             else:
                 y_tm1 = ys_e[k]
                 #g = self.sigmoid(self.w_gold(y_tm1) + self.w_hypo(y_tm1_oracle))

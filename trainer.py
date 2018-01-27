@@ -103,6 +103,7 @@ class Trainer(object):
                     batch_oracles = batch_search_oracle(batch_beam_trgs, trgs[1:], trgs_m[1:])
                     #wlog(batch_oracles)
                     batch_oracles = batch_oracles[:-1].cuda()
+                    batch_oracles = self.model.decoder.trg_lookup_table(batch_oracles)
 
                 self.model.zero_grad()
                 # (max_tlen_batch - 1, batch_size, out_size)
