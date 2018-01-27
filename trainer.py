@@ -68,9 +68,6 @@ class Trainer(object):
 
             epoch_start = time.time()
 
-            # decay the probability value epslion of scheduled sampling per batch
-            ss_eps_cur = schedule_sample_eps_decay(epoch - 1, ss_eps_cur)   # start from 1
-
             # train for one epoch on the training data
             wlog('\n' + '$' * 30, 0)
             wlog(' Epoch [{}/{}] '.format(epoch, wargs.max_epochs) + '$' * 30)
@@ -203,9 +200,11 @@ class Trainer(object):
             wlog('Train accuracy {:4.2f}%'.format(avg_epoch_acc * 100))
             wlog('Average loss {:4.2f}'.format(avg_epoch_loss))
             wlog('Train perplexity: {0:4.2f}'.format(math.exp(avg_epoch_loss)))
-
             wlog('End epoch, batch [{}], [{}] eval save model ...'.format(epoch_bidx, eval_cnt[0]))
+
             mteval_bleu = self.mt_eval(epoch, epoch_bidx)
+            # decay the probability value epslion of scheduled sampling per batch
+            ss_eps_cur = schedule_sample_eps_decay(epoch - 1, ss_eps_cur)   # start from 1
             self.optim.update_learning_rate(mteval_bleu, epoch)
             epoch_time_consume = time.time() - epoch_start
             wlog('Consuming: {:4.2f}s'.format(epoch_time_consume))

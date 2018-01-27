@@ -326,16 +326,24 @@ class Decoder(nn.Module):
         # (max_tlen_batch - 1, batch_size, trg_wemb_size)
         ys_e = ys if ys.dim() == 3 else self.trg_lookup_table(ys)
 
-        sent_logit, y_tm1_oracle = [], ys_e[0]
+        sent_logit, y_tm1_model = [], ys_e[0]
         for k in range(y_Lm1):
             if wargs.dynamic_cyk_decoding is True: btg_uh = self.ha_btg(btg_xs_h)
             if ss_eps < 1.:
-                if oracles is not None: y_tm1_oracle = self.trg_lookup_table(oracles)[k]
+                if oracles is not None:
+                    _seed = tc.Tensor(b_size, 1).bernoulli_()
+                    if wargs.gpu_id: _seed = _seed.cuda()
+                    y_tm1_oracle = y_tm1_model * _seed + y_tm1_oracle * (1. - _seed)
+                else:
+                    y_tm1_oracle = y_tm1_model
 
-                uval = tc.rand(b_size, 1)    # different word and differet batch
-                if wargs.gpu_id: uval = uval.cuda()
-                _g = Variable((uval <= ss_eps).float(), requires_grad=False)
-                #_h = Variable((uval > ss_eps).float(), requires_grad=False)
+                #uval = tc.rand(b_size, 1)    # different word and differet batch
+                #if wargs.gpu_id: uval = uval.cuda()
+                #_g = Variable((uval <= ss_eps).float(), requires_grad=False)
+
+                _g = ss_eps * tc.ones(b_size, 1)
+                _g = tc.bernoulli(_g)   # pick gold with the probability of ss_eps
+                if wargs.gpu_id: _g = _g.cuda()
                 #y_tm1 = schedule_sample_word(_h, _g, ss_eps, ys_e[k], y_tm1_oracle)
                 y_tm1 = ys_e[k] * _g + y_tm1_oracle * (1. - _g)
             else:
@@ -366,8 +374,8 @@ class Decoder(nn.Module):
             if ss_eps < 1. and oracles is None:
                 #logit = self.map_vocab(logit)
                 logit = self.classifier.get_a(logit, noise=False)
-                y_tm1_oracle = logit.max(-1)[1]
-                y_tm1_oracle = self.trg_lookup_table(y_tm1_oracle)
+                y_tm1_model = logit.max(-1)[1]
+                y_tm1_model = self.trg_lookup_table(y_tm1_model)
 
             #tlen_batch_c.append(attend)
             #tlen_batch_y.append(y_tm1)
