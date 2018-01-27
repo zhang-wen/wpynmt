@@ -64,6 +64,7 @@ class Trainer(object):
         train_start = time.time()
         wlog('\n' + '#' * 120 + '\n' + '#' * 30 + ' Start Training ' + '#' * 30 + '\n' + '#' * 120)
 
+        batch_oracles, _checks = None, None
         for epoch in range(wargs.start_epoch, wargs.max_epochs + 1):
 
             epoch_start = time.time()
@@ -95,7 +96,6 @@ class Trainer(object):
                 _, srcs, ttrgs_for_files, slens, srcs_m, trg_mask_for_files = self.train_data[batch_idx]
                 trgs, trgs_m = ttrgs_for_files[0], trg_mask_for_files[0]
                 #wlog(trgs)
-                batch_oracles, _checks = None, None
                 if wargs.ss_type is not None and ss_eps_cur < 1. and bleu_sampling is True:
                     batch_beam_trgs = self.sampler.beam_search_trans(srcs, srcs_m, trgs_m)
                     batch_beam_trgs = [list(zip(*b)[0]) for b in batch_beam_trgs]
@@ -204,7 +204,7 @@ class Trainer(object):
 
             mteval_bleu = self.mt_eval(epoch, epoch_bidx)
             # decay the probability value epslion of scheduled sampling per batch
-            ss_eps_cur = schedule_sample_eps_decay(epoch - 1, ss_eps_cur)   # start from 1
+            if wargs.ss_type is not None: ss_eps_cur = schedule_sample_eps_decay(epoch, ss_eps_cur)   # start from 1
             self.optim.update_learning_rate(mteval_bleu, epoch)
             epoch_time_consume = time.time() - epoch_start
             wlog('Consuming: {:4.2f}s'.format(epoch_time_consume))

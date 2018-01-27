@@ -329,7 +329,7 @@ class Decoder(nn.Module):
         sent_logit, y_tm1_model = [], ys_e[0]
         for k in range(y_Lm1):
             if wargs.dynamic_cyk_decoding is True: btg_uh = self.ha_btg(btg_xs_h)
-            if ss_eps < 1.:
+            if wargs.ss_type is not None and ss_eps < 1.:
                 if oracles is not None:
                     _seed = tc.Tensor(b_size, 1).bernoulli_()
                     if wargs.gpu_id: _seed = _seed.cuda()
@@ -371,7 +371,7 @@ class Decoder(nn.Module):
             logit = self.step_out(s_tm1, y_tm1, attend)
             sent_logit.append(logit)
 
-            if ss_eps < 1. and oracles is None:
+            if wargs.ss_type is not None and ss_eps < 1. and oracles is None:
                 #logit = self.map_vocab(logit)
                 logit = self.classifier.get_a(logit, noise=False)
                 y_tm1_model = logit.max(-1)[1]
