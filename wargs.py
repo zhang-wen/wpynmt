@@ -1,8 +1,8 @@
-dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'L' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
-max_seq_len = 50
+max_seq_len = 80
 
 '''
 Embedding layer
@@ -90,6 +90,7 @@ if dataset == 'S':
     max_epochs = 60
     epoch_eval = True
     small = True
+    use_multi_bleu = True
     cased = False
 elif dataset == 'M':
     src_wemb_size = 512
@@ -109,6 +110,7 @@ elif dataset == 'M':
     tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
     with_bpe = False
     with_postproc = True
+    use_multi_bleu = False
     cased = False
 elif dataset == 'L':
     #src_wemb_size = 500
@@ -119,18 +121,24 @@ elif dataset == 'L':
     #out_size = 512
     #val_tst_dir = '/home/wen/3.corpus/wmt16/rsennrich/devtst/'
     #val_tst_dir = '/home/wen/3.corpus/wmt14/en-de-Luong/'
-    val_tst_dir = '/home/wen/3.corpus/wmt2017/de-en/'
-    val_prefix = 'newstest2014'
+    #val_tst_dir = '/home/wen/3.corpus/wmt2017/de-en/'
+    #val_prefix = 'newstest2014'
     #val_prefix = 'newstest2014.tc'
-    val_src_suffix = 'en.16kbpe'
-    val_ref_suffix = 'ori.de'
+    #val_src_suffix = 'en.16kbpe'
+    #val_ref_suffix = 'ori.de'
+    val_tst_dir = '/home/wen/3.corpus/wmt14/en-fr/jean/dev/'
+    val_prefix = 'ntst1213'
+    val_src_suffix = 'en'
+    val_ref_suffix = 'fr'
     ref_cnt = 1
-    tests_prefix = ['newstest2014.2737', 'newstest2015', 'newstest2016', 'newstest2017']
+    tests_prefix = ['ntst14']
+    #tests_prefix = ['newstest2014.2737', 'newstest2015', 'newstest2016', 'newstest2017']
     #tests_prefix = ['newstest2009', 'newstest2010', 'newstest2011', 'newstest2012', 'newstest2014', 'newstest2015', 'newstest2016', 'newstest2017']
     #drop_rate = 0.2
-    src_dict_size = 50000
-    trg_dict_size = 50000
-    with_bpe = True
+    src_dict_size = 30000
+    trg_dict_size = 30000
+    with_bpe = False
+    use_multi_bleu = True
     cased = True    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
 
 display_freq = 10 if small else 1000
@@ -214,8 +222,8 @@ print_att = True
 
 # Scheduled Sampling of Samy bengio's paper
 bleu_sampling = False
-ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
-ss_eps_begin = 0.9   # set None for no scheduled sampling
+ss_type = None     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
+ss_eps_begin = 1   # set None for no scheduled sampling
 ss_eps_end = 1
 #ss_decay_rate = 0.005
 ss_decay_rate = (ss_eps_begin - ss_eps_end) / 10.
@@ -231,6 +239,6 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [0]
+gpu_id = [1]
 #gpu_id = None
 

@@ -19,6 +19,7 @@ else: from searchs.nbs import *
 
 from tools.utils import *
 from tools.bleu import bleu_file
+from tools.multibleu import print_multi_bleu
 import uniout
 
 numpy.set_printoptions(threshold=numpy.nan)
@@ -297,10 +298,12 @@ class Translator(object):
             os.rename(opost_name, "{}_{}.txt".format(opost_name, mteval_bleu_opost))
 
         mteval_bleu = bleu_file(out_fname, ref_fpaths, cased=wargs.cased)
-        #mteval_bleu = bleu_file(out_fname + '.seg.plain', ref_fpaths)
-        os.rename(out_fname, "{}_{}.txt".format(out_fname, mteval_bleu))
 
-        return mteval_bleu
+        multi_bleu = print_multi_bleu(out_fname, ref_fpaths, cased=wargs.cased)
+        #mteval_bleu = bleu_file(out_fname + '.seg.plain', ref_fpaths)
+        os.rename(out_fname, "{}_{}_{}.txt".format(out_fname, mteval_bleu, multi_bleu))
+
+        return mteval_bleu if wargs.use_multi_bleu is False else multi_bleu
         #return mteval_bleu_opost if wargs.with_postproc is True else mteval_bleu
 
     def trans_tests(self, tests_data, eid, bid):
@@ -329,7 +332,7 @@ class Translator(object):
         valid_out = "{}_e{}_upd{}_b{}m{}_bch{}".format(
             outprefix, eid, bid, self.k, self.search_mode, wargs.with_batch)
 
-        mteval_bleu = self.write_file_eval(valid_out, trans, wargs.val_prefix, alns, subw)
+        bleu_score = self.write_file_eval(valid_out, trans, wargs.val_prefix, alns, subw)
 
         bleu_scores_fname = '{}/train_bleu.log'.format(wargs.dir_valid)
         bleu_scores = [0.]
@@ -339,27 +342,27 @@ class Translator(object):
                     s_bleu = line.split(':')[-1].strip()
                     bleu_scores.append(float(s_bleu))
 
-        wlog('\nCurrent [{}] - Best History [{}]'.format(mteval_bleu, max(bleu_scores)))
-        if mteval_bleu > max(bleu_scores):   # better than history
+        wlog('\nCurrent [{}] - Best History [{}]'.format(bleu_score, max(bleu_scores)))
+        if bleu_score > max(bleu_scores):   # better than history
             copyfile(model_file, wargs.best_model)
             wlog('Better, cp {} {}'.format(model_file, wargs.best_model))
-            bleu_content = 'epoch [{}], batch[{}], BLEU score*: {}'.format(eid, bid, mteval_bleu)
+            bleu_content = 'epoch [{}], batch[{}], BLEU score*: {}'.format(eid, bid, bleu_score)
             if wargs.final_test is False and tests_data is not None: self.trans_tests(tests_data, eid, bid)
         else:
             wlog('Worse')
-            bleu_content = 'epoch [{}], batch[{}], BLEU score : {}'.format(eid, bid, mteval_bleu)
+            bleu_content = 'epoch [{}], batch[{}], BLEU score : {}'.format(eid, bid, bleu_score)
 
         append_file(bleu_scores_fname, bleu_content)
 
         sfig = '{}.{}'.format(outprefix, 'sfig')
-        sfig_content = ('{} {} {} {} {}').format(eid, bid, self.search_mode, self.k, mteval_bleu)
+        sfig_content = ('{} {} {} {} {}').format(eid, bid, self.search_mode, self.k, bleu_score)
         append_file(sfig, sfig_content)
 
         if wargs.save_one_model and os.path.exists(model_file) is True:
             os.remove(model_file)
             wlog('Saving one model, so delete {}\n'.format(model_file))
 
-        return mteval_bleu
+        return bleu_score
 
 if __name__ == "__main__":
     import sys

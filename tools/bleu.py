@@ -188,7 +188,8 @@ def bleu_file(hypo, refs, ngram=4, cased=False):
         :param refs: the list of path to reference files
     '''
 
-    wlog('Starting evaluating {}-gram BLEU ... '.format(ngram))
+    if cased is False: wlog('Calculating case-insensitive {}-gram BLEU ...'.format(ngram))
+    else: wlog('Calculating case-sensitive {}-gram BLEU ...'.format(ngram))
     wlog('\tcandidate file: {}'.format(hypo))
     wlog('\treferences file:')
     for ref in refs: wlog('\t\t{}'.format(ref))
