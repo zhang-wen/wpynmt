@@ -60,6 +60,9 @@ class Trainer(object):
         bidx, eval_cnt, ss_eps_cur = 0, [0], wargs.ss_eps_begin
         wlog('Self-normalization alpha -> {}'.format(wargs.self_norm_alpha))
         tor_hook = Translator(self.model, self.sv, self.tv)
+        if wargs.ss_type is not None:
+            wlog('Word-level optimizing bias between training and decoding ...')
+            if bleu_sampling is True: wlog('Sentence-level optimizing ...')
 
         train_start = time.time()
         wlog('\n' + '#' * 120 + '\n' + '#' * 30 + ' Start Training ' + '#' * 30 + '\n' + '#' * 120)

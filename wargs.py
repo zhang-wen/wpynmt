@@ -69,7 +69,6 @@ epoch_shuffle = False
 epoch_shuffle_minibatch = 1
 
 small = False
-eval_small = False
 epoch_eval = False
 final_test = False
 
@@ -99,8 +98,8 @@ elif dataset == 'M':
     align_size = 512
     dec_hid_size = 512
     out_size = 512
-    val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
-    #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
+    #val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
+    val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     val_prefix = 'nist02'
     dev_prefix = 'nist02'
     #@val_src_suffix = '8kbpe.src'
@@ -138,8 +137,9 @@ display_freq = 10 if small else 1000
 sampling_freq = 100 if small else 5000
 sample_size = 5
 if_fixed_sampling = False
-eval_valid_from = 50000 if eval_small else 50000
-eval_valid_freq = 10000 if eval_small else 20000
+eval_small = False
+eval_valid_from = 50 if eval_small else 50000
+eval_valid_freq = 10 if eval_small else 20000
 
 save_one_model = True
 start_epoch = 1
@@ -199,7 +199,7 @@ dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
 dec_layer_cnt = 4
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 1
+model = 0
 
 # convolutional layer
 #fltr_windows = [1, 3, 5]   # windows size
@@ -213,9 +213,9 @@ dynamic_cyk_decoding = False
 print_att = True
 
 # Scheduled Sampling of Samy bengio's paper
-bleu_sampling = True
+bleu_sampling = False
 ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
-ss_eps_begin = 1   # set None for no scheduled sampling
+ss_eps_begin = 0.9   # set None for no scheduled sampling
 ss_eps_end = 1
 #ss_decay_rate = 0.005
 ss_decay_rate = (ss_eps_begin - ss_eps_end) / 10.
@@ -231,6 +231,6 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [1]
+gpu_id = [0]
 #gpu_id = None
 
