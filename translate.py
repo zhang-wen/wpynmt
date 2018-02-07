@@ -287,19 +287,24 @@ class Translator(object):
             if not os.path.exists(ref_fpath): continue
             ref_fpaths.append(ref_fpath)
 
+        assert os.path.exists(out_fname), 'translation do not exist ...'
         if wargs.with_bpe is True:
-            os.system('cp {} {}.bpe'.format(out_fname, out_fname))
-            wlog('cp {} {}.bpe'.format(out_fname, out_fname))
-            os.system("sed -r 's/(@@ )|(@@ ?$)//g' {}.bpe > {}".format(out_fname, out_fname))
-            wlog("sed -r 's/(@@ )|(@@ ?$)//g' {}.bpe > {}".format(out_fname, out_fname))
+            bpe_fname = '{}.bpe'.format(out_fname)
+            #os.system('cp {} {}.bpe'.format(out_fname, out_fname))
+            copyfile(out_fname, bpe_fname)
+            assert os.path.exists(bpe_fname), 'bpe file do not exist ...'
+            wlog('copy {} to {}'.format(out_fname, bpe_fname))
+            os.system("sed -r 's/(@@ )|(@@ ?$)//g' {} > {}".format(bpe_fname, out_fname))
+            wlog("sed -r 's/(@@ )|(@@ ?$)//g' {} > {}".format(bpe_fname, out_fname))
 
         # Luong: remove "rich-text format" --> rich ##AT##-##AT## text format
         #os.system("sed -r -i 's/( ##AT##)|(##AT## )//g' {}".format(out_fname))
         #wlog("sed -r -i 's/( ##AT##)|(##AT## )//g' {}".format(out_fname))
         if wargs.with_postproc is True:
             opost_name = '{}.opost'.format(out_fname)
-            os.system('cp {} {}'.format(out_fname, opost_name))
-            wlog('cp {} {}'.format(out_fname, opost_name))
+            copyfile(out_fname, opost_name)
+            #os.system('cp {} {}'.format(out_fname, opost_name))
+            wlog('cp {} to {}'.format(out_fname, opost_name))
             os.system("sh postproc.sh {} {}".format(opost_name, out_fname))
             wlog("sh postproc.sh {} {}".format(opost_name, out_fname))
             mteval_bleu_opost = bleu_file(opost_name, ref_fpaths, cased=wargs.cased)
