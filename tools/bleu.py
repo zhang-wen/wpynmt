@@ -5,7 +5,11 @@ import math
 import re
 import sys
 import numpy
-from tools.utils import *
+
+def wlog(obj, newline=1):
+
+    if newline == 1: sys.stderr.write('{}\n'.format(obj))
+    else: sys.stderr.write('{}'.format(obj))
 
 '''
 convert some code of Moses mteval-v11b.pl into python code
@@ -210,6 +214,7 @@ def bleu_file(hypo, refs, ngram=4, cased=False):
 
 if __name__ == "__main__":
 
+    '''
     ref_fpaths = []
     for idx in range(4):
         #ref_fpath = '{}/{}'.format('work0', 'ref.seg.plain')
@@ -226,6 +231,39 @@ if __name__ == "__main__":
     #print bleu_file('data3/hyp.seg.plain', ref_fpaths)
     #print bleu_file('out', ref_fpaths)
     print bleu_file('trans_e10_upd15008_b10m1_bch1_32.64.txt', ref_fpaths)
+    '''
+
+    import os
+    import sys
+    import argparse
+
+    parser = argparse.ArgumentParser(description='mt-eval BLEU score on multiple references.')
+    parser.add_argument('-lc', help='Lowercase', action='store_true')
+    parser.add_argument('-c', '--candidate', dest='c', required=True, help='translation file')
+    parser.add_argument('-r', '--references', dest='references', required=True, help='Reads the reference_[0, 1, ...]')
+    args = parser.parse_args()
+
+    # reference: /home/wen/3.corpus/segment_allnist_stanseg/nist03.ref.plain_
+    ref_fpaths = []
+    ref_cnt = 1
+    if ref_cnt == 1:
+        ref_fpath = args.references
+        if os.path.exists(ref_fpath): ref_fpaths.append(ref_fpath)
+    else:
+        for idx in range(ref_cnt):
+            ref_fpath = '{}_{}'.format(args.references, idx)
+            if not os.path.exists(ref_fpath): continue
+            ref_fpaths.append(ref_fpath)
+
+    #print(args.references)
+    # TODO: Multiple references
+    #reference_files = [args.references]
+    print(ref_fpaths)
+
+    #open_files = map(open, ref_fpaths)
+    cand_file = args.c
+    cased = ( not args.lc )
+    bleu_file(cand_file, ref_fpaths, ngram=4, cased=cased)
 
 
 
