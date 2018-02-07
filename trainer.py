@@ -113,6 +113,7 @@ class Trainer(object):
                 outputs = self.model(srcs, trgs[:-1], srcs_m, trgs_m[:-1],
                                      ss_eps=ss_eps_cur, oracles=batch_oracles)
                 if len(outputs) == 2: (outputs, _checks) = outputs
+                if len(outputs) == 2: (outputs, attends) = outputs
                 this_bnum = outputs.size(1)
 
                 #batch_loss, batch_correct_num, batch_log_norm = self.classifier(outputs, trgs[1:], trgs_m[1:])

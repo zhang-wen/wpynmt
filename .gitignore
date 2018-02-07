@@ -25,6 +25,7 @@ sb*
 
 data/*
 data*
+wmodel*
 wmodel/
 wvalid/
 wtests/
@@ -46,4 +47,5 @@ test/
 /docs
 *.svg
 *bak
+wexp*
 

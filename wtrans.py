@@ -11,10 +11,10 @@ from torch import cuda
 
 import wargs
 from tools.inputs import Input
-from tools.utils import *
+from tools.utils import _load_model
 
 from translate import Translator
-from inputs_handler import extract_vocab, val_wrap_data, wrap_data
+from inputs_handler import extract_vocab, wrap_tst_data, wrap_data
 from models.losser import *
 
 if __name__ == "__main__":
@@ -24,10 +24,10 @@ if __name__ == "__main__":
     #A.add_argument('--model', dest='model', default=0,
     #               help='0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet')
 
-    A.add_argument('--model-file', dest='model_file', help='model file')
+    A.add_argument("-m", '--model-file', required=True, dest='model_file', help='model file')
 
-    A.add_argument('--test-file', dest='test_file', default=None,
-                   help='the input test file path we will translate')
+    A.add_argument("-i", '--input-file', dest='input_file', default=None,
+                   help='name of file to be translated')
 
     '''
     A.add_argument('--search-mode', dest='search_mode', default=2,
@@ -92,6 +92,7 @@ if __name__ == "__main__":
     switchs = [useBatch, vocabNorm, lenNorm, useMv, mergeWay, avgAtt]
     '''
 
+    assert os.path.exists(wargs.src_dict) and os.path.exists(wargs.trg_dict), 'need vocabulary ...'
     src_vocab = extract_vocab(None, wargs.src_dict)
     trg_vocab = extract_vocab(None, wargs.trg_dict)
 
@@ -101,34 +102,37 @@ if __name__ == "__main__":
     wlog('Start decoding ... init model ... ', 0)
 
     nmtModel = NMT(src_vocab_size, trg_vocab_size)
-    classifier = Classifier(wargs.out_size, trg_vocab_size,
-                            nmtModel.decoder.trg_lookup_table if wargs.copy_trg_emb is True else None)
+    #classifier = Classifier(wargs.out_size, trg_vocab_size,
+    #                        nmtModel.decoder.trg_lookup_table if wargs.copy_trg_emb is True else None)
 
     if wargs.gpu_id:
         cuda.set_device(wargs.gpu_id[0])
+        wlog('Push model onto GPU {} ... '.format(wargs.gpu_id[0]), 0)
         nmtModel.cuda()
-        classifier.cuda()
-        wlog('Push model onto GPU[{}] ... '.format(wargs.gpu_id[0]))
+        #classifier.cuda()
     else:
+        wlog('Push model onto CPU ... ', 0)
         nmtModel.cpu()
-        classifier.cpu()
-        wlog('Push model onto CPU ... ')
+        #classifier.cpu()
+    wlog('done.')
 
-    model_dict, class_dict, eid, bid, _ = load_pytorch_model(model_file)
+    _dict = _load_model(model_file)
+    if len(_dict) == 4: model_dict, eid, bid, optim = _dict
+    elif len(_dict) == 5: model_dict, class_dict, eid, bid, optim = _dict
 
     nmtModel.load_state_dict(model_dict)
-    classifier.load_state_dict(class_dict)
-    nmtModel.classifier = classifier
+    #classifier.load_state_dict(class_dict)
+    #nmtModel.classifier = classifier
 
     wlog('\nFinish to load model.')
 
     dec_conf()
 
     nmtModel.eval()
-    nmtModel.classifier.eval()
+    #nmtModel.classifier.eval()
     tor = Translator(nmtModel, src_vocab.idx2key, trg_vocab.idx2key, print_att=wargs.print_att)
 
-    if not args.test_file:
+    if not args.input_file:
         wlog('Translating one sentence ... ')
         # s = tc.Tensor([[0, 10811, 140, 217, 19, 1047, 482, 29999, 0, 0, 0]])
         #s = '( 北京 综合 电 ) 曾 因 美国 总统 布什 访华 而 一 度 升温 的 中 美 关系 在 急速 ' \
@@ -191,23 +195,24 @@ if __name__ == "__main__":
         tor.trans_samples(s, t)
         sys.exit(0)
 
-    input_file = '{}{}.{}'.format(wargs.val_tst_dir, args.test_file, wargs.val_src_suffix)
-    ref_file = '{}{}.{}'.format(wargs.val_tst_dir, args.test_file, wargs.val_ref_suffix)
-    #input_file = args.test_file
+    input_file = '{}{}.{}'.format(wargs.val_tst_dir, args.input_file, wargs.val_src_suffix)
+    ref_file = '{}{}.{}'.format(wargs.val_tst_dir, args.input_file, wargs.val_ref_suffix)
+    #input_file = args.input_file
 
     wlog('Translating test file {} ... '.format(input_file))
-    test_src_tlst, test_src_lens = val_wrap_data(input_file, src_vocab)
+    test_src_tlst, test_src_lens = wrap_tst_data(input_file, src_vocab)
     test_input_data = Input(test_src_tlst, None, 1, volatile=True)
 
     batch_tst_data = None
     if os.path.exists(ref_file):
         wlog('With force decoding test file {} ... to get alignments'.format(input_file))
         wlog('\t\tRef file {}'.format(ref_file))
-        tst_src_tlst, tst_trg_tlst = wrap_data(input_file, ref_file, src_vocab, trg_vocab,
-                                               False, False, 1000000)
+        tst_src_tlst, tst_trg_tlst = wrap_data(wargs.val_tst_dir, args.input_file,
+                                               wargs.val_src_suffix, wargs.val_ref_suffix,
+                                               src_vocab, trg_vocab, False, False, 1000000)
         batch_tst_data = Input(tst_src_tlst, tst_trg_tlst, 10, batch_sort=False)
 
-    trans, alns = tor.single_trans_file(test_input_data, batch_tst_data=batch_tst_data)
+    trans, alns, _ = tor.single_trans_file(test_input_data, batch_tst_data=batch_tst_data)
     #trans, alns = tor.single_trans_file(test_input_data)
     #trans = tor.multi_process(viter, n_process=nprocess)
 
@@ -217,16 +222,16 @@ if __name__ == "__main__":
     p2 = 'GPU' if wargs.gpu_id else 'CPU'
     p3 = 'wb' if wargs.with_batch else 'wob'
 
-    #test_file_name = input_file if '/' not in input_file else input_file.split('/')[-1]
-    outdir = 'wexp-{}-{}-{}-{}-{}'.format(args.test_file, p1, p2, p3, model_file.split('/')[0])
+    #input_file_name = input_file if '/' not in input_file else input_file.split('/')[-1]
+    outdir = 'wexp-{}-{}-{}-{}-{}'.format(args.input_file, p1, p2, p3, model_file.split('/')[0])
     if wargs.ori_search: outdir = '{}-{}'.format(outdir, 'ori')
     init_dir(outdir)
-    outprefix = outdir + '/trans_' + args.test_file
+    outprefix = outdir + '/trans_' + args.input_file
     # wTrans/trans
     file_out = "{}_e{}_upd{}_b{}m{}_bch{}".format(
         outprefix, eid, bid, wargs.beam_size, wargs.search_mode, wargs.with_batch)
 
-    mteval_bleu = tor.write_file_eval(file_out, trans, args.test_file, alns)
+    mteval_bleu = tor.write_file_eval(file_out, trans, args.input_file, alns)
 
     bleus_record_fname = '{}/record_bleu.log'.format(outdir)
     bleu_content = 'epoch [{}], batch[{}], BLEU score : {}'.format(eid, bid, mteval_bleu)

@@ -104,8 +104,8 @@ elif dataset == 'M':
     #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     val_prefix = 'nist02'
     dev_prefix = 'nist02'
-    val_src_suffix = '8kbpe.src'
-    #val_src_suffix = 'src'
+    #val_src_suffix = '8kbpe.src'
+    val_src_suffix = 'src'
     val_ref_suffix = 'ref.plain_'
     ref_cnt = 4
     tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
@@ -202,7 +202,7 @@ dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
 dec_layer_cnt = 4
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 0
+model = 1
 
 # convolutional layer
 #fltr_windows = [1, 3, 5]   # windows size
@@ -234,6 +234,6 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [2]
+gpu_id = [5]
 #gpu_id = None
 

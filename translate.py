@@ -110,12 +110,15 @@ class Translator(object):
         point_every, number_every = int(math.ceil(batch_count/100)), int(math.ceil(batch_count/10))
         attent_matrixs, trg_toks = [], []
         for batch_idx in range(batch_count):
-            _, srcs, trgs, _, srcs_m, trgs_m = batch_tst_data[batch_idx]
+            _, srcs, ttrgs_for_files, _, srcs_m, trg_mask_for_files = batch_tst_data[batch_idx]
+            trgs, trgs_m = ttrgs_for_files[0], trg_mask_for_files[0]
             # src: ['我', '爱', '北京', '天安门']
             # trg: ['<b>', 'i', 'love', 'beijing', 'tiananmen', 'square', '<e>']
             # feed ['<b>', 'i', 'love', 'beijing', 'tiananmen', 'square']
             # must feed first <b>, because feed previous word to get alignment of next word 'i' !!!
-            _, attends = self.model(srcs, trgs[:-1], srcs_m, trgs_m[:-1], isAtt=True, test=True)
+            outputs = self.model(srcs, trgs[:-1], srcs_m, trgs_m[:-1], isAtt=True, test=True)
+            if len(outputs) == 2: (outputs, _checks) = outputs
+            if len(outputs) == 2: (outputs, attends) = outputs
             # attends: (trg_maxL-1, src_maxL, B)
 
             attent_matrixs.extend(list(attends.permute(2, 0, 1).cpu().data.numpy()))
@@ -169,19 +172,22 @@ class Translator(object):
                     trans = ' '.join(trans)
                     if wargs.word_piece is True: trans_subwords = '###'.join(trans_subwords)
                 else:
-                    trans, ids, attent_matrix = self.trans_onesent(s_filter)
-                    if len(trans) == 2:
-                        trans, trg_toks = trans
-                        trans_subwords = '###'.join(trg_toks)
-                    else: trg_toks = trans.split(' ')
-                    if trans == '': wlog('What ? null translation ... !')
-                    words_cnt += len(ids)
-                    if fd_attent_matrixs is not None:
+                    if fd_attent_matrixs is None:   # need translate
+                        trans, ids, attent_matrix = self.trans_onesent(s_filter)
+                        if len(trans) == 2:
+                            trans, trg_toks = trans
+                            trans_subwords = '###'.join(trg_toks)
+                        else: trg_toks = trans.split(' ')
+                        if trans == '': wlog('What ? null translation ... !')
+                        words_cnt += len(ids)
+                    else:
                         # attention: feed previous word -> get the alignment of next word !!!
                         attent_matrix = fd_attent_matrixs[bid] # do not remove <b>
                         #print attent_matrix
                         trg_toks = sent_filter(trgs[bid]) # remove <b> and <e>
                         trg_toks = [self.tvcb_i2w[wid] for wid in trg_toks]
+                        trans = ' '.join(trg_toks)
+                        words_cnt += len(trg_toks)
 
                     # get alignment from attent_matrix for one translation
                     if attent_matrix is not None:
@@ -210,14 +216,16 @@ class Translator(object):
 
         if self.search_mode == 1:
             C = self.nbs.C
-            wlog('Average location of bp [{}/{}={:6.4f}]'.format(C[1], C[0], C[1] / C[0]))
-            wlog('Step[{}] stepout[{}]'.format(*C[2:]))
+            if C[0] != 0:
+                wlog('Average location of bp [{}/{}={:6.4f}]'.format(C[1], C[0], C[1] / C[0]))
+                wlog('Step[{}] stepout[{}]'.format(*C[2:]))
 
         if self.search_mode == 2:
             C = self.wcp.C
-            wlog('Average Merging Rate [{}/{}={:6.4f}]'.format(C[1], C[0], C[1] / C[0]))
-            wlog('Average location of bp [{}/{}={:6.4f}]'.format(C[3], C[2], C[3] / C[2]))
-            wlog('Step[{}] stepout[{}]'.format(*C[4:]))
+            if C[0] != 0 and C[2] != 0:
+                wlog('Average Merging Rate [{}/{}={:6.4f}]'.format(C[1], C[0], C[1] / C[0]))
+                wlog('Average location of bp [{}/{}={:6.4f}]'.format(C[3], C[2], C[3] / C[2]))
+                wlog('Step[{}] stepout[{}]'.format(*C[4:]))
 
         spend = time.time() - trans_start
         if words_cnt == 0: wlog('What ? No words generated when translating one file !!!')

@@ -85,6 +85,8 @@ def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50):
 
 def count_vocab(data_file, max_vcb_size, max_seq_len=50):
 
+    assert data_file and os.path.exists(data_file), 'need file to extract vocabulary ...'
+
     vocab = Dictionary()
     with open(data_file, 'r') as f:
         for sent in f.readlines():
