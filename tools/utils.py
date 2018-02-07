@@ -4,7 +4,6 @@ import os
 import re
 import numpy
 import shutil
-import wargs
 import json
 import subprocess
 import math
@@ -14,6 +13,9 @@ import torch as tc
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
+
+sys.path.append('../')
+import wargs
 from wargs import *
 reload(sys)
 sys.setdefaultencoding('utf-8')

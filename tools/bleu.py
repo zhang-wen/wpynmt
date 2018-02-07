@@ -6,6 +6,8 @@ import re
 import sys
 import numpy
 
+from utils import debug
+
 def wlog(obj, newline=1):
 
     if newline == 1: sys.stderr.write('{}\n'.format(obj))
@@ -258,7 +260,7 @@ if __name__ == "__main__":
     #print(args.references)
     # TODO: Multiple references
     #reference_files = [args.references]
-    print(ref_fpaths)
+    #print(ref_fpaths)
 
     #open_files = map(open, ref_fpaths)
     cand_file = args.c

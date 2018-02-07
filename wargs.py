@@ -1,4 +1,4 @@
-dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'L' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
@@ -134,15 +134,17 @@ elif dataset == 'L':
     src_dict_size = 50000
     trg_dict_size = 50000
     with_bpe = True
-    use_multi_bleu = True
+    use_multi_bleu = False
     cased = True    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
+    small = True
+    eval_small = True
 
 display_freq = 10 if small else 1000
 sampling_freq = 100 if small else 5000
 sample_size = 5
 if_fixed_sampling = False
-eval_valid_from = 50000 if eval_small else 100000
-eval_valid_freq = 10000 if eval_small else 20000
+eval_valid_from = 500 if eval_small else 100000
+eval_valid_freq = 100 if eval_small else 20000
 
 save_one_model = True
 start_epoch = 1
@@ -160,7 +162,7 @@ with_batch = 1
 ori_search = 0
 beam_size = 10
 vocab_norm = 1  # softmax
-len_norm = 2    # 0: no noraml, 1: length normal, 2: alpha-beta
+len_norm = 1    # 0: no noraml, 1: length normal, 2: alpha-beta
 with_mv = 0
 merge_way = 'Y'
 avg_att = 0
@@ -234,6 +236,6 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [5]
+gpu_id = [1]
 #gpu_id = None
 
