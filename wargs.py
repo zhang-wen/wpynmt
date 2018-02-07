@@ -125,8 +125,9 @@ elif dataset == 'L':
     val_tst_dir = '/home/wen/3.corpus/wmt2017/de-en/'
     val_prefix = 'newstest2014'
     #val_prefix = 'newstest2014.tc'
+    use_multi_bleu = True
     val_src_suffix = 'en.16kbpe'
-    val_ref_suffix = 'ori.de'
+    val_ref_suffix = 'tc.de' if use_multi_bleu is True else 'ori.de'
     ref_cnt = 1
     tests_prefix = ['newstest2014.2737', 'newstest2015', 'newstest2016', 'newstest2017']
     #tests_prefix = ['newstest2009', 'newstest2010', 'newstest2011', 'newstest2012', 'newstest2014', 'newstest2015', 'newstest2016', 'newstest2017']
@@ -134,10 +135,9 @@ elif dataset == 'L':
     src_dict_size = 50000
     trg_dict_size = 50000
     with_bpe = True
-    use_multi_bleu = False
     cased = True    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
-    small = True
-    eval_small = True
+    #small = True
+    #eval_small = True
 
 display_freq = 10 if small else 1000
 sampling_freq = 100 if small else 5000
@@ -219,7 +219,7 @@ print_att = True
 
 # Scheduled Sampling of Samy bengio's paper
 bleu_sampling = False
-ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
+ss_type = None     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
 ss_eps_begin = 1.   # set None for no scheduled sampling
 ss_eps_end = 1.
 #ss_decay_rate = 0.005
@@ -236,6 +236,6 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [1]
+gpu_id = [0]
 #gpu_id = None
 
