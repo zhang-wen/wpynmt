@@ -1,4 +1,4 @@
-dataset = 'L' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
@@ -102,12 +102,12 @@ elif dataset == 'M':
     align_size = 512
     dec_hid_size = 512
     out_size = 512
-    val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
-    #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
+    #val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
+    val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     val_prefix = 'nist02'
     dev_prefix = 'nist02'
-    #val_src_suffix = '8kbpe.src'
-    val_src_suffix = 'src'
+    val_src_suffix = '16kbpe.src'
+    #val_src_suffix = 'src'
     val_ref_suffix = 'ref.plain_'
     ref_cnt = 4
     tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
@@ -221,7 +221,7 @@ print_att = True
 
 # Scheduled Sampling of Samy bengio's paper
 bleu_sampling = False
-ss_type = None     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
+ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
 ss_eps_begin = 1.   # set None for no scheduled sampling
 ss_eps_end = 1.
 #ss_decay_rate = 0.005
@@ -238,6 +238,6 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [0]
+gpu_id = [3]
 #gpu_id = None
 

@@ -36,7 +36,7 @@ class Classifier(nn.Module):
             logit.data.add_(
                 -tc.log(-tc.log(
                     tc.Tensor(logit.size(0), logit.size(1)).cuda().uniform_(0, 1) + epsilon)
-                    + epsilon)) / 0.1
+                    + epsilon)) / 0.5
 
         return logit
 

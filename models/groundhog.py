@@ -26,7 +26,7 @@ class NMT(nn.Module):
 
     def init(self, xs, xs_mask=None, test=True):
 
-        if test:  # for decoding
+        if test is True and not isinstance(xs, Variable):  # for decoding
             if wargs.gpu_id and not xs.is_cuda: xs = xs.cuda()
             xs = Variable(xs, requires_grad=False, volatile=True)
 
@@ -193,7 +193,7 @@ class Decoder(nn.Module):
 
             if wargs.ss_type is not None and ss_eps < 1. and oracles is None:
                 #logit = self.map_vocab(logit)
-                logit = self.classifier.get_a(logit, noise=False)
+                logit = self.classifier.get_a(logit, noise=True)
                 y_tm1_model = logit.max(-1)[1]
                 y_tm1_model = self.trg_lookup_table(y_tm1_model)
 
