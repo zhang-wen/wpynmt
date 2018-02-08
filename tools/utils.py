@@ -659,3 +659,16 @@ def grad_checker(model, _checks=None):
             wlog('wen after_mask---------------')
             wlog(items[5].cpu().data.numpy())
 
+def proc_bpe(input_fname, output_fname):
+
+    fin = open(input_fname, 'r')
+    contend = fin.read()
+    fin.close()
+
+    contend = re.sub('(@@ )|(@@ ?$)', '', contend)
+
+    fout = open(output_fname, 'w')
+    fout.write(contend)
+    fout.close()
+
+

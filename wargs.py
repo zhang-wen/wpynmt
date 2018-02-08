@@ -89,9 +89,11 @@ if dataset == 'S':
     tests_prefix = ['devset3.lc']
     batch_size = 10
     max_epochs = 60
-    epoch_eval = True
+    epoch_eval = False
     small = True
+    eval_small = True
     use_multi_bleu = False
+    with_bpe = True
     cased = False
 elif dataset == 'M':
     src_wemb_size = 512
@@ -204,7 +206,7 @@ dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
 dec_layer_cnt = 4
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 1
+model = 0
 
 # convolutional layer
 #fltr_windows = [1, 3, 5]   # windows size

@@ -31,19 +31,19 @@ class Translator(object):
 
         self.svcb_i2w = svcb_i2w
         self.tvcb_i2w = tvcb_i2w
-        self.search_mode = search_mode if search_mode else wargs.search_mode
-        self.thresh = thresh
         self.lm = lm
-        self.ngram = ngram
         self.ptv = ptv
-        self.k = k if k else wargs.beam_size
         self.noise = noise
-        self.print_att = print_att
         self.model = model
+        self.ngram = ngram
+        self.thresh = thresh
+        self.print_att = print_att
+        self.k = k if k else wargs.beam_size
+        self.search_mode = search_mode if search_mode else wargs.search_mode
 
         if self.search_mode == 0: self.greedy = Greedy(self.tvcb_i2w)
-        elif self.search_mode == 1: self.nbs = Nbs(model, self.tvcb_i2w, k=self.k, noise=self.noise,
-                                                   print_att=print_att)
+        elif self.search_mode == 1: self.nbs = Nbs(model, self.tvcb_i2w, k=self.k,
+                                                   noise=self.noise, print_att=print_att)
         elif self.search_mode == 2: self.wcp = Wcp(model, self.tvcb_i2w, k=self.k)
 
     def trans_onesent(self, s):
@@ -290,23 +290,29 @@ class Translator(object):
         assert os.path.exists(out_fname), 'translation do not exist ...'
         if wargs.with_bpe is True:
             bpe_fname = '{}.bpe'.format(out_fname)
+            wlog('copy {} to {} ... '.format(out_fname, bpe_fname), 0)
             #os.system('cp {} {}.bpe'.format(out_fname, out_fname))
             copyfile(out_fname, bpe_fname)
             assert os.path.exists(bpe_fname), 'bpe file do not exist ...'
-            wlog('copy {} to {}'.format(out_fname, bpe_fname))
-            os.system("sed -r 's/(@@ )|(@@ ?$)//g' {} > {}".format(bpe_fname, out_fname))
-            wlog("sed -r 's/(@@ )|(@@ ?$)//g' {} > {}".format(bpe_fname, out_fname))
+            wlog('done')
+            wlog("sed -r 's/(@@ )|(@@ ?$)//g' {} > {} ... ".format(bpe_fname, out_fname), 0)
+            #os.system("sed -r 's/(@@ )|(@@ ?$)//g' {} > {}".format(bpe_fname, out_fname))
+            proc_bpe(bpe_fname, out_fname)
+            wlog('done')
 
         # Luong: remove "rich-text format" --> rich ##AT##-##AT## text format
         #os.system("sed -r -i 's/( ##AT##)|(##AT## )//g' {}".format(out_fname))
         #wlog("sed -r -i 's/( ##AT##)|(##AT## )//g' {}".format(out_fname))
         if wargs.with_postproc is True:
             opost_name = '{}.opost'.format(out_fname)
-            copyfile(out_fname, opost_name)
+            wlog('copy {} to {} ... '.format(out_fname, opost_name), 0)
             #os.system('cp {} {}'.format(out_fname, opost_name))
-            wlog('cp {} to {}'.format(out_fname, opost_name))
+            copyfile(out_fname, opost_name)
+            assert os.path.exists(opost_name), 'opost file do not exist ...'
+            wlog('done')
+            wlog("sh postproc.sh {} {}".format(opost_name, out_fname), 0)
             os.system("sh postproc.sh {} {}".format(opost_name, out_fname))
-            wlog("sh postproc.sh {} {}".format(opost_name, out_fname))
+            wlog('done')
             mteval_bleu_opost = bleu_file(opost_name, ref_fpaths, cased=wargs.cased)
             os.rename(opost_name, "{}_{}.txt".format(opost_name, mteval_bleu_opost))
 
