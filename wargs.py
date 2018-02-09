@@ -1,8 +1,8 @@
-dataset = 'S' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
-max_seq_len = 80
+max_seq_len = 50
 
 '''
 Embedding layer
@@ -106,8 +106,8 @@ elif dataset == 'M':
     val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     val_prefix = 'nist02'
     dev_prefix = 'nist02'
-    val_src_suffix = '16kbpe.src'
-    #val_src_suffix = 'src'
+    #val_src_suffix = '16kbpe.src'
+    val_src_suffix = 'src'
     val_ref_suffix = 'ref.plain_'
     ref_cnt = 4
     tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
@@ -154,8 +154,8 @@ start_epoch = 1
 model_prefix = dir_model + '/model'
 best_model = dir_valid + '/best.model.pt' if dir_valid else 'best.model.pt'
 # pretrained model
-pre_train = None
-#pre_train = best_model
+#pre_train = None
+pre_train = best_model
 fix_pre_params = False
 
 # decoder hype-parameters
@@ -193,7 +193,7 @@ start_decay_from = None
 learning_rate_decay = 0.5
 last_valid_bleu = 0.
 
-snip_size = 1
+snip_size = 10
 file_tran_dir = 'wexp-gpu-nist03'
 laynorm = False
 segments = False
@@ -222,10 +222,10 @@ print_att = True
 # Scheduled Sampling of Samy bengio's paper
 greed_sampling = False
 greed_gumbel_noise = 0.5     # None: w/o noise
-bleu_sampling = False
+bleu_sampling = True
 bleu_gumbel_noise = 0.5     # None: w/o noise
 ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
-ss_eps_begin = 0.9   # set None for no scheduled sampling
+ss_eps_begin = 1.   # set None for no scheduled sampling
 ss_eps_end = 1.
 #ss_decay_rate = 0.005
 ss_decay_rate = (ss_eps_begin - ss_eps_end) / 10.

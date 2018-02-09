@@ -337,10 +337,13 @@ class Decoder(nn.Module):
                         if wargs.gpu_id: _seed = _seed.cuda()
                         y_tm1_oracle = y_tm1_model * _seed + oracles[k] * (1. - _seed)
                         #y_tm1_oracle = y_tm1_model.data.mul_(_seed) + y_tm1_oracle.data.mul_(1. - _seed)
+                        #wlog('joint word and sent ... ')
                     else:
                         y_tm1_oracle = y_tm1_model  # word-level oracle (w/o w/ noise)
+                        #wlog('word level oracle ... ')
                 else:
                     y_tm1_oracle = oracles[k]   # sentence-level oracle
+                    #wlog('sent level oracle ... ')
 
                 #uval = tc.rand(b_size, 1)    # different word and differet batch
                 #if wargs.gpu_id: uval = uval.cuda()
@@ -379,10 +382,10 @@ class Decoder(nn.Module):
             sent_logit.append(logit)
 
             if wargs.ss_type is not None and ss_eps < 1. and wargs.greed_sampling is True:
-                #logit = self.map_vocab(logit)
                 logit = self.classifier.get_a(logit, noise=wargs.greed_gumbel_noise)
                 y_tm1_model = logit.max(-1)[1]
                 y_tm1_model = self.trg_lookup_table(y_tm1_model)
+                #wlog('word-level greedy sampling, noise {}'.format(wargs.greed_gumbel_noise))
 
             #tlen_batch_c.append(attend)
             #tlen_batch_y.append(y_tm1)
