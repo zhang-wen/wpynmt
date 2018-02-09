@@ -310,7 +310,7 @@ class Translator(object):
             copyfile(out_fname, opost_name)
             assert os.path.exists(opost_name), 'opost file do not exist ...'
             wlog('done')
-            wlog("sh postproc.sh {} {}".format(opost_name, out_fname), 0)
+            wlog("sh postproc.sh {} {}".format(opost_name, out_fname))
             os.system("sh postproc.sh {} {}".format(opost_name, out_fname))
             wlog('done')
             mteval_bleu_opost = bleu_file(opost_name, ref_fpaths, cased=wargs.cased)

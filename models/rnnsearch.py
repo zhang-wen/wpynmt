@@ -330,14 +330,17 @@ class Decoder(nn.Module):
         for k in range(y_Lm1):
             if wargs.dynamic_cyk_decoding is True: btg_uh = self.ha_btg(btg_xs_h)
             if wargs.ss_type is not None and ss_eps < 1.:
-                if oracles is not None:
-                    _seed = tc.Tensor(b_size, 1).bernoulli_()
-                    _seed = Variable(_seed, requires_grad=False)
-                    if wargs.gpu_id: _seed = _seed.cuda()
-                    y_tm1_oracle = y_tm1_model * _seed + oracles[k] * (1. - _seed)
-                    #y_tm1_oracle = y_tm1_model.data.mul_(_seed) + y_tm1_oracle.data.mul_(1. - _seed)
+                if wargs.greed_sampling is True:
+                    if oracles is not None:     # joint word and sentence level
+                        _seed = tc.Tensor(b_size, 1).bernoulli_()
+                        _seed = Variable(_seed, requires_grad=False)
+                        if wargs.gpu_id: _seed = _seed.cuda()
+                        y_tm1_oracle = y_tm1_model * _seed + oracles[k] * (1. - _seed)
+                        #y_tm1_oracle = y_tm1_model.data.mul_(_seed) + y_tm1_oracle.data.mul_(1. - _seed)
+                    else:
+                        y_tm1_oracle = y_tm1_model  # word-level oracle (w/o w/ noise)
                 else:
-                    y_tm1_oracle = y_tm1_model
+                    y_tm1_oracle = oracles[k]   # sentence-level oracle
 
                 #uval = tc.rand(b_size, 1)    # different word and differet batch
                 #if wargs.gpu_id: uval = uval.cuda()
@@ -375,9 +378,9 @@ class Decoder(nn.Module):
             logit = self.step_out(s_tm1, y_tm1, attend)
             sent_logit.append(logit)
 
-            if wargs.ss_type is not None and ss_eps < 1. and oracles is None:
+            if wargs.ss_type is not None and ss_eps < 1. and wargs.greed_sampling is True:
                 #logit = self.map_vocab(logit)
-                logit = self.classifier.get_a(logit, noise=False)
+                logit = self.classifier.get_a(logit, noise=wargs.gumbel_noise)
                 y_tm1_model = logit.max(-1)[1]
                 y_tm1_model = self.trg_lookup_table(y_tm1_model)
 

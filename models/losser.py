@@ -27,12 +27,12 @@ class Classifier(nn.Module):
         self.output_size = output_size
         self.softmax = MaskSoftmax()
 
-    def get_a(self, logit, noise=False):
+    def get_a(self, logit, noise=None):
 
         if not logit.dim() == 2: logit = logit.contiguous().view(-1, logit.size(-1))
         logit = self.map_vocab(logit)
 
-        if noise is True:
+        if noise is not None:
             logit.data.add_(
                 -tc.log(-tc.log(
                     tc.Tensor(logit.size(0), logit.size(1)).cuda().uniform_(0, 1) + epsilon)
@@ -68,7 +68,7 @@ class Classifier(nn.Module):
 
         return self.criterion(pred, gold), log_norm * gold_mask[:, None]
 
-    def forward(self, feed, gold=None, gold_mask=None, noise=False):
+    def forward(self, feed, gold=None, gold_mask=None, noise=None):
 
         # no dropout in decoding
         feed = self.dropout(feed) if gold is not None else feed
