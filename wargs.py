@@ -1,4 +1,4 @@
-dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'S' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
@@ -87,7 +87,7 @@ if dataset == 'S':
     val_ref_suffix = 'en'
     ref_cnt = 16
     tests_prefix = ['devset3.lc']
-    batch_size = 10
+    batch_size = 40
     max_epochs = 60
     epoch_eval = False
     small = True
@@ -206,7 +206,7 @@ dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
 dec_layer_cnt = 4
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 0
+model = 1
 
 # convolutional layer
 #fltr_windows = [1, 3, 5]   # windows size
@@ -220,11 +220,12 @@ dynamic_cyk_decoding = False
 print_att = True
 
 # Scheduled Sampling of Samy bengio's paper
-greed_sampling = True
-gumbel_noise = None     # None: w/o noise
-bleu_sampling = True
+greed_sampling = False
+greed_gumbel_noise = 0.5     # None: w/o noise
+bleu_sampling = False
+bleu_gumbel_noise = 0.5     # None: w/o noise
 ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
-ss_eps_begin = 1.   # set None for no scheduled sampling
+ss_eps_begin = 0.9   # set None for no scheduled sampling
 ss_eps_end = 1.
 #ss_decay_rate = 0.005
 ss_decay_rate = (ss_eps_begin - ss_eps_end) / 10.

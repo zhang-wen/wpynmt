@@ -329,7 +329,7 @@ class Decoder(nn.Module):
         sent_logit, y_tm1_model = [], ys_e[0]
         for k in range(y_Lm1):
             if wargs.dynamic_cyk_decoding is True: btg_uh = self.ha_btg(btg_xs_h)
-            if wargs.ss_type is not None and ss_eps < 1.:
+            if wargs.ss_type is not None and ss_eps < 1. and (wargs.greed_sampling or wargs.bleu_sampling):
                 if wargs.greed_sampling is True:
                     if oracles is not None:     # joint word and sentence level
                         _seed = tc.Tensor(b_size, 1).bernoulli_()
@@ -380,7 +380,7 @@ class Decoder(nn.Module):
 
             if wargs.ss_type is not None and ss_eps < 1. and wargs.greed_sampling is True:
                 #logit = self.map_vocab(logit)
-                logit = self.classifier.get_a(logit, noise=wargs.gumbel_noise)
+                logit = self.classifier.get_a(logit, noise=wargs.greed_gumbel_noise)
                 y_tm1_model = logit.max(-1)[1]
                 y_tm1_model = self.trg_lookup_table(y_tm1_model)
 

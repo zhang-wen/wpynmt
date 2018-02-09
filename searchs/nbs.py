@@ -236,7 +236,8 @@ class Nbs(object):
                     btg_xs_h = btg_xs_h.view(L, -1, enc_size).expand(L, remain_bs, enc_size)
 
             # (B*prevb_sz, vocab_size)
-            next_ces = self.decoder.classifier(logit)
+            #wlog('bleu sampling, noise {}'.format(self.noise))
+            next_ces = self.decoder.classifier(logit, noise=self.noise)
             next_ces = next_ces.cpu().data.numpy()
             voc_size = next_ces.shape[1]
             cand_scores = hyp_scores[:, None] + next_ces

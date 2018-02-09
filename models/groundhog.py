@@ -167,14 +167,17 @@ class Decoder(nn.Module):
         sent_logit, y_tm1_model = [], ys_e[0]
         for k in range(y_Lm1):
 
-            if wargs.ss_type is not None and ss_eps < 1.:
-                if oracles is not None:
-                    _seed = tc.Tensor(b_size, 1).bernoulli_()
-                    _seed = Variable(_seed, requires_grad=False)
-                    if wargs.gpu_id: _seed = _seed.cuda()
-                    y_tm1_oracle = y_tm1_model * _seed + oracles[k] * (1. - _seed)
+            if wargs.ss_type is not None and ss_eps < 1. and (wargs.greed_sampling or wargs.bleu_sampling):
+                if wargs.greed_sampling is True:
+                    if oracles is not None:     # joint word and sentence level
+                        _seed = tc.Tensor(b_size, 1).bernoulli_()
+                        _seed = Variable(_seed, requires_grad=False)
+                        if wargs.gpu_id: _seed = _seed.cuda()
+                        y_tm1_oracle = y_tm1_model * _seed + oracles[k] * (1. - _seed)
+                    else:
+                        y_tm1_oracle = y_tm1_model  # word-level oracle (w/o w/ noise)
                 else:
-                    y_tm1_oracle = y_tm1_model
+                    y_tm1_oracle = oracles[k]   # sentence-level oracle
 
                 _g = ss_eps * tc.ones(b_size, 1)
                 _g = tc.bernoulli(_g)   # pick gold with the probability of ss_eps
@@ -191,9 +194,9 @@ class Decoder(nn.Module):
             logit = self.step_out(s_tm1, y_tm1, attend)
             sent_logit.append(logit)
 
-            if wargs.ss_type is not None and ss_eps < 1. and oracles is None:
+            if wargs.ss_type is not None and ss_eps < 1. and wargs.greed_sampling is True:
                 #logit = self.map_vocab(logit)
-                logit = self.classifier.get_a(logit, noise=True)
+                logit = self.classifier.get_a(logit, noise=wargs.greed_gumbel_noise)
                 y_tm1_model = logit.max(-1)[1]
                 y_tm1_model = self.trg_lookup_table(y_tm1_model)
 

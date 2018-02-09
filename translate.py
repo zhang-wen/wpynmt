@@ -27,7 +27,7 @@ numpy.set_printoptions(threshold=numpy.nan)
 class Translator(object):
 
     def __init__(self, model, svcb_i2w=None, tvcb_i2w=None, search_mode=None, thresh=None, lm=None,
-                 ngram=None, ptv=None, k=None, noise=False, print_att=False):
+                 ngram=None, ptv=None, k=None, noise=None, print_att=False):
 
         self.svcb_i2w = svcb_i2w
         self.tvcb_i2w = tvcb_i2w

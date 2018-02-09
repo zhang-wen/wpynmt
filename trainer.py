@@ -78,7 +78,8 @@ class Trainer(object):
             wlog('Schedule sampling value {}'.format(ss_eps_cur))
             from searchs.nbs import Nbs
             if wargs.ss_type is not None and ss_eps_cur < 1. and bleu_sampling is True:
-                self.sampler = Nbs(self.model, self.tv, k=3, noise=False, print_att=False, batch_sample=True)
+                self.sampler = Nbs(self.model, self.tv, k=3, noise=wargs.bleu_gumbel_noise,
+                                   print_att=False, batch_sample=True)
             if wargs.epoch_shuffle and epoch > wargs.epoch_shuffle_minibatch: self.train_data.shuffle()
             # shuffle the original batch
             shuffled_batch_idx = tc.randperm(batch_count)
