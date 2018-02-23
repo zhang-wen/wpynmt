@@ -6,12 +6,81 @@ import re
 import sys
 import numpy
 
-from utils import debug
-
 def wlog(obj, newline=1):
 
     if newline == 1: sys.stderr.write('{}\n'.format(obj))
     else: sys.stderr.write('{}'.format(obj))
+
+def length_bleu(src_fpath, ref_fpaths, trans_fpath, ngram=4, cased=False,
+                min_len=0, max_len=80, len_interval=10):
+
+    if cased is False: wlog('Calculating case-insensitive {}-gram BLEU ...'.format(ngram))
+    else: wlog('Calculating case-sensitive {}-gram BLEU ...'.format(ngram))
+
+    wlog('\tSource file: {}'.format(src_fpath))
+    wlog('\tCandidate file: {}'.format(trans_fpath))
+    wlog('\tReferences file:')
+    for ref_fpath in ref_fpaths: wlog('\t\t{}'.format(ref_fpath))
+
+    # split by source length
+
+    src_F = open(src_fpath, 'r')
+    src_lines = src_F.readlines()
+    src_F.close()
+    src_lines = [line.strip() for line in src_lines]
+
+    hyp_F = open(trans_fpath, 'r')
+    hyp_lines = hyp_F.readlines()
+    hyp_F.close()
+    hyp_lines = [line.strip() for line in hyp_lines]
+
+    refs_lines = []
+    for ref_fpath in ref_fpaths:
+        ref_F = open(ref_fpath, 'r')
+        ref_lines = ref_F.readlines()
+        ref_F.close()
+        ref_lines = [line.strip() for line in ref_lines]
+        refs_lines.append(ref_lines)
+
+    sent_num = len(src_lines)
+    #hypo = open(trans_fpath, 'r').read().strip()
+    #refs = [open(ref_fpath, 'r').read().strip() for ref_fpath in ref_fpaths]
+    assert sent_num == len(hyp_lines) == len(refs_lines[0]), 'file length dismatch'
+
+    ref_cnt = len(ref_fpaths)
+
+    intervals = [(k, k + len_interval) for k in range(min_len, max_len, len_interval)]
+    num_intervals = len(intervals)
+
+    inter_hyps = [[] for i in range(num_intervals)]
+    inter_refs = [ [[] for i in range(ref_cnt)] for k in range(num_intervals) ]
+
+    for k in range(sent_num):
+
+        src_line, hyp_line = src_lines[k], hyp_lines[k]
+        src_L = len(src_line.split(' '))
+
+        for interval_idx in range(num_intervals):
+            left, right = intervals[interval_idx]
+            if left < src_L and src_L <= right:
+                inter_hyps[interval_idx].append(hyp_line)
+                for ref_idx in range(ref_cnt):
+                    ref_lines = refs_lines[ref_idx]
+                    inter_refs[interval_idx][ref_idx].append(ref_lines[k])
+            else:
+                continue
+
+    bleus = [None] * num_intervals
+
+    for interval_idx in range(num_intervals):
+        hyp = '\n'.join(inter_hyps[interval_idx])
+        refs = ['\n'.join(inter_refs[interval_idx][ref_idx]) for ref_idx in range(ref_cnt)]
+        result = bleu(hyp, refs, ngram, cased=cased)
+        result = float('%.2f' % (result * 100))
+        bleus[interval_idx] = result
+
+    return bleus
+
 
 '''
 convert some code of Moses mteval-v11b.pl into python code
@@ -247,7 +316,7 @@ if __name__ == "__main__":
 
     # reference: /home/wen/3.corpus/segment_allnist_stanseg/nist03.ref.plain_
     ref_fpaths = []
-    ref_cnt = 1
+    ref_cnt = 4
     if ref_cnt == 1:
         ref_fpath = args.references
         if os.path.exists(ref_fpath): ref_fpaths.append(ref_fpath)
@@ -265,7 +334,14 @@ if __name__ == "__main__":
     #open_files = map(open, ref_fpaths)
     cand_file = args.c
     cased = ( not args.lc )
-    bleu_file(cand_file, ref_fpaths, ngram=4, cased=cased)
+    #bleu_file(cand_file, ref_fpaths, ngram=4, cased=cased)
+
+    src_fpath = './nist03.src.plain.u8.a2b.stanseg'
+    #src_fpath = './src.3'
+    bleus = length_bleu(src_fpath, ref_fpaths, cand_file, ngram=4, cased=cased)
+    print bleus
+
+
 
 
 
