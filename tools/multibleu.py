@@ -5,7 +5,7 @@ from __future__ import division, print_function
 from math import exp, log
 from collections import Counter
 from tools.utils import *
-
+from tools.bleu import zh_to_chars
 
 def ngram_count(words, n):
     if n <= len(words):
@@ -47,23 +47,27 @@ def bleu(candidate, references, maxn=4):
     return bp * exp(sum(safe_log(precs[n]) for n in range(maxn)) / maxn)
 
 
-def tokenize(txt):
-    return txt.strip().split()
+def tokenize(txt, char=False):
+    txt = txt.strip()
+    if char is True: txt = zh_to_chars(txt)
+    else: txt = txt.split()
+    return txt
 
+def tokenize_lower(txt, char=False):
+    txt = txt.strip().lower()
+    if char is True: txt = zh_to_chars(txt)
+    else: txt = txt.split()
+    return txt
 
-def tokenize_lower(txt):
-    return txt.strip().lower().split()
-
-
-def multi_bleu(candidates, all_references, tokenize_fn=tokenize, maxn=4):
+def multi_bleu(candidates, all_references, tokenize_fn=tokenize, maxn=4, char=False):
     correct = [0] * maxn
     total = [0] * maxn
     cand_tot_length = 0
     ref_closest_length = 0
 
     for candidate, references in zip(candidates, zip(*all_references)):
-        candidate = tokenize_fn(candidate)
-        references = map(tokenize_fn, references)
+        candidate = tokenize_fn(candidate, char)
+        references = map(tokenize_fn, references, [char for _ in references])
         cand_tot_length += len(candidate)
         ref_closest_length += closest_min_length(candidate, references)
         for n in range(maxn):
@@ -83,7 +87,7 @@ def multi_bleu(candidates, all_references, tokenize_fn=tokenize, maxn=4):
     return score, prec_pc, brevity_penalty, cand_tot_length, ref_closest_length
 
 
-def print_multi_bleu(cand_file, ref_fpaths, cased=False, maxn=4):
+def print_multi_bleu(cand_file, ref_fpaths, cased=False, maxn=4, char=False):
 
     tokenize_fn = tokenize if cased is True else tokenize_lower
     if cased is False: wlog('Calculating case-insensitive {}-gram BLEU ...'.format(maxn))
@@ -96,7 +100,7 @@ def print_multi_bleu(cand_file, ref_fpaths, cased=False, maxn=4):
     refs = [open(ref_fpath, 'r') for ref_fpath in ref_fpaths]
 
     score, precisions, brevity_penalty, cand_tot_length, ref_closest_length = \
-        multi_bleu(cand, refs, tokenize_fn, maxn)
+        multi_bleu(cand, refs, tokenize_fn, maxn, char=char)
 
     cand.close()
     for fd in refs: fd.close()

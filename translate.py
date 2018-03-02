@@ -320,9 +320,21 @@ class Translator(object):
 
         multi_bleu = print_multi_bleu(out_fname, ref_fpaths, cased=wargs.cased)
         #mteval_bleu = bleu_file(out_fname + '.seg.plain', ref_fpaths)
-        os.rename(out_fname, "{}_{}_{}.txt".format(out_fname, mteval_bleu, multi_bleu))
+        if wargs.char is True:
+            c_mteval_bleu = bleu_file(out_fname, ref_fpaths, cased=wargs.cased, char=True)
+            c_multi_bleu = print_multi_bleu(out_fname, ref_fpaths, cased=wargs.cased, char=True)
+            os.rename(out_fname, "{}_{}_{}_c_{}_{}.txt".format(
+                out_fname, mteval_bleu, multi_bleu, c_mteval_bleu, c_multi_bleu))
+        else: os.rename(out_fname, "{}_{}_{}.txt".format(out_fname, mteval_bleu, multi_bleu))
 
-        return mteval_bleu if wargs.use_multi_bleu is False else multi_bleu
+        if wargs.use_multi_bleu is False:
+            if wargs.char is False: final_bleu = mteval_bleu
+            else: final_bleu = c_mteval_bleu
+        else:
+            if wargs.char is False: final_bleu = multi_bleu
+            else: final_bleu = c_multi_bleu
+
+        return final_bleu
         #return mteval_bleu_opost if wargs.with_postproc is True else mteval_bleu
 
     def trans_tests(self, tests_data, eid, bid):

@@ -2,7 +2,7 @@ dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
-max_seq_len = 50
+max_seq_len = 80
 
 '''
 Embedding layer
@@ -68,10 +68,11 @@ max_epochs = 20
 epoch_shuffle = False
 epoch_shuffle_minibatch = 1
 
-small = False
-eval_small = False
+small = True
+eval_small = True
 epoch_eval = False
 final_test = False
+char = False
 
 if dataset == 'S':
     src_wemb_size = 256
@@ -103,18 +104,27 @@ elif dataset == 'M':
     dec_hid_size = 512
     out_size = 512
     #val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
-    val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
-    val_prefix = 'nist02'
-    dev_prefix = 'nist02'
+    #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
+    #val_tst_dir = '/home5/wen/2.data/mt/uy_zh_300w/devtst/'
+    val_tst_dir = '/home/wen/3.corpus/mt/uy_zh_300w/devtst/'
+    #val_prefix = 'nist02'
+    #dev_prefix = 'nist02'
+    val_prefix = 'dev700'
+    dev_prefix = 'dev700'
     #val_src_suffix = '16kbpe.src'
-    val_src_suffix = 'src'
-    val_ref_suffix = 'ref.plain_'
+    #val_src_suffix = 'uy.src'
+    val_src_suffix = 'uy.32kbpe.src'
+    val_ref_suffix = 'zh.ref.plain_'
+    src_dict_size = 50000
+    trg_dict_size = 50000
     ref_cnt = 4
-    tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
-    with_bpe = True
-    with_postproc = True
+    #tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
+    tests_prefix = ['tst861']
+    with_bpe = False
+    with_postproc = False
     use_multi_bleu = False
     cased = False
+    char = True
 elif dataset == 'L':
     #src_wemb_size = 500
     #trg_wemb_size = 500
@@ -154,8 +164,8 @@ start_epoch = 1
 model_prefix = dir_model + '/model'
 best_model = dir_valid + '/best.model.pt' if dir_valid else 'best.model.pt'
 # pretrained model
-#pre_train = None
-pre_train = best_model
+pre_train = None
+#pre_train = best_model
 fix_pre_params = False
 
 # decoder hype-parameters
@@ -222,9 +232,9 @@ print_att = True
 # Scheduled Sampling of Samy bengio's paper
 greed_sampling = False
 greed_gumbel_noise = 0.5     # None: w/o noise
-bleu_sampling = True
+bleu_sampling = False
 bleu_gumbel_noise = 0.5     # None: w/o noise
-ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
+ss_type = None     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
 ss_eps_begin = 1.   # set None for no scheduled sampling
 ss_eps_end = 1.
 #ss_decay_rate = 0.005
@@ -241,6 +251,6 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [3]
+gpu_id = [0]
 #gpu_id = None
 

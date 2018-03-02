@@ -5,13 +5,47 @@ import math
 import re
 import sys
 import numpy
+import string
+from zhon import hanzi
 
 def wlog(obj, newline=1):
 
     if newline == 1: sys.stderr.write('{}\n'.format(obj))
     else: sys.stderr.write('{}'.format(obj))
 
-def length_bleu(src_fpath, ref_fpaths, trans_fpath, ngram=4, cased=False,
+def zh_to_chars(s):
+
+    regex = []
+
+    # Match a whole word:
+    regex += [ur'[A-Za-z]+']
+
+    # Match a single CJK character:
+    regex += [ur'[\u4e00-\ufaff]']
+
+    # Match one of anything else, except for spaces:
+    #regex += [ur'^\s']
+
+    # Match the float
+    regex += [ur'[-+]?\d*\.\d+|\d+']
+
+    # Match chinese float
+    ch_punc = hanzi.punctuation
+    regex += [ur'[{}]'.format(ch_punc)]	# point .
+
+    # Match the punctuation
+    regex += [ur'[.]+']	# point .
+
+    punc = string.punctuation
+    punc = punc.replace('.', '')
+    regex += [ur'[{}]'.format(punc)]
+
+    regex = "|".join(regex)
+    r = re.compile(regex)
+
+    return r.findall(s)
+
+def length_bleu(src_fpath, ref_fpaths, trans_fpath, ngram=4, cased=False, char=False,
                 min_len=0, max_len=80, len_interval=10):
 
     if cased is False: wlog('Calculating case-insensitive {}-gram BLEU ...'.format(ngram))
@@ -75,7 +109,7 @@ def length_bleu(src_fpath, ref_fpaths, trans_fpath, ngram=4, cased=False,
     for interval_idx in range(num_intervals):
         hyp = '\n'.join(inter_hyps[interval_idx])
         refs = ['\n'.join(inter_refs[interval_idx][ref_idx]) for ref_idx in range(ref_cnt)]
-        result = bleu(hyp, refs, ngram, cased=cased)
+        result = bleu(hyp, refs, ngram, cased=cased, char=char)
         result = float('%.2f' % (result * 100))
         bleus[interval_idx] = result
 
@@ -153,7 +187,7 @@ def sentence2dict(sentence, n):
                 result[gram] = 1
     return result
 
-def bleu(hypo_c, refs_c, n=4, logfun=wlog, cased=False):
+def bleu(hypo_c, refs_c, n=4, logfun=wlog, cased=False, char=False):
     '''
         Calculate BLEU score given translation and references.
 
@@ -176,11 +210,15 @@ def bleu(hypo_c, refs_c, n=4, logfun=wlog, cased=False):
     #print hypo_sen
     #print len(hypo_sen)
     for num in range(len(hypo_sen)):
+
         hypo = hypo_sen[num]
-        hypo = token(hypo, cased)
+        if char is True: hypo = ' '.join(zh_to_chars(hypo))
+        else: hypo = token(hypo, cased)
+
         h_length = len(hypo.split(' '))
 
-        refs = [token(refs_sen[i][num], cased) for i in range(len(refs_c))]
+        if char is True: refs = [' '.join(zh_to_chars(refs_sen[i][num])) for i in range(len(refs_c))]
+        else: refs = [token(refs_sen[i][num], cased) for i in range(len(refs_c))]
         ref_lengths = sorted([len(refs[i].split(' ')) for i in range(len(refs))])
 
         # problem is not the brevity penalty, mteval-v11.perl of Moses also has brevity penalty,
@@ -251,7 +289,7 @@ def bleu(hypo_c, refs_c, n=4, logfun=wlog, cased=False):
 
     return BLEU
 
-def bleu_file(hypo, refs, ngram=4, cased=False):
+def bleu_file(hypo, refs, ngram=4, cased=False, char=False):
 
     '''
         Calculate the BLEU score given translation files and reference files.
@@ -278,7 +316,7 @@ def bleu_file(hypo, refs, ngram=4, cased=False):
     #print hypo.endswith('\n')
     #print type(refs)
     #print type(refs[0])
-    result = bleu(hypo, refs, ngram, cased=cased)
+    result = bleu(hypo, refs, ngram, cased=cased, char=char)
     result = float('%.2f' % (result * 100))
 
     return result
