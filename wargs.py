@@ -90,7 +90,7 @@ if dataset == 'S':
     tests_prefix = ['devset3.lc']
     batch_size = 40
     max_epochs = 60
-    epoch_eval = False
+    epoch_eval = True
     small = True
     eval_small = True
     use_multi_bleu = False
@@ -211,9 +211,9 @@ seg_val_tst_dir = 'orule_1.7'
 
 # model
 enc_rnn_type = 'sru'    # rnn, gru, lstm, sru
-enc_layer_cnt = 1
+enc_layer_cnt = 4
 dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
-dec_layer_cnt = 1
+dec_layer_cnt = 4
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
 model = 5

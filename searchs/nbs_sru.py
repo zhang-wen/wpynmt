@@ -211,6 +211,7 @@ class Nbs(object):
             #    s_im1, enc_src, uh, y_im1, btg_xs_h=btg_xs_h, btg_uh=btg_uh,
             #    btg_xs_mask=btg_xs_mask)
             #a_i, s_i, y_im1, alpha_ij = step_output[:4]
+            s_im1 = s_im1.permute(1, 0, 2)
             a_i, s_i, y_im1, hidden_i, alpha_ij = self.decoder.step_sru(s_im1, enc_src, uh, y_im1)
             # (n_remainings*p, enc_hid_size), (n_remainings*p, dec_hid_size),
             # (n_remainings*p, trg_wemb_size), (layers*directions, n_remainings*p,dim),
@@ -255,7 +256,7 @@ class Nbs(object):
             _s_i, _alpha_ij, alpha_ij = [], [], alpha_ij.t()    # (p*B, srcL)
             s_i = hidden_i.permute(1, 0, 2)
             for _idx in prebs_sz[:-1]:
-                _s_i.append(s_i[:_idx])
+                _s_i.append(s_i[:_idx].unsqueeze(1))
                 _alpha_ij.append(alpha_ij[:_idx].t())
                 s_i, alpha_ij = s_i[_idx:], alpha_ij[_idx:]
             _s_i.append(s_i)    # [B: (prevb, dec_hid_size)]
