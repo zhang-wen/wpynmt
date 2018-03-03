@@ -5,6 +5,7 @@ from torch.autograd import Variable
 
 import wargs
 from tools.utils import *
+from models.losser import *
 
 if 'sru' in [wargs.enc_rnn_type, wargs.dec_rnn_type]:
     from sru import check_sru_requirement
@@ -79,7 +80,9 @@ class NMT(nn.Module):
 
         return s0, xs, uh
 
-    def forward(self, srcs, trgs, srcs_m, trgs_m):
+    #def forward(self, srcs, trgs, srcs_m, trgs_m):
+    def forward(self, srcs, trgs, srcs_m, trgs_m, isAtt=False, test=False,
+                ss_eps=1., oracles=None):
         # (max_slen_batch, batch_size, enc_hid_size)
         s0, srcs, uh = self.init(srcs, srcs_m, False)
 
@@ -213,6 +216,9 @@ class Decoder(nn.Module):
         self.ly = nn.Linear(wargs.trg_wemb_size, out_size)
         self.lc = nn.Linear(2*wargs.enc_hid_size, out_size)
 
+        self.classifier = Classifier(wargs.out_size, trg_vocab_size,
+                                     self.trg_lookup_table if wargs.copy_trg_emb is True else None)
+
     def fwd_gru(self, s_tm1, xs_h, ys, uh, xs_mask=None, ys_mask=None):
 
         tlen_batch_s, tlen_batch_c = [], []
@@ -266,9 +272,8 @@ class Decoder(nn.Module):
         #print 's_t: ', s_t.size()
         #print 'hidden_t: ', hidden_t.size()
 
-        del alpha_ij
         # s_t: (1, 1, 512)
-        return attend, s_t[0], y_tm1, hidden_t
+        return attend, s_t[0], y_tm1, hidden_t, alpha_ij
 
     def forward(self, s_tm1, xs_h, ys, uh, xs_mask=None, ys_mask=None):
 
@@ -280,9 +285,9 @@ class Decoder(nn.Module):
             # (max_tlen_batch - 1, batch_size, trg_wemb_size)
             ys_e = ys if ys.dim() == 3 else self.trg_lookup_table(ys)
             for k in range(y_Lm1):
-                a_t, s_t, _, s_tm1 = self.step_sru(s_tm1, xs_h, uh, ys_e[k],
-                                           xs_mask if xs_mask is not None else None,
-                                           ys_mask[k] if ys_mask is not None else None)
+                a_t, s_t, _, s_tm1, _ = self.step_sru(s_tm1, xs_h, uh, ys_e[k],
+                                                      xs_mask if xs_mask is not None else None,
+                                                      ys_mask[k] if ys_mask is not None else None)
                 tlen_batch_c.append(a_t)
                 tlen_batch_s.append(s_t)
 

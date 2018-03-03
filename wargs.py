@@ -1,8 +1,8 @@
-dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'S' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
-max_seq_len = 80
+max_seq_len = 50
 
 '''
 Embedding layer
@@ -68,8 +68,8 @@ max_epochs = 20
 epoch_shuffle = False
 epoch_shuffle_minibatch = 1
 
-small = True
-eval_small = True
+small = False
+eval_small = False
 epoch_eval = False
 final_test = False
 char = False
@@ -211,12 +211,12 @@ seg_val_tst_dir = 'orule_1.7'
 
 # model
 enc_rnn_type = 'sru'    # rnn, gru, lstm, sru
-enc_layer_cnt = 4
+enc_layer_cnt = 1
 dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
-dec_layer_cnt = 4
+dec_layer_cnt = 1
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 1
+model = 5
 
 # convolutional layer
 #fltr_windows = [1, 3, 5]   # windows size
