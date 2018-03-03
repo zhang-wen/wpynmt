@@ -48,4 +48,5 @@ test/
 *.svg
 *bak
 wexp*
+*.tar
 

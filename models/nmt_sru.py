@@ -153,28 +153,19 @@ class Attention(nn.Module):
         self.align_size = align_size
         self.sa = nn.Linear(dec_hid_size, self.align_size)
         self.tanh = nn.Tanh()
+        self.maskSoftmax = MaskSoftmax()
         self.a1 = nn.Linear(self.align_size, 1)
 
     # support for 3-D input
     def forward(self, s_tm1, xs_h, uh, xs_mask=None):
 
-        '''
-        d1, d2, d3 = uh.size()
-        # (b, dec_hid_size) -> (b, aln) -> (1, b, aln) -> (slen, b, aln) -> (slen, b)
-        e_ij = self.a1(
-            self.tanh(self.sa(s_tm1)[None, :, :] + uh)).squeeze(2).exp()
-        if xs_mask is not None: e_ij = e_ij * xs_mask
-
-        # probability in each column: (slen, b)
-        e_ij = e_ij / e_ij.sum(0)[None, :]
-
-        # weighted sum of the h_j: (b, enc_hid_size)
-        attend = (e_ij[:, :, None] * xs_h).sum(0)
-        '''
+        # for 2-D input
+        #_check_a1 = self.a1(self.tanh(self.sa(s_tm1)[None, :, :] + uh)).squeeze(2)
+        #e_ij = self.maskSoftmax(_check_a1, mask=xs_mask, dim=0)
+        #attend = (e_ij[:, :, None] * xs_h).sum(0)
 
         if s_tm1.dim() == 2: s_tm1 = s_tm1[None, :, :]
-
-        # (tL,b,dec_hid_size)->(tL,b,aln)->(1,tL,b,aln)->(sL,tL,b,aln)->(sL,tL,b)
+        '''
         e_ij = self.a1(
             self.tanh(self.sa(s_tm1)[None,:,:,:] + uh[:,None,:,:])).squeeze(-1).exp()
         #print e_ij.size()
@@ -183,12 +174,20 @@ class Attention(nn.Module):
         if xs_mask is not None: e_ij = e_ij * xs_mask[:,None,:]
         # probability in each column: (sL, tL, b)
         e_ij = e_ij / e_ij.sum(0)[None, :, :]
+        '''
+
+        # (tL,b,dec_hid_size)->(tL,b,aln)->(1,tL,b,aln)->(sL,tL,b,aln)->(sL,tL,b)
+        _check_tanh_sa = self.tanh(self.sa(s_tm1)[None, :, :, :] + uh[:, None, :, :])
+        _check_a1 = self.a1(_check_tanh_sa).squeeze(-1)
+        e_ij = self.maskSoftmax(_check_a1,
+                                mask=(xs_mask[:, None, :] if xs_mask is not None else None),
+                                dim=0)
+
         # weighted sum of the h_j: (tL, b, enc_hid_size)
         attend = (e_ij[:, :, :, None] * xs_h[:,None,:,:]).sum(0)
-
         e_ij, attend = e_ij.squeeze(1), attend.squeeze(0)
-
         # (sL, b), (b, enc_hid_size) or (sL, tL, b), (tL, b, enc_hid_size)
+
         return e_ij, attend
 
 class Decoder(nn.Module):
