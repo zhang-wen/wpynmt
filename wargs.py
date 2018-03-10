@@ -1,4 +1,4 @@
-dataset = 'S' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
@@ -104,27 +104,28 @@ elif dataset == 'M':
     dec_hid_size = 512
     out_size = 512
     #val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
-    #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
+    val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     #val_tst_dir = '/home5/wen/2.data/mt/uy_zh_300w/devtst/'
-    val_tst_dir = '/home/wen/3.corpus/mt/uy_zh_300w/devtst/'
-    #val_prefix = 'nist02'
-    #dev_prefix = 'nist02'
-    val_prefix = 'dev700'
-    dev_prefix = 'dev700'
+    #val_tst_dir = '/home/wen/3.corpus/mt/uy_zh_300w/devtst/'
+    val_prefix = 'nist02'
+    dev_prefix = 'nist02'
+    #val_prefix = 'dev700'
+    #dev_prefix = 'dev700'
     #val_src_suffix = '16kbpe.src'
     #val_src_suffix = 'uy.src'
-    val_src_suffix = 'uy.32kbpe.src'
-    val_ref_suffix = 'zh.ref.plain_'
-    src_dict_size = 50000
-    trg_dict_size = 50000
+    #val_src_suffix = 'uy.32kbpe.src'
+    val_src_suffix = 'src'
+    val_ref_suffix = 'ref.plain_'
+    #src_dict_size = 50000
+    #trg_dict_size = 50000
     ref_cnt = 4
-    #tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
-    tests_prefix = ['tst861']
+    tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
+    #tests_prefix = ['tst861']
     with_bpe = False
-    with_postproc = False
+    with_postproc = True
     use_multi_bleu = False
     cased = False
-    char = True
+    #char = True
 elif dataset == 'L':
     #src_wemb_size = 500
     #trg_wemb_size = 500
@@ -211,12 +212,12 @@ seg_val_tst_dir = 'orule_1.7'
 
 # model
 enc_rnn_type = 'sru'    # rnn, gru, lstm, sru
-enc_layer_cnt = 1
+enc_layer_cnt = 4
 dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
-dec_layer_cnt = 1
+dec_layer_cnt = 4
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 5
+model = 1
 
 # convolutional layer
 #fltr_windows = [1, 3, 5]   # windows size
@@ -243,7 +244,7 @@ ss_k = 12.     # k < 1 for exponential decay, k >= 1 for inverse sigmoid decay
 
 # free parameter for self-normalization
 # 0 is equivalent to the standard neural network objective function.
-self_norm_alpha = None
+self_norm_alpha = 0.5
 nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 # car nmt
 #sampling = 'truncation'     # truncation, length_limit, gumbeling
