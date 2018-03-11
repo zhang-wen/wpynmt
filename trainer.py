@@ -212,8 +212,9 @@ class Trainer(object):
             wlog('Train accuracy {:4.2f}%'.format(avg_epoch_acc * 100))
             wlog('Average loss {:4.2f}'.format(avg_epoch_loss))
             wlog('Train perplexity: {0:4.2f}'.format(math.exp(avg_epoch_loss)))
-            wlog('Train average |w-logZ|: {0:4.2f}, |s-logZ|: {0:4.2f}'.format(
-                epoch_batch_logZ / epoch_trg_words, epoch_batch_logZ / epoch_n_sents))
+            wlog('Train average |w-logZ|: {}/{}={} |s-logZ|: {}/{}={}'.format(
+                epoch_batch_logZ, epoch_trg_words, epoch_batch_logZ / epoch_trg_words,
+                epoch_batch_logZ, epoch_n_sents, epoch_batch_logZ / epoch_n_sents))
             wlog('End epoch, batch [{}], [{}] eval save model ...'.format(epoch_bidx, eval_cnt[0]))
 
             mteval_bleu = self.mt_eval(epoch, epoch_bidx)
