@@ -66,9 +66,9 @@ class Classifier(nn.Module):
         log_norm, pred = self.log_prob(pred)
         pred = pred * gold_mask[:, None]
 
-        batch_avg_Z = (log_norm * gold_mask[:, None]).sum() / gold_mask.sum()
+        batch_Z = (log_norm * gold_mask[:, None]).abs().sum()
 
-        return self.criterion(pred, gold), batch_avg_Z
+        return self.criterion(pred, gold), batch_Z
 
     def forward(self, feed, gold=None, gold_mask=None, noise=None):
 
@@ -82,13 +82,13 @@ class Classifier(nn.Module):
 
         if gold.dim() == 2: gold, gold_mask = gold.view(-1), gold_mask.view(-1)
         # negative likelihood log
-        nll, batch_avg_Z = self.nll_loss(pred, gold, gold_mask)
+        nll, batch_Z = self.nll_loss(pred, gold, gold_mask)
 
         # (max_tlen_batch - 1, batch_size, trg_vocab_size)
         pred_correct = (pred.max(dim=-1)[1]).eq(gold).masked_select(gold.ne(PAD)).sum()
 
         # total loss,  correct count in one batch
-        return nll, pred_correct, batch_avg_Z
+        return nll, pred_correct, batch_Z
 
     #   outputs: the predict outputs from the model.
     #   gold: correct target sentences in current batch 
@@ -102,10 +102,10 @@ class Classifier(nn.Module):
         shard_state = { "feed": outputs, "gold": gold, 'gold_mask': gold_mask }
 
         for shard in shards(shard_state, shard_size):
-            loss, pred_correct, batch_avg_Z = self(**shard)
+            loss, pred_correct, _batch_Z = self(**shard)
             batch_loss += loss.data.clone()[0]
             batch_correct_num += pred_correct.data.clone()[0]
-            batch_Z += batch_avg_Z
+            batch_Z += _batch_Z
             loss.div(cur_batch_count).backward()
 
         return batch_loss, batch_correct_num, batch_Z

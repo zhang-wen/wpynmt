@@ -85,9 +85,9 @@ class Trainer(object):
             shuffled_batch_idx = tc.randperm(batch_count)
 
             sample_size = wargs.sample_size
-            epoch_loss, epoch_trg_words, epoch_num_correct, epoch_selfnorm_Z = 0, 0, 0, 0
-            show_loss, show_src_words, show_trg_words, show_correct_num = 0, 0, 0, 0
-            sample_spend, eval_spend, epoch_bidx = 0, 0, 0
+            epoch_loss, epoch_trg_words, epoch_num_correct, epoch_batch_logZ = 0, 0, 0, 0, 0
+            show_loss, show_src_words, show_trg_words, show_correct_num, show_batch_logZ = 0, 0, 0, 0, 0
+            sample_spend, eval_spend, epoch_bidx, n_sents = 0, 0, 0, 0
             show_start = time.time()
 
             for k in range(batch_count):
@@ -116,13 +116,14 @@ class Trainer(object):
                 if len(outputs) == 2: (outputs, _checks) = outputs
                 if len(outputs) == 2: (outputs, attends) = outputs
                 this_bnum = outputs.size(1)
+                n_sents += this_bnum
 
                 #batch_loss, batch_correct_num, batch_log_norm = self.classifier(outputs, trgs[1:], trgs_m[1:])
                 #batch_loss.div(this_bnum).backward()
                 #batch_loss = batch_loss.data[0]
                 #batch_correct_num = batch_correct_num.data[0]
 
-                batch_loss, batch_correct_num, batch_avg_Z = self.classifier.snip_back_prop(
+                batch_loss, batch_correct_num, batch_Z = self.classifier.snip_back_prop(
                     outputs, trgs[1:], trgs_m[1:], wargs.snip_size)
 
                 self.optim.step()
@@ -140,19 +141,21 @@ class Trainer(object):
                 show_trg_words += batch_trg_words
                 epoch_trg_words += batch_trg_words
 
-                epoch_selfnorm_Z += batch_avg_Z
+                show_batch_logZ += batch_Z
+                epoch_batch_logZ += batch_Z
 
                 if epoch_bidx % wargs.display_freq == 0:
                     #print show_correct_num, show_loss, show_trg_words, show_loss/show_trg_words
                     ud = time.time() - show_start - sample_spend - eval_spend
                     wlog(
                         'Epo:{:>2}/{:>2} |[{:^5} {:^5} {:^5}k] |acc:{:5.2f}% |ppl:{:4.2f} '
-                        '| |logZ|:{:.2f} '
+                        '||w-logZ|:{:.2f} ||s-logZ|:{:.2f} '
                         '|stok/s:{:>4}/{:>2}={:>2} |ttok/s:{:>2} '
                         '|stok/sec:{:6.2f} |ttok/sec:{:6.2f} |elapsed:{:4.2f}/{:4.2f}m'.format(
                             epoch, wargs.max_epochs, epoch_bidx, batch_idx, bidx/1000,
                             (show_correct_num / show_trg_words) * 100,
-                            math.exp(show_loss / show_trg_words), batch_avg_Z,
+                            math.exp(show_loss / show_trg_words), show_batch_logZ / show_trg_words,
+                            show_batch_logZ / n_sents,
                             batch_src_words, this_bnum, int(batch_src_words / this_bnum),
                             int(batch_trg_words / this_bnum),
                             show_src_words / ud, show_trg_words / ud, ud,
@@ -205,7 +208,8 @@ class Trainer(object):
             wlog('Train accuracy {:4.2f}%'.format(avg_epoch_acc * 100))
             wlog('Average loss {:4.2f}'.format(avg_epoch_loss))
             wlog('Train perplexity: {0:4.2f}'.format(math.exp(avg_epoch_loss)))
-            wlog('Train average self-norm Z: {0:4.2f}'.format(epoch_selfnorm_Z / epoch_bidx))
+            wlog('Train average |w-logZ|: {0:4.2f}, |s-logZ|: {0:4.2f}'.format(
+                epoch_batch_logZ / epoch_trg_words, epoch_batch_logZ / n_sents))
             wlog('End epoch, batch [{}], [{}] eval save model ...'.format(epoch_bidx, eval_cnt[0]))
 
             mteval_bleu = self.mt_eval(epoch, epoch_bidx)
