@@ -85,7 +85,7 @@ class Trainer(object):
             shuffled_batch_idx = tc.randperm(batch_count)
 
             sample_size = wargs.sample_size
-            epoch_loss, epoch_trg_words, epoch_num_correct, epoch_batch_logZ = 0, 0, 0, 0, 0
+            epoch_loss, epoch_trg_words, epoch_num_correct, epoch_batch_logZ = 0, 0, 0, 0
             show_loss, show_src_words, show_trg_words, show_correct_num, show_batch_logZ = 0, 0, 0, 0, 0
             sample_spend, eval_spend, epoch_bidx, n_sents = 0, 0, 0, 0
             show_start = time.time()
@@ -161,7 +161,7 @@ class Trainer(object):
                             show_src_words / ud, show_trg_words / ud, ud,
                             (time.time() - train_start) / 60.)
                     )
-                    show_loss, show_src_words, show_trg_words, show_correct_num = 0, 0, 0, 0
+                    show_loss, show_src_words, show_trg_words, show_correct_num, show_batch_logZ = 0, 0, 0, 0, 0
                     sample_spend, eval_spend = 0, 0
                     show_start = time.time()
 

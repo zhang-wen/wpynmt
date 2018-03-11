@@ -103,8 +103,8 @@ elif dataset == 'M':
     align_size = 512
     dec_hid_size = 512
     out_size = 512
-    #val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
-    val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
+    val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
+    #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     #val_tst_dir = '/home5/wen/2.data/mt/uy_zh_300w/devtst/'
     #val_tst_dir = '/home/wen/3.corpus/mt/uy_zh_300w/devtst/'
     val_prefix = 'nist02'
