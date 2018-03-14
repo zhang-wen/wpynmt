@@ -180,7 +180,7 @@ pre_train = None
 fix_pre_params = False
 
 # decoder hype-parameters
-search_mode = 2
+search_mode = 1
 with_batch = 1
 ori_search = 0
 beam_size = 10

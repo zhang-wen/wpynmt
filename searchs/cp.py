@@ -56,11 +56,6 @@ class Wcp(object):
         debug('Src[{}], hyp (w/o EOS)[{}], maxL[{}], loss[{}]'.format(
             srcL, len(best_trans), self.maxL, best_loss))
 
-        debug('Average Merging Rate [{}/{}={:6.4f}]'.format(
-            self.C[1], self.C[0], self.C[1] / self.C[0]))
-        debug('Average location of bp [{}/{}={:6.4f}]'.format(
-            self.C[3], self.C[2], self.C[3] / self.C[2]))
-        debug('Step[{}] stepout[{}]'.format(*self.C[4:]))
         return filter_reidx(best_trans, self.tvcb_i2w), best_loss
         '''
 
@@ -72,8 +67,9 @@ class Wcp(object):
             best_trans, best_loss = self.batch_tran_cands[bidx][0][0], self.batch_tran_cands[bidx][0][1]
             debug('Src[{}], maskL[{}], hyp (w/o EOS)[{}], maxL[{}], loss[{}]'.format(
                 x_mask[:, bidx].sum().data[0], self.srcL, len(best_trans), self.maxL, best_loss))
-        debug('Average location of bp [{}/{}={:6.4f}]'.format(self.C[1], self.C[0], self.C[1] / self.C[0]))
-        debug('Step[{}] stepout[{}]'.format(*self.C[2:]))
+        wlog('Average Merging Rate [{}/{}={:6.4f}]'.format(self.C[1], self.C[0], self.C[1] / self.C[0]))
+        wlog('Average location of bp [{}/{}={:6.4f}]'.format(self.C[3], self.C[2], self.C[3] / self.C[2]))
+        wlog('Step[{}] stepout[{}]'.format(*self.C[4:]))
 
         return self.batch_tran_cands
 
@@ -126,7 +122,7 @@ class Wcp(object):
                     _needed = _memory[jj] = (score_im1_2, p_ij_2, s_im1_2, y_im1_2, ye_im1_2, jj)
 
                 ifmerge = False
-                #if wargs.merge_way == 'Y': ifmerge = (y_im1_2 == y_im1_1)
+                if wargs.merge_way == 'Y': ifmerge = (y_im1_2 == y_im1_1)
                 #if wargs.merge_way == 'Y':
                 #    d = self.pdist(ye_im1_1.data.unsqueeze(0), ye_im1_2.data.unsqueeze(0))[0][0]
                     #d = cor_coef(y_im1_e1.data, y_im1_e2.data)
@@ -183,12 +179,12 @@ class Wcp(object):
             self.C[5] += 1
             #t2 = time.time()
 
-            if wargs.vocab_norm:
-                #_cei = self.model.classifier(_logit)
-                _cei = self.decoder.classifier.get_a(_logit)
+            _cei = self.decoder.classifier(_logit)
+            #if wargs.vocab_norm:
+                #_cei = self.decoder.classifier.get_a(_logit)
                 #t3 = time.time()
-                _cei = -self.decoder.classifier.log_prob(_cei)[-1]
-            else: _cei = -self.decoder.classifier.get_a(logit)
+                #_cei = -self.decoder.classifier.log_prob(_cei)[-1]
+            #else: _cei = -self.decoder.classifier.get_a(_logit)
             #t4 = time.time()
             #total = t4 - t1
             #if bidx == 1 and sub_cube_id == 0:
@@ -325,8 +321,8 @@ class Wcp(object):
                     logit = self.decoder.step_out(true_si, ye_im1, a_i)
                     self.C[5] += 1
 
-                    if wargs.vocab_norm: _cei = self.decoder.classifier(logit)
-                    else: _cei = -self.decoder.classifier.get_a(logit)[-1]
+                    _cei = self.decoder.classifier(logit)
+                    #else: _cei = -self.decoder.classifier.get_a(logit)
                     _cei = _cei.cpu().data.numpy().flatten()    # (1,vocsize) -> (vocsize,)
 
                     self.buf_state_merge[which][iexp] = (true_si, true_pi, _cei)
@@ -414,7 +410,8 @@ class Wcp(object):
             # cube pruning may out of order by loss, so we need to sort it again here
             # losss from low to high
 
-        n_remainings = len(self.beam[self.maxL][0])   # loop ends, how many sentences left
+        # no early stop, back tracking
+        n_remainings = len(self.beam[self.maxL])   # loop ends, how many sentences left
         self.no_early_best(n_remainings)
 
         '''
@@ -459,7 +456,7 @@ class Wcp(object):
                     elif wargs.len_norm == 2:   # alpha length normal
                         lp, cp = lp_cp(hyp[-1], self.maxL, bidx, self.beam)
                         score = (hyp[0] / lp + cp, hyp[0])
-                    hyps.append(score + hyp[-4:-1] + (self.maxL, ))
+                    hyps.append(score + hyp[-3:] + (self.maxL, ))
             else:
                 debug('No early stop, no enough {} hyps with EOS, select the best '
                       'one from {} hyps.'.format(self.k, len(hyps)))

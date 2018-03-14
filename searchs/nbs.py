@@ -373,9 +373,9 @@ class Nbs(object):
             else:
                 debug('No early stop, no enough {} hyps with EOS, select the best '
                       'one from {} hyps.'.format(self.k, len(hyps)))
-                #for hyp in sorted_hyps: debug('{}'.format(hyp))
                 #best_hyp = sorted_hyps[0]
             sorted_hyps = sorted(hyps, key=lambda tup: tup[0])
+            for hyp in sorted_hyps: debug('{}'.format(hyp))
             debug('Sent {}: Best hyp length (w/ EOS)[{}]'.format(bidx, sorted_hyps[0][-1]))
             self.batch_tran_cands[true_id] = [back_tracking(self.beam, bidx, hyp, \
                         self.attent_probs[true_id] if self.attent_probs is not None \
