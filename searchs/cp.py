@@ -13,37 +13,44 @@ from tools.utils import *
 
 class Wcp(object):
 
-    def __init__(self, model, tvcb_i2w=None, k=10, thresh=100.0, lm=None, ngram=3, ptv=None):
+    def __init__(self, model, tvcb_i2w=None, k=10, thresh=100.0, lm=None,
+                 ngram=3, ptv=None, print_att=False):
 
         self.model = model
         self.decoder = model.decoder
 
-        self.tvcb_i2w = tvcb_i2w
         self.k = k
-        self.thresh = thresh
         self.lm = lm
-        self.ngram = ngram
         self.ptv = ptv
+        self.ngram = ngram
+        self.thresh = thresh
+        self.tvcb_i2w = tvcb_i2w
+        self.print_att = print_att
 
         self.C = [0] * 6
         self.pdist = nn.PairwiseDistance(2)
 
-    def cube_prune_trans(self, s_list):
+    def cube_prune_trans(self, x_LB, x_mask=None):
 
         self.cnt = count()
-        self.beam, self.hyps = [], []
-        srcL = len(s_list)
-        self.maxL = 2 * srcL
+        if isinstance(x_LB, list): x_LB = tc.Tensor(x_LB).long().unsqueeze(-1)
+        self.srcL, self.B = x_LB.size()
+        self.maxL = 2 * self.srcL
+        if x_mask is None:
+            x_mask = tc.ones((self.srcL, 1))
+            x_mask = Variable(x_mask, requires_grad=False, volatile=True).cuda()
 
-        # (srcL, 1)
-        s_tensor = tc.Tensor(s_list).long().unsqueeze(-1)
+        self.beam, self.hyps = [], [[] for _ in range(self.B)]
+        self.batch_tran_cands = [[] for _ in range(self.B)]
+        self.attent_probs = [[] for _ in range(self.B)] if self.print_att is True else None
 
         # s_tensor: (len, 1), beamsize==1
-        s_init, self.enc_src0, self.uh0 = self.model.init(s_tensor, test=True)
+        s_init, self.enc_src0, self.uh0 = self.model.init(x_LB, xs_mask=x_mask, test=True)
         # s_init: (1, trg_nhids), enc_src0: (srcL, 1, src_nhids*2), uh0: (srcL, 1, align_size)
 
-        init_beam(self.beam, cnt=self.maxL, s0=s_init, detail=True)
+        init_beam(self.beam, cnt=self.maxL, s0=s_init, cp=True)
 
+        '''
         best_trans, best_loss = self.cube_pruning()
 
         debug('Src[{}], hyp (w/o EOS)[{}], maxL[{}], loss[{}]'.format(
@@ -54,8 +61,22 @@ class Wcp(object):
         debug('Average location of bp [{}/{}={:6.4f}]'.format(
             self.C[3], self.C[2], self.C[3] / self.C[2]))
         debug('Step[{}] stepout[{}]'.format(*self.C[4:]))
-
         return filter_reidx(best_trans, self.tvcb_i2w), best_loss
+        '''
+
+        self.cube_pruning()
+
+        #batch_tran_cands: [(trans, loss, attend)]
+        for bidx in range(self.B):
+            debug([ (a[0], a[1]) for a in self.batch_tran_cands[bidx] ])
+            best_trans, best_loss = self.batch_tran_cands[bidx][0][0], self.batch_tran_cands[bidx][0][1]
+            debug('Src[{}], maskL[{}], hyp (w/o EOS)[{}], maxL[{}], loss[{}]'.format(
+                x_mask[:, bidx].sum().data[0], self.srcL, len(best_trans), self.maxL, best_loss))
+        debug('Average location of bp [{}/{}={:6.4f}]'.format(self.C[1], self.C[0], self.C[1] / self.C[0]))
+        debug('Step[{}] stepout[{}]'.format(*self.C[2:]))
+
+        return self.batch_tran_cands
+
 
     ##################################################################
 
@@ -66,7 +87,8 @@ class Wcp(object):
 
     def merge(self, bidx, eq_classes):
 
-        prevb = self.beam[bidx - 1]
+        B_prevbs = self.beam[bidx - 1]
+        prevb = B_prevbs[0]
         ye_im1 = tc.Tensor([k[-2] for k in prevb]).long()
         if wargs.gpu_id: ye_im1 = ye_im1.cuda()
         ye_im1 = Variable(ye_im1, requires_grad=False, volatile=True)
@@ -86,7 +108,7 @@ class Wcp(object):
                 score_im1_1, p_ij_1, s_im1_1, y_im1_1, ye_im1_1, nj = _needed
                 assert(j == nj)
             else:
-                score_im1_1, p_ij_1, s_im1_1, y_im1_1, _ = prevb[j]
+                score_im1_1, p_ij_1, s_im1_1, _, y_im1_1, _ = prevb[j]
                 ye_im1_1 = ye_im1[j]
                 _needed = _memory[j] = (score_im1_1, p_ij_1, s_im1_1, y_im1_1, ye_im1_1, j)
 
@@ -99,12 +121,12 @@ class Wcp(object):
                     score_im1_2, p_ij_2, s_im1_2, y_im1_2, ye_im1_2, njj = _needed
                     assert(jj == njj)
                 else:
-                    score_im1_2, p_ij_2, s_im1_2, y_im1_2, _ = prevb[jj]
+                    score_im1_2, p_ij_2, s_im1_2, _, y_im1_2, _ = prevb[jj]
                     ye_im1_2 = ye_im1[jj]
                     _needed = _memory[jj] = (score_im1_2, p_ij_2, s_im1_2, y_im1_2, ye_im1_2, jj)
 
                 ifmerge = False
-                if wargs.merge_way == 'Y': ifmerge = (y_im1_2 == y_im1_1)
+                #if wargs.merge_way == 'Y': ifmerge = (y_im1_2 == y_im1_1)
                 #if wargs.merge_way == 'Y':
                 #    d = self.pdist(ye_im1_1.data.unsqueeze(0), ye_im1_2.data.unsqueeze(0))[0][0]
                     #d = cor_coef(y_im1_e1.data, y_im1_e2.data)
@@ -129,12 +151,13 @@ class Wcp(object):
     def create_cube(self, bidx, eq_classes):
         # eq_classes: 0: [(score_im1, s_im1, y_im1, bp), ... ], 1:
         cube = []
-        cnt_transed = len(self.hyps)
+        cnt_transed = len(self.hyps[0])
 
         # for each equivalence class
         for sub_cube_id, leq_class in eq_classes.iteritems():
 
             sub_cube_rowsz = len(leq_class)
+            # (score_im1_1, p_ij_1, s_im1_1, y_im1_1, ye_im1_1, j)
             _ , _, _s_im1_r0, _, ye_im1_r0, _ = leq_class[0]
             '''
             _s_im1_r0, ye_im1_r0 = [], []
@@ -154,7 +177,7 @@ class Wcp(object):
             #    _s_im1 = tc.mean(tc.stack(_s_im1, dim=0), dim=0)
 
             #t1 = time.time()
-            _ai, _si, ye_im1, _pi = self.decoder.step(_s_im1_r0, self.enc_src0, self.uh0, ye_im1_r0)
+            _ai, _si, ye_im1, _pi, _, _, _ = self.decoder.step(_s_im1_r0, self.enc_src0, self.uh0, ye_im1_r0)
             self.C[4] += 1
             _logit = self.decoder.step_out(_si, ye_im1, _ai)
             self.C[5] += 1
@@ -162,10 +185,10 @@ class Wcp(object):
 
             if wargs.vocab_norm:
                 #_cei = self.model.classifier(_logit)
-                _cei = self.model.classifier.get_a(_logit)
+                _cei = self.decoder.classifier.get_a(_logit)
                 #t3 = time.time()
-                _cei = -self.model.classifier.log_prob(_cei)
-            else: _cei = -self.model.classifier.get_a(logit)
+                _cei = -self.decoder.classifier.log_prob(_cei)[-1]
+            else: _cei = -self.decoder.classifier.get_a(logit)
             #t4 = time.time()
             #total = t4 - t1
             #if bidx == 1 and sub_cube_id == 0:
@@ -278,9 +301,9 @@ class Wcp(object):
             #heapq.heappush(extheap, sub_cube[0][0])
             self.buf_state_merge.append([None] * rowsz)
 
-        cnt_transed = len(self.hyps)
-        #while len(extheap) > 0 and counter < self.k - cnt_transed:
-        while len(extheap) > 0 and counter < self.k:
+        cnt_transed = len(self.hyps[0])
+        while len(extheap) > 0 and counter < self.k - cnt_transed:
+        #while len(extheap) > 0 and counter < self.k:
 
             #true_sci, score_im1, _, bp, true_si, pi, yi, iexp, jexp, which = heapq.heappop(extheap)
 
@@ -291,21 +314,22 @@ class Wcp(object):
             true_sci = _sci
 
             if rsz == 1 or iexp == 0:
+                true_pi = _pi
                 true_si = _si
                 true_sci = _sci
             else:
-                if self.buf_state_merge[which][iexp]: true_si, _cei = self.buf_state_merge[which][iexp]
+                if self.buf_state_merge[which][iexp]: true_si, true_pi, _cei = self.buf_state_merge[which][iexp]
                 else:
-                    a_i, true_si, ye_im1, _ = self.decoder.step(s_im1, self.enc_src0, self.uh0, ye_im1)
+                    a_i, true_si, ye_im1, true_pi, _, _, _ = self.decoder.step(s_im1, self.enc_src0, self.uh0, ye_im1)
                     self.C[4] += 1
                     logit = self.decoder.step_out(true_si, ye_im1, a_i)
                     self.C[5] += 1
 
-                    if wargs.vocab_norm: _cei = self.model.classifier(logit)
-                    else: _cei = -self.model.classifier.get_a(logit)
+                    if wargs.vocab_norm: _cei = self.decoder.classifier(logit)
+                    else: _cei = -self.decoder.classifier.get_a(logit)[-1]
                     _cei = _cei.cpu().data.numpy().flatten()    # (1,vocsize) -> (vocsize,)
 
-                    self.buf_state_merge[which][iexp] = (true_si, _cei)
+                    self.buf_state_merge[which][iexp] = (true_si, true_pi, _cei)
 
                 true_sci = score_im1 + _cei[yi]
                 #debug('| {:6.3f}={:6.3f}+{:6.3f}'.format(true_sci, score_im1, _cei[yi]))
@@ -313,18 +337,20 @@ class Wcp(object):
             if cnt_bp: self.C[3] += (bp + 1)
             if yi == EOS:
                 # beam items count decrease 1
-                if wargs.len_norm == 0: self.hyps.append((true_sci, yi, bp, bidx))
+                if wargs.len_norm == 0: self.hyps[0].append((true_sci, true_sci, 0, yi, bp, bidx))
                 elif wargs.len_norm == 1:
-                    self.hyps.append(((true_sci / bidx), true_sci, yi, bp, bidx))
+                    self.hyps[0].append(((true_sci / bidx), true_sci, 0, yi, bp, bidx))
                 elif wargs.len_norm == 2:
                     lp, cp = self.lp_cp(bp, bidx)
                     #print true_sci, lp, cp, (true_sci/lp - cp)
-                    self.hyps.append(((true_sci/lp - cp), true_sci, yi, bp, bidx))
-                #debug('Gen hypo {}'.format(self.hyps[-1]))
+                    self.hyps[0].append(((true_sci/lp - cp), true_sci, 0, yi, bp, bidx))
+                debug('Gen hypo {}'.format(self.hyps[0][-1]))
                 # last beam created and finish cube pruning
-                if len(self.hyps) == self.k: return True
+                if len(self.hyps[0]) == self.k: return True
             # generate one item in current beam
-            else: self.beam[bidx].append((true_sci, true_pi, true_si, yi, bp))
+            else: self.next_beam_cur_sent.append((true_sci, true_pi, true_si, 0, yi, bp))
+            self.beam[bidx] = [ self.next_beam_cur_sent ]
+            self.preb_alpha.append(true_pi.squeeze(-1))
 
             whichsubcub = cube[which]
             # make sure we do not add repeadedly
@@ -337,13 +363,14 @@ class Wcp(object):
                 self.Push_heap(extheap, bidx, down)
                 #heapq.heappush(extheap, right)
             counter += 1
+        if self.attent_probs is not None: self.attent_probs[0].append(tc.stack(self.preb_alpha, 1))
         return False
 
     def lp_cp(self, bp, bidx):
 
         ys_pi = []
         for i in reversed(xrange(1, bidx)):
-            _, p_im1, _, w, bp = self.beam[i][bp]
+            _, p_im1, _, w, bp = self.beam[i][0][bp]
             ys_pi.append(p_im1)
         if len(ys_pi) == 0: return 1.0, 0.0
         ys_pi = tc.stack(ys_pi, dim=0).sum(0)   # (slen, 1)
@@ -356,8 +383,11 @@ class Wcp(object):
 
     def cube_pruning(self):
 
+        self.true_bidx = [0]
+
         for bidx in range(1, self.maxL + 1):
 
+            self.preb_alpha, self.next_beam_cur_sent = [], []
             eq_classes = OrderedDict()
             self.merge(bidx, eq_classes)
 
@@ -366,23 +396,30 @@ class Wcp(object):
 
             if self.cube_prune(bidx, cube):
 
-                #debug('Early stop! see {} hyps ending with EOS.'.format(self.k))
-                sorted_hyps = sorted(self.hyps, key=lambda tup: tup[0])
-                #for hyp in sorted_hyps: debug('{}'.format(hyp))
+                debug('Early stop! see {} hyps ending with EOS.'.format(self.k))
+                sorted_hyps = sorted(self.hyps[0], key=lambda tup: tup[0])
+                for hyp in sorted_hyps: debug('{}'.format(hyp))
                 best_hyp = sorted_hyps[0]
-                #debug('Best hyp length (w/ EOS)[{}]'.format(best_hyp[-1]))
-
-                return back_tracking(self.beam, best_hyp)
+                debug('Best hyp length (w/ EOS)[{}]'.format(best_hyp[-1]))
+                self.batch_tran_cands[0] = [back_tracking(self.beam, 0, hyp, \
+                    self.attent_probs[0] if self.attent_probs is not None \
+                                            else None) for hyp in sorted_hyps]
+                return
+                #return back_tracking(self.beam, best_hyp)
 
             self.beam[bidx] = sorted(self.beam[bidx], key=lambda tup: tup[0])
-            #debug('beam {} ----------------------------'.format(bidx))
-            #for b in self.beam[bidx]: debug('{}'.format(b[0:1] + b[2:]))
+            debug('beam {} ----------------------------'.format(bidx))
+            for b in self.beam[bidx][0]: debug(b[0:1] + b[-3:])    # do not output state
             # because of the the estimation of P(f|abcd) as P(f|cd), so the generated beam by
             # cube pruning may out of order by loss, so we need to sort it again here
             # losss from low to high
 
+        n_remainings = len(self.beam[self.maxL][0])   # loop ends, how many sentences left
+        self.no_early_best(n_remainings)
+
+        '''
         # no early stop, back tracking
-        if len(self.hyps) == 0:
+        if len(self.hyps[0]) == 0:
             #debug('No early stop, no hyp ending with EOS, select one length {} '.format(self.maxL))
             best_hyp = self.beam[self.maxL][0]
             if wargs.len_norm == 0:
@@ -396,10 +433,43 @@ class Wcp(object):
         else:
             #debug('No early stop, no enough {} hyps ending with EOS, select the best '
             #      'one from {} hyps.'.format(self.k, len(self.hyps)))
-            sorted_hyps = sorted(self.hyps, key=lambda tup: tup[0])
+            sorted_hyps = sorted(self.hyps[0], key=lambda tup: tup[0])
             #for hyp in sorted_hyps: debug('{}'.format(hyp))
             best_hyp = sorted_hyps[0]
 
         #debug('Best hyp length (w/ EOS)[{}]'.format(best_hyp[-1]))
         return back_tracking(self.beam, best_hyp)
+        '''
+
+    def no_early_best(self, n_remainings):
+
+        if n_remainings == 0: return
+        debug('==Start== No early stop ...')
+        for bidx in range(n_remainings):
+            true_id = self.true_bidx[bidx]
+            debug('Sent {}, true id {}'.format(bidx, true_id))
+            hyps = self.hyps[true_id]
+            if len(hyps) == self.k: continue  # have finished this sentence
+            # no early stop, back tracking
+            if len(hyps) == 0:
+                debug('No early stop, no hyp with EOS, select k hyps length {} '.format(self.maxL))
+                for hyp in self.beam[self.maxL][bidx]:
+                    if wargs.len_norm == 0: score = (hyp[0], None)
+                    elif wargs.len_norm == 1: score = (hyp[0] / self.maxL, hyp[0])
+                    elif wargs.len_norm == 2:   # alpha length normal
+                        lp, cp = lp_cp(hyp[-1], self.maxL, bidx, self.beam)
+                        score = (hyp[0] / lp + cp, hyp[0])
+                    hyps.append(score + hyp[-4:-1] + (self.maxL, ))
+            else:
+                debug('No early stop, no enough {} hyps with EOS, select the best '
+                      'one from {} hyps.'.format(self.k, len(hyps)))
+                #best_hyp = sorted_hyps[0]
+            sorted_hyps = sorted(hyps, key=lambda tup: tup[0])
+            for hyp in sorted_hyps: debug('{}'.format(hyp))
+            debug('Sent {}: Best hyp length (w/ EOS)[{}]'.format(bidx, sorted_hyps[0][-1]))
+            self.batch_tran_cands[true_id] = [back_tracking(self.beam, bidx, hyp, \
+                        self.attent_probs[true_id] if self.attent_probs is not None \
+                                                else None) for hyp in sorted_hyps]
+        debug('==End== No early stop ...')
+
 

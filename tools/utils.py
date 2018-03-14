@@ -238,13 +238,16 @@ def part_sort(vec, num):
 
     return k_rank_ids_invec
 
-
 # beam search
-def init_beam(beam, s0=None, cnt=50, score_0=0.0, loss_0=0.0, dyn_dec_tup=None):
+def init_beam(beam, s0=None, cnt=50, score_0=0.0, loss_0=0.0, dyn_dec_tup=None, cp=False):
     del beam[:]
     for i in range(cnt + 1):
         ibeam = []  # one beam [] for one char besides start beam
         beam.append(ibeam)
+
+    if cp is True:
+        beam[0] = [ [ (loss_0, None, s0, 0, BOS, 0) ] ]
+        return
     # indicator for the first target word (<b>)
     if dyn_dec_tup is not None:
         beam[0].append((loss_0, dyn_dec_tup, s0, BOS, 0))

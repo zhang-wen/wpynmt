@@ -139,14 +139,15 @@ class Nbs(object):
                         self.batch_tran_cands[0] = [back_tracking(self.beam, 0, hyp, \
                             self.attent_probs[0] if self.attent_probs is not None \
                                                     else None) for hyp in sorted_hyps]
-                        return back_tracking(self.beam, 0, best_hyp)
+                        return
+                        #return back_tracking(self.beam, 0, best_hyp)
                 # should calculate when generate item in current beam
                 else: next_beam_cur_sent.append(b)
             self.beam[i] = [ next_beam_cur_sent ]
 
             debug('beam {} ----------------------------'.format(i))
             for b in self.beam[i][0]: debug(b[0:1] + b[-3:])    # do not output state
-        n_remainings = len(self.beam[self.maxL])   # loop ends, how many sentences left
+        n_remainings = len(self.beam[self.maxL][0])   # loop ends, how many sentences left
 
         return self.no_early_best(n_remainings)
 

@@ -45,7 +45,8 @@ class Translator(object):
         if self.search_mode == 0: self.greedy = Greedy(self.tvcb_i2w)
         elif self.search_mode == 1: self.nbs = Nbs(model, self.tvcb_i2w, k=self.k,
                                                    noise=self.noise, print_att=print_att)
-        elif self.search_mode == 2: self.wcp = Wcp(model, self.tvcb_i2w, k=self.k)
+        elif self.search_mode == 2: self.wcp = Wcp(model, self.tvcb_i2w, k=self.k,
+                                                   print_att=print_att)
 
     def trans_onesent(self, s):
 
@@ -53,7 +54,8 @@ class Translator(object):
 
         if self.search_mode == 0: trans = self.greedy.greedy_trans(s)
         elif self.search_mode == 1: batch_tran_cands = self.nbs.beam_search_trans(s)
-        elif self.search_mode == 2: (trans, ids), loss = self.wcp.cube_prune_trans(s)
+        #elif self.search_mode == 2: (trans, ids), loss = self.wcp.cube_prune_trans(s)
+        elif self.search_mode == 2: batch_tran_cands = self.wcp.cube_prune_trans(s)
         trans, loss, attent_matrix = batch_tran_cands[0][0] # first sent, best cand
         trans, ids = filter_reidx(trans, self.tvcb_i2w)
 

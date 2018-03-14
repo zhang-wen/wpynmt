@@ -180,7 +180,7 @@ pre_train = None
 fix_pre_params = False
 
 # decoder hype-parameters
-search_mode = 1
+search_mode = 2
 with_batch = 1
 ori_search = 0
 beam_size = 10
@@ -263,6 +263,6 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [3]
+gpu_id = [2]
 #gpu_id = None
 
