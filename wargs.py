@@ -254,7 +254,8 @@ ss_k = 12.     # k < 1 for exponential decay, k >= 1 for inverse sigmoid decay
 
 # free parameter for self-normalization
 # 0 is equivalent to the standard neural network objective function.
-self_norm_alpha = 0.5
+#self_norm_alpha = 0.5
+self_norm_alpha = None
 nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 # car nmt
 #sampling = 'truncation'     # truncation, length_limit, gumbeling

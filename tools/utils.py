@@ -24,8 +24,8 @@ def str1(content, encoding='utf-8'):
     return json.dumps(content, encoding=encoding, ensure_ascii=False, indent=4)
     pass
 
-#DEBUG = True
-DEBUG = False
+DEBUG = True
+#DEBUG = False
 #PAD = 0
 #UNK = 1
 #BOS = 2
@@ -240,7 +240,7 @@ def part_sort(vec, num):
 
 
 # beam search
-def init_beam(beam, s0=None, cnt=50, score_0=0.0, loss_0=0.0, hs0=None, dyn_dec_tup=None):
+def init_beam(beam, s0=None, cnt=50, score_0=0.0, loss_0=0.0, dyn_dec_tup=None):
     del beam[:]
     for i in range(cnt + 1):
         ibeam = []  # one beam [] for one char besides start beam
@@ -250,6 +250,8 @@ def init_beam(beam, s0=None, cnt=50, score_0=0.0, loss_0=0.0, hs0=None, dyn_dec_
         beam[0].append((loss_0, dyn_dec_tup, s0, BOS, 0))
     elif wargs.len_norm == 2:
         beam[0] = [[ (loss_0, None, s0[i], i, BOS, 0) ] for i in range(s0.size(0))]
+    #elif with_batch == 0:
+    #    beam[0].append((loss_0, s0, BOS, 0))
     else:
         beam[0] = [[ (loss_0, s0[i], i, BOS, 0) ] for i in range(s0.size(0))]
 

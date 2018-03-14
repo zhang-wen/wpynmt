@@ -61,7 +61,9 @@ class Nbs(object):
             # (1, trg_nhids), (src_len, 1, src_nhids*2)
             init_beam(self.beam, cnt=self.maxL, s0=self.s0)
 
-        if not wargs.with_batch: best_trans, best_loss = self.search()
+        if not wargs.with_batch:
+            assert self.B == 1, 'Only support a sentences for batch'
+            self.search()
         elif wargs.ori_search:   best_trans, best_loss = self.ori_batch_search()
         else:                    self.batch_search()
         # best_trans w/o <bos> and <eos> !!!
@@ -85,56 +87,68 @@ class Nbs(object):
     ##################################################################
     def search(self):
 
+        self.true_bidx = [0]
         for i in range(1, self.maxL + 1):
 
-            prevb = self.beam[i - 1]
+            B_prevbs = self.beam[i - 1]
+            prevb = B_prevbs[0]
             preb_sz = len(prevb)
             cnt_bp = (i >= 2)
             if cnt_bp: self.C[0] += preb_sz
-            cands = []
+            cands, preb_alpha = [], []
             for j in xrange(preb_sz):  # size of last beam
                 # (45.32, (beam, trg_nhids), -1, 0)
-                accum_im1, s_im1, y_im1, bp_im1 = self.beam[i - 1][j]
+                accum_im1, s_im1, _, y_im1, _ = prevb[j]
 
-                a_i, s_i, y_im1, _, _, _ = self.decoder.step(s_im1, self.enc_src0, self.uh0, y_im1)
+                a_i, s_i, y_im1, alpha_ij, _, _, _ = self.decoder.step(
+                    s_im1, self.enc_src0, self.uh0, y_im1)
                 self.C[2] += 1
                 logit = self.decoder.step_out(s_i, y_im1, a_i)
                 self.C[3] += 1
+                # alpha_ij: (srcL, 1)
+                preb_alpha.append(alpha_ij.squeeze(-1))
 
-                next_ces = self.model.classifier(logit)
+                next_ces = self.decoder.classifier(logit)
                 next_ces = next_ces.cpu().data.numpy()
                 next_ces_flat = next_ces.flatten()    # (1,vocsize) -> (vocsize,)
-                ranks_idx_flat = part_sort(next_ces_flat, self.k - len(self.hyps))
+                ranks_idx_flat = part_sort(next_ces_flat, self.k - len(self.hyps[0]))
                 k_avg_loss_flat = next_ces_flat[ranks_idx_flat]  # -log_p_y_given_x
 
                 accum_i = accum_im1 + k_avg_loss_flat
-                cands += [(accum_i[idx], s_i, wid, j) for idx, wid in enumerate(ranks_idx_flat)]
+                cands += [(accum_i[idx], s_i, 0, wid, j) for idx, wid in enumerate(ranks_idx_flat)]
 
             k_ranks_flat = part_sort(np.asarray(
-                [cand[0] for cand in cands] + [np.inf]), self.k - len(self.hyps))
+                [cand[0] for cand in cands] + [np.inf]), self.k - len(self.hyps[0]))
             k_sorted_cands = [cands[r] for r in k_ranks_flat]
+            if self.attent_probs is not None: self.attent_probs[0].append(tc.stack(preb_alpha, 1))
 
+            next_beam_cur_sent = []
             for b in k_sorted_cands:
                 if cnt_bp: self.C[1] += (b[-1] + 1)
                 if b[-2] == EOS:
-                    if wargs.len_norm: self.hyps.append(((b[0] / i), b[0]) + b[-2:] + (i,))
-                    else: self.hyps.append((b[0], ) + b[-2:] + (i, ))
-                    debug('Gen hypo {}'.format(self.hyps[-1]))
-                    if len(self.hyps) == self.k:
+                    if wargs.len_norm: self.hyps[0].append(((b[0] / i), b[0]) + b[-3:] + (i,))
+                    else: self.hyps[0].append((b[0], ) + b[-3:] + (i, ))
+                    debug('Gen hypo {}'.format(self.hyps[0][-1]))
+                    if len(self.hyps[0]) == self.k:
                         # output sentence, early stop, best one in k
                         debug('Early stop! see {} hyps ending with EOS.'.format(self.k))
-                        sorted_hyps = sorted(self.hyps, key=lambda tup: tup[0])
+                        sorted_hyps = sorted(self.hyps[0], key=lambda tup: tup[0])
                         for hyp in sorted_hyps: debug('{}'.format(hyp))
                         best_hyp = sorted_hyps[0]
                         debug('Best hyp length (w/ EOS)[{}]'.format(best_hyp[-1]))
-                        return back_tracking(self.beam, best_hyp)
+                        self.batch_tran_cands[0] = [back_tracking(self.beam, 0, hyp, \
+                            self.attent_probs[0] if self.attent_probs is not None \
+                                                    else None) for hyp in sorted_hyps]
+                        return back_tracking(self.beam, 0, best_hyp)
                 # should calculate when generate item in current beam
-                else: self.beam[i].append(b)
+                else: next_beam_cur_sent.append(b)
+            self.beam[i] = [ next_beam_cur_sent ]
 
             debug('beam {} ----------------------------'.format(i))
-            for b in self.beam[i]: debug(b[0:1] + b[2:])    # do not output state
+            for b in self.beam[i][0]: debug(b[0:1] + b[-3:])    # do not output state
+        n_remainings = len(self.beam[self.maxL])   # loop ends, how many sentences left
 
-        return back_tracking(self.beam, self.no_early_best())
+        return self.no_early_best(n_remainings)
 
     #@exeTime
     def batch_search(self):
