@@ -147,7 +147,7 @@ class Nbs(object):
 
             debug('beam {} ----------------------------'.format(i))
             for b in self.beam[i][0]: debug(b[0:1] + b[-3:])    # do not output state
-        n_remainings = len(self.beam[self.maxL][0])   # loop ends, how many sentences left
+        n_remainings = len(self.beam[self.maxL])   # loop ends, how many sentences left
 
         return self.no_early_best(n_remainings)
 

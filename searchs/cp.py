@@ -67,9 +67,9 @@ class Wcp(object):
             best_trans, best_loss = self.batch_tran_cands[bidx][0][0], self.batch_tran_cands[bidx][0][1]
             debug('Src[{}], maskL[{}], hyp (w/o EOS)[{}], maxL[{}], loss[{}]'.format(
                 x_mask[:, bidx].sum().data[0], self.srcL, len(best_trans), self.maxL, best_loss))
-        wlog('Average Merging Rate [{}/{}={:6.4f}]'.format(self.C[1], self.C[0], self.C[1] / self.C[0]))
-        wlog('Average location of bp [{}/{}={:6.4f}]'.format(self.C[3], self.C[2], self.C[3] / self.C[2]))
-        wlog('Step[{}] stepout[{}]'.format(*self.C[4:]))
+        debug('Average Merging Rate [{}/{}={:6.4f}]'.format(self.C[1], self.C[0], self.C[1] / self.C[0]))
+        debug('Average location of bp [{}/{}={:6.4f}]'.format(self.C[3], self.C[2], self.C[3] / self.C[2]))
+        debug('Step[{}] stepout[{}]'.format(*self.C[4:]))
 
         return self.batch_tran_cands
 
