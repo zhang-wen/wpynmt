@@ -261,7 +261,7 @@ def back_tracking(beam, bidx, best_sample_endswith_eos, attent_probs=None):
     attent_matrix = [] if attent_probs is not None else None
     check = (len(beam[0][0][0]) == 5)
     #print len(attent_probs), endi
-    for i in reversed(xrange(0, endi)): # [1, endi-1], not <bos> 0 and <eos> endi==self.maxL
+    for i in reversed(xrange(0, endi)): # [0, endi-1], with <bos> 0 and no <eos> endi==self.maxL
         # the best (minimal sum) loss which is the first one in the last beam,
         # then use the back pointer to find the best path backward
         # <eos> is in pos endi, we do not keep <eos>
@@ -271,14 +271,17 @@ def back_tracking(beam, bidx, best_sample_endswith_eos, attent_probs=None):
         else: _, _, _, _, w, backptr = beam[i][bidx][bp]
         seq.append(w)
         bp = backptr
-        # ([first word, ..., last word]) not bos and eos
-        if attent_matrix is not None: attent_matrix.append(attent_probs[i-1][:, bp])
+        # ([first word, ..., last word]) with bos and no eos, bos haven't align
+        if attent_matrix is not None and i != 0:
+            attent_matrix.append(attent_probs[i-1][:, bp])
 
     if attent_probs is not None and len(attent_matrix) > 0:
         # attent_matrix: (trgL, srcL)
         attent_matrix = tc.stack(attent_matrix[::-1], dim=0)
         attent_matrix = attent_matrix.cpu().data.numpy()
 
+    # seq (bos, t1, t2, t3, t4, ---)
+    # att (---, a0, a1, a2, a3, a4 ) 
     return seq[::-1], best_loss, attent_matrix # reverse
 
 def filter_reidx(best_trans, tV_i2w=None, ifmv=False, ptv=None):
@@ -346,7 +349,7 @@ def print_attention_text(attention_matrix, source_tokens, target_tokens, thresho
     :param threshold: The threshold for including an alignment link in the result, float
     """
 
-    #assert attention_matrix.shape[0] == len(target_tokens)
+    assert attention_matrix.shape[0] == len(target_tokens)
 
     if isP is True:
         wlog('  ', 0)
@@ -358,7 +361,7 @@ def print_attention_text(attention_matrix, source_tokens, target_tokens, thresho
     for (i, f_i) in enumerate(source_tokens):
         #maxJ, maxP = 0, 0.0
 
-        if isP is True: sys.stdout.write(" |")
+        if isP is True: wlog(' |', 0)
         for (j, _) in enumerate(target_tokens):
             align_prob = attention_matrix[j, i]
             if i == 0:  # start from 1
@@ -380,8 +383,8 @@ def print_attention_text(attention_matrix, source_tokens, target_tokens, thresho
         for k in range(max(map(len, target_tokens))):
             wlog('  ', 0)
             for word in target_tokens:
-                letter = word[k] if len(word) > k else " "
-                wlog(' {} '.format(letter))
+                letter = word[k] if len(word) > k else ' '
+                wlog(' {} '.format(letter), 0)
             wlog('')
         wlog('')
 
@@ -398,11 +401,11 @@ def plot_attention(attention_matrix, source_tokens, target_tokens, filename):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    #from pylab import mpl
+    from pylab import mpl
 
-    matplotlib.rc('font', family='sans-serif')
+    #matplotlib.rc('font', family='sans-serif')
     #matplotlib.rc('font', serif='HelveticaNeue')
-    matplotlib.rc('font', serif='SimHei')
+    #matplotlib.rc('font', serif='SimHei')
     #matplotlib.rc('font', serif='Microsoft YaHei')
     #mpl.rcParams['font.sans-serif'] = ['Microsoft YaHei']
     #mpl.rcParams['font.sans-serif'] = ['SimHei']
@@ -413,6 +416,11 @@ def plot_attention(attention_matrix, source_tokens, target_tokens, filename):
     #plt.rcParams['axes.unicode_minus'] = False
     #mpl.rcParams['axes.unicode_minus'] = False
     #zh_font = mpl.font_manager.FontProperties(fname='/home5/wen/miniconda2/lib/python2.7/site-packages/matplotlib/mpl-data/fonts/ttf/SimHei.ttf')
+    zh_font = mpl.font_manager.FontProperties(
+        fname='/home/wen/anaconda2/lib/python2.7/site-packages/matplotlib/mpl-data/fonts/ttf/Microsoft Yahei.ttf')
+    en_font = mpl.font_manager.FontProperties(
+        fname='/home/wen/anaconda2/lib/python2.7/site-packages/matplotlib/mpl-data/fonts/ttf/Microsoft Yahei.ttf')
+        #fname='/home/wen/anaconda2/lib/python2.7/site-packages/matplotlib/mpl-data/fonts/ttf/SimHei.ttf')
 
     assert attention_matrix.shape[0] == len(target_tokens)
 
@@ -425,9 +433,9 @@ def plot_attention(attention_matrix, source_tokens, target_tokens, filename):
     #plt.gca().yaxis.set_ticks_position('left')
     plt.gca().xaxis.set_ticks_position('top')
     #plt.xticks(fontsize=18, fontweight='bold')
-    plt.xticks(fontsize=18)
+    plt.xticks(fontsize=20)
     #plt.yticks(fontsize=18, fontweight='bold')
-    plt.yticks(fontsize=18)
+    plt.yticks(fontsize=20)
 
     #plt.grid(True, which='minor', linestyle='-')
     #plt.gca().set_xticks([i for i in range(0, len(target_tokens))])
@@ -435,13 +443,14 @@ def plot_attention(attention_matrix, source_tokens, target_tokens, filename):
     plt.gca().set_xticks([i for i in range(0, len(source_tokens))])
     plt.gca().set_yticks([i for i in range(0, len(target_tokens))])
     #plt.gca().set_xticklabels(source_tokens, rotation='vertical')
-    #plt.gca().set_xticklabels(source_tokens, rotation=45, fontsize=20, fontweight='bold')
-    plt.gca().set_xticklabels(source_tokens, rotation=70, fontsize=20)
+    plt.gca().set_xticklabels(source_tokens, rotation=70, fontweight='bold', FontProperties=zh_font)
+    plt.gca().tick_params(axis='x', labelsize=20)
+    #plt.gca().set_xticklabels(source_tokens, rotation=70, fontsize=20)
 
     #source_tokens = [unicode(k, "utf-8") for k in source_tokens]
     #plt.gca().set_yticklabels(source_tokens, rotation='horizontal', fontproperties=zh_font)
     #plt.gca().set_yticklabels(source_tokens, rotation='horizontal')
-    plt.gca().set_yticklabels(target_tokens, fontsize=24, fontweight='bold')
+    plt.gca().set_yticklabels(target_tokens, fontsize=24, fontweight='bold', FontProperties=en_font)
 
     plt.tight_layout()
     #plt.draw()

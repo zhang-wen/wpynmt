@@ -93,7 +93,7 @@ class Translator(object):
                 trans = re.sub('(@@ )|(@@ ?$)', '', trans)
 
             if self.print_att is True:
-                if isinstance(vcb_i2w, dict):
+                if isinstance(self.svcb_i2w, dict):
                     src_toks = [self.svcb_i2w[wid] for wid in s_filter]
                 else:
                     src = self.svcb_i2w.decode(s_filter)
