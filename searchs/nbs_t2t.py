@@ -214,9 +214,9 @@ class Nbs(object):
             # (preb_sz, part_Len, d_model) -> (preb_sz, d_model)
             dec_output = dec_output[:, -1, :] # (preb_sz, d_model) previous decoder hidden state
             debug('Previous decoder output: {}'.format(dec_output.size()))
+            alpha_ij = alpha_ij[:, -1, :].permute(1, 0)    # (B, trgL, srcL) -> (srcL, B)
             if self.attent_probs is not None:
                 #print 'alpha_ij: ', alpha_ij.size()
-                alpha_ij = alpha_ij[:, -1, :].permute(1, 0)    # (B, trgL, srcL) -> (srcL, B)
                 self.attent_probs[0].append(alpha_ij)
             self.C[2] += 1
             self.C[3] += 1
@@ -245,7 +245,7 @@ class Nbs(object):
                 if wargs.len_norm == 0: score = (b[0], None)
                 elif wargs.len_norm == 1: score = (b[0] / i, b[0])
                 elif wargs.len_norm == 2:   # alpha length normal
-                    lp, cp = lp_cp(bp, i, self.beam)
+                    lp, cp = lp_cp(bp, i, 0, self.beam)
                     score = (b[0] / lp + cp, b[0])
                 if cnt_bp: self.C[1] += (bp + 1)
                 if b[-2] == EOS:
@@ -276,7 +276,7 @@ class Nbs(object):
             for b in self.beam[i][0]:    # do not output state
                 if wargs.dynamic_cyk_decoding is True:
                     debug(b[0:1] + (b[1][0], b[1][1], b[1][2].data.int().tolist()) + b[-2:])
-                else: debug(b[0:1] + b[-2:])
+                else: debug(b[0:1] + (b[1].size(), ) + b[-2:])
             hyp_scores = np.array([b[0] for b in self.beam[i][0]])
 
         # no early stop, back tracking
@@ -293,7 +293,7 @@ class Nbs(object):
             if wargs.len_norm == 0: score = (best_hyp[0], None)
             elif wargs.len_norm == 1: score = (best_hyp[0] / self.maxL, best_hyp[0])
             elif wargs.len_norm == 2:   # alpha length normal
-                lp, cp = lp_cp(best_hyp[-1], self.maxL, bidx, self.beam)
+                lp, cp = lp_cp(best_hyp[-1], self.maxL, 0, self.beam)
                 score = (best_hyp[0] / lp + cp, best_hyp[0])
             self.hyps.append(score + best_hyp[-3:] + (self.maxL, ))
         else:

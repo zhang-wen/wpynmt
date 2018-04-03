@@ -183,9 +183,9 @@ fix_pre_params = False
 search_mode = 1
 with_batch = 1
 ori_search = 0
-beam_size = 10
+beam_size = 4
 vocab_norm = 1  # softmax
-len_norm = 1    # 0: no noraml, 1: length normal, 2: alpha-beta
+len_norm = 2    # 0: no noraml, 1: length normal, 2: alpha-beta
 with_mv = 0
 merge_way = 'Y'
 avg_att = 0
@@ -277,7 +277,7 @@ d_v=64
 d_model=512     # == n_head*d_v
 d_word_vec=512
 d_inner_hid=1024
-n_layers=1
+n_layers=2
 n_head=8
 warmup_steps=8000
 
