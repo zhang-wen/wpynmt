@@ -289,7 +289,7 @@ class Nbs(object):
         debug('==Start== No early stop ...')
         if len(self.hyps) == 0:
             debug('No early stop, no hyp with EOS, select k hyps length {} '.format(self.maxL))
-            best_hyp = self.beam[self.maxL][0]
+            best_hyp = self.beam[self.maxL][0][0]
             if wargs.len_norm == 0: score = (best_hyp[0], None)
             elif wargs.len_norm == 1: score = (best_hyp[0] / self.maxL, best_hyp[0])
             elif wargs.len_norm == 2:   # alpha length normal
