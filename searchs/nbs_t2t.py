@@ -276,7 +276,7 @@ class Nbs(object):
             for b in self.beam[i][0]:    # do not output state
                 if wargs.dynamic_cyk_decoding is True:
                     debug(b[0:1] + (b[1][0], b[1][1], b[1][2].data.int().tolist()) + b[-2:])
-                else: debug(b[0:1] + (b[1].size(), ) + b[-2:])
+                else: debug(b[0:1] + b[-2:])
             hyp_scores = np.array([b[0] for b in self.beam[i][0]])
 
         # no early stop, back tracking
