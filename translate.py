@@ -15,7 +15,8 @@ if wargs.model == 2: from searchs.nbs_ia import *
 elif wargs.model == 3: from searchs.nbs_layers import *
 elif wargs.model == 5: from searchs.nbs_sru import *
 elif wargs.model == 6: from searchs.nbs_cyk import *
-elif wargs.search_mode == 1: from searchs.nbs import *
+elif wargs.model == 8: from searchs.nbs_t2t import *
+#elif wargs.search_mode == 1: from searchs.nbs import *
 else: from searchs.cp import *
 
 from tools.utils import *
@@ -66,24 +67,31 @@ class Translator(object):
         # attent_matrix: (trgL, srcL) numpy
         return trans, ids, attent_matrix
 
-    def trans_samples(self, srcs, trgs):
+    def trans_samples(self, srcs, trgs, spos=None):
 
-        if isinstance(srcs, tc.autograd.variable.Variable): srcs = srcs.data
-        if isinstance(trgs, tc.autograd.variable.Variable): trgs = trgs.data
+        if isinstance(srcs, tc.autograd.variable.Variable): t_srcs = srcs.data
+        if isinstance(trgs, tc.autograd.variable.Variable): t_trgs = trgs.data
 
         # srcs: (sample_size, max_sLen)
-        for idx in range(len(srcs)):
+        for idx in range(len(t_srcs)):
 
-            s_filter = sent_filter(list(srcs[idx]))
+            s_filter = sent_filter(list(t_srcs[idx]))
             src_sent = idx2sent(s_filter, self.svcb_i2w)
             if len(src_sent) == 2: src_sent, ori_src_toks = src_sent
             wlog('\n[{:3}] {}'.format('Src', src_sent))
-            t_filter = sent_filter(list(trgs[idx]))
+            t_filter = sent_filter(list(t_trgs[idx]))
             ref_sent = idx2sent(t_filter, self.tvcb_i2w)
             if len(ref_sent) == 2: ref_sent, ori_ref_toks = ref_sent
             wlog('[{:3}] {}'.format('Ref', ref_sent))
 
+            if wargs.model == 8:
+                src_seq, src_pos = srcs[idx], spos[idx]
+                non_zero_idx = src_seq.data.cpu().nonzero().squeeze().numpy()
+                src_seq, src_pos = src_seq[non_zero_idx], src_pos[non_zero_idx]
+                s_filter = (src_seq[None, :], src_pos[None, :])
+
             trans, ids, attent_matrix = self.trans_onesent(s_filter)
+
             if len(trans) == 2:
                 trans, trg_toks = trans
                 trans_subwords = '###'.join(trg_toks)
@@ -152,7 +160,11 @@ class Translator(object):
 
         trans_start = time.time()
         for bid in range(batch_count):
-            batch_srcs_LB = src_input_data[bid][1] # (dxs, tsrcs, lengths, src_mask)
+            n_bid_src = src_input_data[bid]
+            # n_bid_src: (idxs, tsrcs, tspos, lengths, src_mask)
+            # idxs, tsrcs, tspos, ttrgs_for_files, ttpos_for_files, lengths, src_mask, trg_mask_for_files
+            batch_srcs_LB = n_bid_src[1]
+            #batch_srcs_LB = src_input_data[bid][1] # (dxs, tsrcs, lengths, src_mask)
             #batch_srcs_LB = batch_srcs_LB.squeeze()
             for no in range(batch_srcs_LB.size(1)): # batch size, 1 for valid
                 s_filter = sent_filter(list(batch_srcs_LB[:,no].data))
@@ -176,7 +188,7 @@ class Translator(object):
                     if wargs.word_piece is True: trans_subwords = '###'.join(trans_subwords)
                 else:
                     if fd_attent_matrixs is None:   # need translate
-                        trans, ids, attent_matrix = self.trans_onesent(s_filter)
+                        trans, ids, attent_matrix = self.trans_onesent(n_bid_src)
                         if len(trans) == 2:
                             trans, trg_toks = trans
                             trans_subwords = '###'.join(trg_toks)

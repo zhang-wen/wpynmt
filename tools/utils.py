@@ -11,8 +11,9 @@ import random
 
 import torch as tc
 import torch.nn as nn
-from torch.autograd import Variable
+import torch.nn.init as init
 import torch.nn.functional as F
+from torch.autograd import Variable
 
 sys.path.append('../')
 import wargs
@@ -49,6 +50,15 @@ BOS = RESERVED_TOKENS.index(BOS_WORD)  # Normally 1 or 2
 EOS = RESERVED_TOKENS.index(EOS_WORD)  # Normally 2 or 3
 
 epsilon = 1e-20
+
+class XavierLinear(nn.Module):
+    ''' Simple Linear layer with xavier init '''
+    def __init__(self, d_in, d_out, bias=True):
+        super(XavierLinear, self).__init__()
+        self.linear = nn.Linear(d_in, d_out, bias=bias)
+        init.xavier_normal(self.linear.weight)
+    def forward(self, x):
+        return self.linear(x)
 
 def _load_model(model_path):
     wlog('Loading pre-trained model ... from {} '.format(model_path), 0)
@@ -239,7 +249,7 @@ def part_sort(vec, num):
     return k_rank_ids_invec
 
 # beam search
-def init_beam(beam, s0=None, cnt=50, score_0=0.0, loss_0=0.0, dyn_dec_tup=None, cp=False):
+def init_beam(beam, s0=None, cnt=50, score_0=0.0, loss_0=0.0, dyn_dec_tup=None, cp=False, transformer=False):
     del beam[:]
     for i in range(cnt + 1):
         ibeam = []  # one beam [] for one char besides start beam

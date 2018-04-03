@@ -6,15 +6,18 @@ from tools.utils import *
 
 class Classifier(nn.Module):
 
-    def __init__(self, input_size, output_size, trg_lookup_table=None):
+    def __init__(self, input_size, output_size, trg_lookup_table=None, trg_wemb_size=wargs.trg_wemb_size):
 
         super(Classifier, self).__init__()
 
         self.dropout = nn.Dropout(wargs.drop_rate)
-        self.map_vocab = nn.Linear(input_size, output_size)
+        if wargs.model == 8:
+            self.map_vocab = XavierLinear(input_size, output_size, bias=False)
+        else:
+            self.map_vocab = nn.Linear(input_size, output_size)
 
         if trg_lookup_table is not None:
-            assert input_size == wargs.trg_wemb_size
+            assert input_size == trg_wemb_size
             wlog('Copying weight of trg_lookup_table into classifier')
             self.map_vocab.weight = trg_lookup_table.weight
         #self.log_prob = nn.LogSoftmax()

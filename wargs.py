@@ -1,4 +1,4 @@
-dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'S' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
@@ -81,31 +81,31 @@ if dataset == 'S':
     align_size = 256
     dec_hid_size = 256
     out_size = 256
-    #val_tst_dir = './data/'
-    #val_prefix = 'devset1_2.lc'
+    val_tst_dir = './data/'
+    val_prefix = 'devset1_2.lc'
     #dev_prefix = 'devset1_2.lc'
-    #val_src_suffix = 'zh'
-    #val_ref_suffix = 'en'
-    #tests_prefix = ['devset3.lc']
-    #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
-    val_tst_dir = '/home/wen/3.corpus/mt/iwslt14-de-en/'
-    val_prefix = 'valid.de-en'
-    val_src_suffix = 'de'
+    val_src_suffix = 'zh'
     val_ref_suffix = 'en'
+    tests_prefix = ['devset3.lc']
+    #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
+    #val_tst_dir = '/home/wen/3.corpus/mt/iwslt14-de-en/'
+    #val_prefix = 'valid.de-en'
+    #val_src_suffix = 'de'
+    #val_ref_suffix = 'en'
     #ref_cnt = 16
     #tests_prefix = ['devset3.lc']
-    tests_prefix = ['test.de-en']
-    ref_cnt = 1
+    #tests_prefix = ['test.de-en']
+    ref_cnt = 16
     batch_size = 40
     max_epochs = 50
-    src_dict_size = 32009
-    trg_dict_size = 22822
+    #src_dict_size = 32009
+    #trg_dict_size = 22822
     epoch_eval = True
     small = True
-    use_multi_bleu = True
+    use_multi_bleu = False
     #eval_small = True
-    with_bpe = True
-    cased = True
+    with_bpe = False
+    cased = False
 elif dataset == 'M':
     src_wemb_size = 512
     trg_wemb_size = 512
@@ -198,11 +198,14 @@ beta_cover_penalty = 0.
 Starting learning rate. If adagrad/adadelta/adam is used, then this is the global learning rate.
 Recommended settings: sgd = 1, adagrad = 0.1, adadelta = 1, adam = 0.001
 '''
-opt_mode = 'adadelta'
-learning_rate = 1.0
+#opt_mode = 'adadelta'
+#learning_rate = 1.0
+#rho = 0.95
 
-#opt_mode = 'adam'
-#learning_rate = 1e-3
+opt_mode = 'adam'
+learning_rate = 1e-3
+beta_1 = 0.9
+beta_2 = 0.98
 
 #opt_mode = 'sgd'
 #learning_rate = 1.
@@ -227,7 +230,7 @@ dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
 dec_layer_cnt = 4
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 1
+model = 8
 
 # convolutional layer
 #fltr_windows = [1, 3, 5]   # windows size
@@ -263,6 +266,19 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [2]
+gpu_id = [0]
 #gpu_id = None
+
+# Transfomer
+proj_share_weight=True
+embs_share_weight=False
+d_k=64  # d_v == d_model // n_head
+d_v=64
+d_model=512     # == n_head*d_v
+d_word_vec=512
+d_inner_hid=1024
+n_layers=1
+n_head=8
+warmup_steps=8000
+
 

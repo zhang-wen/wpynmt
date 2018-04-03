@@ -33,6 +33,8 @@ import torch.backends.cudnn as cudnn
 cudnn.benchmark = True
 cudnn.enabled = True
 
+tc.manual_seed(1111)
+
 def main():
 
     #if wargs.ss_type is not None: assert wargs.model == 1, 'Only rnnsearch support schedule sample'
@@ -93,7 +95,29 @@ def main():
             batch_tests[prefix] = Input(test_src_tlst, None, 1, volatile=True, batch_sort=False)
     wlog('\n## Finish to Prepare Dataset ! ##\n')
 
-    nmtModel = NMT(src_vocab_size, trg_vocab_size)
+    if wargs.model == 8:
+        from models.transformer import Transformer
+        #from transformer.Models import Transformer
+        nmtModel = Transformer(
+            src_vocab_size,
+            trg_vocab_size,
+            wargs.max_seq_len,
+            proj_share_weight=wargs.proj_share_weight,
+            embs_share_weight=wargs.embs_share_weight,
+            d_model=wargs.d_model,
+            d_word_vec=wargs.d_word_vec,
+            d_inner_hid=wargs.d_inner_hid,
+            n_layers=wargs.n_layers,
+            n_head=wargs.n_head,
+            dropout=wargs.drop_rate)
+
+        def get_criterion(vocab_size):
+            weight = tc.ones(vocab_size)
+            weight[PAD] = 0
+            return nn.CrossEntropyLoss(weight, size_average=False)
+        crit = get_criterion(trg_vocab_size)
+    else: nmtModel = NMT(src_vocab_size, trg_vocab_size)
+
     if wargs.pre_train is not None:
 
         assert os.path.exists(wargs.pre_train)
@@ -124,12 +148,13 @@ def main():
         wargs.start_epoch = eid + 1
 
     else:
-        for n, p in nmtModel.named_parameters(): init_params(p, n, True)
+        if wargs.model != 8:
+            for n, p in nmtModel.named_parameters(): init_params(p, n, True)
         optim = Optim(
             wargs.opt_mode, wargs.learning_rate, wargs.max_grad_norm,
             learning_rate_decay=wargs.learning_rate_decay,
             start_decay_from=wargs.start_decay_from,
-            last_valid_bleu=wargs.last_valid_bleu
+            last_valid_bleu=wargs.last_valid_bleu, model=wargs.model
         )
 
     if wargs.gpu_id is not None:
@@ -140,6 +165,7 @@ def main():
     else:
         wlog('Push model onto CPU ... ', 0)
         nmtModel.cpu()
+
     wlog('done.')
 
     wlog(nmtModel)
@@ -148,7 +174,10 @@ def main():
     pcnt2 = sum([p.nelement() for p in nmtModel.parameters()])
     wlog('Parameters number: {}/{}'.format(pcnt1, pcnt2))
 
-    optim.init_optimizer(nmtModel.parameters())
+    wlog('\n' + '*' * 30 + ' Trainable parameters ' + '*' * 30)
+    for n, p in nmtModel.get_trainable_parameters(): wlog(n)
+    if wargs.model == 8: optim.init_optimizer((p for n, p in nmtModel.get_trainable_parameters()))
+    else: optim.init_optimizer(nmtModel.parameters())
 
     trainer = Trainer(nmtModel, batch_train, vocabs, optim, batch_valid, batch_tests)
 

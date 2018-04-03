@@ -99,8 +99,9 @@ class Trainer(object):
                 batch_idx = shuffled_batch_idx[k] if epoch >= wargs.epoch_shuffle_minibatch else k
 
                 # (max_slen_batch, batch_size)
-                _, srcs, ttrgs_for_files, slens, srcs_m, trg_mask_for_files = self.train_data[batch_idx]
-                trgs, trgs_m = ttrgs_for_files[0], trg_mask_for_files[0]
+                #_, srcs, ttrgs_for_files, slens, srcs_m, trg_mask_for_files = self.train_data[batch_idx]
+                _, srcs, spos, ttrgs_for_files, ttpos_for_files, slens, srcs_m, trg_mask_for_files = self.train_data[batch_idx]
+                trgs, tpos, trgs_m = ttrgs_for_files[0], ttpos_for_files[0], trg_mask_for_files[0]
                 #wlog(trgs)
                 if wargs.ss_type is not None and ss_eps_cur < 1. and bleu_sampling is True:
                     batch_beam_trgs = self.sampler.beam_search_trans(srcs, srcs_m, trgs_m)
@@ -111,23 +112,35 @@ class Trainer(object):
                     batch_oracles = batch_oracles[:-1].cuda()
                     batch_oracles = self.model.decoder.trg_lookup_table(batch_oracles)
 
-                self.model.zero_grad()
+                #self.model.zero_grad()
+                self.optim.zero_grad()
                 # (max_tlen_batch - 1, batch_size, out_size)
-                outputs = self.model(srcs, trgs[:-1], srcs_m, trgs_m[:-1],
-                                     ss_eps=ss_eps_cur, oracles=batch_oracles)
-                if len(outputs) == 2: (outputs, _checks) = outputs
-                if len(outputs) == 2: (outputs, attends) = outputs
+                if wargs.model == 8:
+                    gold, gold_mask = trgs[1:], trgs_m[1:]
+                    # (L, B) -> (B, L)
+                    T_srcs, T_spos, T_trgs, T_tpos = srcs.t(), spos.t(), trgs.t(), tpos.t()
+                    src, trg = (T_srcs, T_spos), (T_trgs, T_tpos)
+                    gold, gold_mask = gold.t(), gold_mask.t()
+                    #gold, gold_mask = trg[0][:, 1:], trgs_m.t()[:, 1:]
+                    if gold.is_contiguous() is False: gold = gold.contiguous()
+                    if gold_mask.is_contiguous() is False: gold_mask = gold_mask.contiguous()
+                    outputs = self.model(src, trg)
+                else:
+                    gold, gold_mask = trgs[1:], trgs_m[1:]
+                    outputs = self.model(srcs, trgs[:-1], srcs_m, trgs_m[:-1],
+                                         ss_eps=ss_eps_cur, oracles=batch_oracles)
+                    if len(outputs) == 2: (outputs, _checks) = outputs
+                    if len(outputs) == 2: (outputs, attends) = outputs
+
                 this_bnum = outputs.size(1)
                 epoch_n_sents += this_bnum
                 show_n_sents += this_bnum
-
                 #batch_loss, batch_correct_num, batch_log_norm = self.classifier(outputs, trgs[1:], trgs_m[1:])
                 #batch_loss.div(this_bnum).backward()
                 #batch_loss = batch_loss.data[0]
                 #batch_correct_num = batch_correct_num.data[0]
-
                 batch_loss, batch_correct_num, batch_Z = self.classifier.snip_back_prop(
-                    outputs, trgs[1:], trgs_m[1:], wargs.snip_size)
+                    outputs, gold, gold_mask, wargs.snip_size)
 
                 self.optim.step()
                 grad_checker(self.model, _checks)
@@ -176,7 +189,8 @@ class Trainer(object):
                     # (max_len_batch, batch_size)
                     sample_src_tensor = srcs.t()[:sample_size]
                     sample_trg_tensor = trgs.t()[:sample_size]
-                    tor_hook.trans_samples(sample_src_tensor, sample_trg_tensor)
+                    sample_src_tensor_pos = T_spos[:sample_size] if wargs.model == 8 else None
+                    tor_hook.trans_samples(sample_src_tensor, sample_trg_tensor, sample_src_tensor_pos)
                     wlog('')
                     sample_spend = time.time() - sample_start
                     self.model.train()
