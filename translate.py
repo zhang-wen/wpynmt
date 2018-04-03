@@ -11,12 +11,14 @@ from shutil import copyfile
 from torch.autograd import Variable
 
 import wargs
-if wargs.model == 2: from searchs.nbs_ia import *
+if wargs.model == 0 or wargs.model == 1: from searchs.nbs import *
+elif wargs.model == 2: from searchs.nbs_ia import *
 elif wargs.model == 3: from searchs.nbs_layers import *
 elif wargs.model == 5: from searchs.nbs_sru import *
 elif wargs.model == 6: from searchs.nbs_cyk import *
 elif wargs.model == 8: from searchs.nbs_t2t import *
-#elif wargs.search_mode == 1: from searchs.nbs import *
+
+if wargs.search_mode == 1: from searchs.nbs import *
 else: from searchs.cp import *
 
 from tools.utils import *

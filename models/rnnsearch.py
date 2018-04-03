@@ -21,6 +21,9 @@ class NMT(nn.Module):
         self.ha = nn.Linear(wargs.enc_hid_size, wargs.align_size)
         self.decoder = Decoder(trg_vocab_size)
 
+    def get_trainable_parameters(self):
+        return ((n, p) for (n, p) in self.named_parameters())
+
     def init_state(self, xs_h, xs_mask=None):
 
         assert xs_h.dim() == 3  # slen, batch_size, enc_size

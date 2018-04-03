@@ -24,6 +24,10 @@ class Optim(object):
             self.d_model = wargs.d_model
             self.n_current_steps = 0
             self.warmup_steps = wargs.warmup_steps
+        else:
+            self.d_model = 0
+            self.n_current_steps = 0
+            self.warmup_steps = 0
 
     def __repr__(self):
 
