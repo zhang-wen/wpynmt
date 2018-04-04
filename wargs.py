@@ -1,4 +1,4 @@
-dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'S' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 max_seq_len = 10000000
@@ -121,7 +121,7 @@ elif dataset == 'M':
     dev_prefix = 'nist02'
     #val_prefix = 'dev700'
     #dev_prefix = 'dev700'
-    val_src_suffix = '32kbpe.src'
+    val_src_suffix = '8kbpe.src'
     #val_src_suffix = 'uy.src'
     #val_src_suffix = 'uy.32kbpe.src'
     #val_src_suffix = 'src'
@@ -266,7 +266,7 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [1]
+gpu_id = [2]
 #gpu_id = None
 
 # Transfomer
