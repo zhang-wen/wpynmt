@@ -20,6 +20,9 @@ class NMT(nn.Module):
         self.ha = nn.Linear(2 * wargs.enc_hid_size, wargs.align_size)
         self.decoder = Decoder(trg_vocab_size)
 
+    def get_trainable_parameters(self):
+        return ((n, p) for (n, p) in self.named_parameters())
+
     def init_state(self, h0_left):
 
         return self.tanh(self.s_init(h0_left))

@@ -1,8 +1,8 @@
-dataset = 'S' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
-max_seq_len = 10000000
-#max_seq_len = 50
+#max_seq_len = 10000000
+max_seq_len = 50
 
 '''
 Embedding layer
@@ -121,18 +121,18 @@ elif dataset == 'M':
     dev_prefix = 'nist02'
     #val_prefix = 'dev700'
     #dev_prefix = 'dev700'
-    val_src_suffix = '8kbpe.src'
+    #val_src_suffix = '8kbpe.src'
     #val_src_suffix = 'uy.src'
     #val_src_suffix = 'uy.32kbpe.src'
-    #val_src_suffix = 'src'
+    val_src_suffix = 'src'
     val_ref_suffix = 'ref.plain_'
-    src_dict_size = 50000
-    trg_dict_size = 50000
+    src_dict_size = 30000
+    trg_dict_size = 30000
     ref_cnt = 4
     tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
     #tests_prefix = ['tst861']
-    with_bpe = True
-    with_postproc = True
+    with_bpe = False
+    with_postproc = False
     use_multi_bleu = False
     cased = False
     #char = True
@@ -230,7 +230,7 @@ dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
 dec_layer_cnt = 4
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 1
+model = 0
 
 # convolutional layer
 #fltr_windows = [1, 3, 5]   # windows size
