@@ -113,8 +113,8 @@ elif dataset == 'M':
     align_size = 512
     dec_hid_size = 512
     out_size = 512
-    val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
-    #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
+    #val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
+    val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     #val_tst_dir = '/home5/wen/2.data/mt/uy_zh_300w/devtst/'
     #val_tst_dir = '/home/wen/3.corpus/mt/uy_zh_300w/devtst/'
     val_prefix = 'nist02'
@@ -230,13 +230,13 @@ dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
 dec_layer_cnt = 4
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 0
+model = 4
 
 # convolutional layer
 #fltr_windows = [1, 3, 5]   # windows size
 #d_fltr_feats = [32, 64, 96]
-fltr_windows = [3]
-d_fltr_feats = [256]
+fltr_windows = [1, 3]
+d_fltr_feats = [128, 256]
 d_mlp = 256
 
 # generate BTG tree when decoding
@@ -266,7 +266,7 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [2]
+gpu_id = [3]
 #gpu_id = None
 
 # Transfomer

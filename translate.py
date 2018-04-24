@@ -123,17 +123,19 @@ class Translator(object):
         point_every, number_every = int(math.ceil(batch_count/100)), int(math.ceil(batch_count/10))
         attent_matrixs, trg_toks = [], []
         for batch_idx in range(batch_count):
-            _, srcs, ttrgs_for_files, _, srcs_m, trg_mask_for_files = batch_tst_data[batch_idx]
+            _, srcs, _, ttrgs_for_files, _, _, srcs_m, trg_mask_for_files = batch_tst_data[batch_idx]
             trgs, trgs_m = ttrgs_for_files[0], trg_mask_for_files[0]
             # src: ['我', '爱', '北京', '天安门']
             # trg: ['<b>', 'i', 'love', 'beijing', 'tiananmen', 'square', '<e>']
             # feed ['<b>', 'i', 'love', 'beijing', 'tiananmen', 'square']
             # must feed first <b>, because feed previous word to get alignment of next word 'i' !!!
             outputs = self.model(srcs, trgs[:-1], srcs_m, trgs_m[:-1], isAtt=True, test=True)
-            if len(outputs) == 2: (outputs, _checks) = outputs
-            if len(outputs) == 2: (outputs, attends) = outputs
+            if len(outputs) == 2: (_outputs, _checks) = outputs
+            if len(_outputs) == 2: (outputs, attends) = _outputs
+            else: attends = _checks
             # attends: (trg_maxL-1, src_maxL, B)
 
+            attends = attends[:-1]
             attent_matrixs.extend(list(attends.permute(2, 0, 1).cpu().data.numpy()))
             # (trg_maxL-2, B) -> (B, trg_maxL-2)
             trg_toks.extend(list(trgs[1:-1].permute(1, 0).cpu().data.numpy()))

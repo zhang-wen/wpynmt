@@ -210,7 +210,7 @@ if __name__ == "__main__":
         tst_src_tlst, tst_trg_tlst = wrap_data(wargs.val_tst_dir, args.input_file,
                                                wargs.val_src_suffix, wargs.val_ref_suffix,
                                                src_vocab, trg_vocab, False, False, 1000000)
-        batch_tst_data = Input(tst_src_tlst, tst_trg_tlst, 10, batch_sort=False)
+        batch_tst_data = Input(tst_src_tlst, tst_trg_tlst, 1, batch_sort=False)
 
     trans, alns, _ = tor.single_trans_file(test_input_data, batch_tst_data=batch_tst_data)
     #trans, alns = tor.single_trans_file(test_input_data)

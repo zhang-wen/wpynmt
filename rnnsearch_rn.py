@@ -88,10 +88,10 @@ class Encoder(nn.Module):
         #self.laynorm1 = LayerNormalization(wargs.enc_hid_size)
         #self.dropout = nn.Dropout(0.1)
 
-        self.down0 = nn.Linear(d_in + d_out, d_out)
-        self.down1 = nn.Linear(d_in + 2 * d_out, d_out)
-        self.down2 = nn.Linear(d_in + 3 * d_out, d_out)
-        self.down3 = nn.Linear(d_in + 4 * d_out, d_out)
+        self.down0 = nn.Linear(2 * d_out, d_out)
+        self.down1 = nn.Linear(3 * d_out, d_out)
+        self.down2 = nn.Linear(4 * d_out, d_out)
+        self.down3 = nn.Linear(5 * d_out, d_out)
 
         #self.relation_layer2 = RelationLayer(wargs.enc_hid_size, wargs.enc_hid_size, 80)
         #self.relation_layer3 = RelationLayer(wargs.enc_hid_size, wargs.enc_hid_size, 80)
@@ -261,8 +261,8 @@ class Decoder(nn.Module):
 
             y_tm1 = ys_e[k]
             y_mask = None if ys_mask is None else ys_mask[k]
-            attend, s_tm1, _, alpha_ij, _, _, _ = self.step(
-                s_tm1, xs_h, uh, y_tm1, xs_mask=xs_mask, y_mask=y_mask)
+            attend, s_tm1, _, _, _, _, _ = self.step(s_tm1, xs_h, uh, y_tm1,
+                                                     xs_mask=xs_mask, y_mask=y_mask)
 
             tlen_batch_c.append(attend)
             tlen_batch_y.append(y_tm1)

@@ -31,12 +31,18 @@ class Optim(object):
 
     def __repr__(self):
 
+        return '\nMode: {}\nLearning rate: {}\nGrad norm: {}\nlearning rate decay: {}\nstart '\
+                    'decay from: {}\nlast valid bleu: {}'.format(
+                    self.opt_mode, self.learning_rate, self.max_grad_norm, self.lr_decay,
+                        self.start_decay_from, self.last_valid_bleu)
+        '''
         return '\nMode: {}\nLearning rate: {}\nGrad norm: {}\nLearning rate decay: {}\nStart '\
                 'decay from: {}\nPrevious valid BLEU: {}\n\nTransformer-d_model: {}\n'\
                 'Transformer-n_current_steps: {}\nTransformer-n_warmup_steps: {}'.format(
                     self.opt_mode, self.learning_rate, self.max_grad_norm, self.lr_decay,
                     self.start_decay_from, self.last_valid_bleu, self.d_model,
                     self.n_current_steps, self.warmup_steps)
+        '''
 
     def zero_grad(self):
 
