@@ -1,8 +1,8 @@
-dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'L' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
-max_seq_len = 50
+max_seq_len = 80
 
 '''
 Embedding layer
@@ -62,6 +62,7 @@ inputs_data = dir_data + 'inputs.pt'
 
 with_bpe = False
 with_postproc = False
+luong_proc = False
 copy_trg_emb = False
 # Training
 max_epochs = 20
@@ -144,20 +145,24 @@ elif dataset == 'L':
     #dec_hid_size = 1024
     #out_size = 512
     #val_tst_dir = '/home/wen/3.corpus/wmt16/rsennrich/devtst/'
-    #val_tst_dir = '/home/wen/3.corpus/wmt14/en-de-Luong/'
-    val_tst_dir = '/home/wen/3.corpus/wmt2017/de-en/'
-    val_prefix = 'newstest2014'
+    val_tst_dir = '/home/wen/3.corpus/wmt14/en-de-Luong/'
+    #val_tst_dir = '/home/wen/3.corpus/wmt2017/de-en/'
+    val_prefix = 'newstest2013'
     #val_prefix = 'newstest2014.tc'
     use_multi_bleu = True
-    val_src_suffix = 'en.16kbpe'
+    val_src_suffix = 'en.32kbpe'
     val_ref_suffix = 'tc.de' if use_multi_bleu is True else 'ori.de'
     ref_cnt = 1
-    tests_prefix = ['newstest2014.2737', 'newstest2015', 'newstest2016', 'newstest2017']
+    #tests_prefix = ['newstest2014.2737', 'newstest2015', 'newstest2016', 'newstest2017']
     #tests_prefix = ['newstest2009', 'newstest2010', 'newstest2011', 'newstest2012', 'newstest2014', 'newstest2015', 'newstest2016', 'newstest2017']
+    tests_prefix = ['newstest2012', 'newstest2014', 'newstest2015']
     #drop_rate = 0.2
     src_dict_size = 50000
     trg_dict_size = 50000
+    batch_size = 128
+    sort_k_batches = 32
     with_bpe = True
+    #luong_proc = True
     cased = True    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
     #small = True
     #eval_small = True
@@ -230,7 +235,7 @@ dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
 dec_layer_cnt = 4
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 4
+model = 1
 
 # convolutional layer
 #fltr_windows = [1, 3, 5]   # windows size
@@ -266,7 +271,7 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [3]
+gpu_id = [2]
 #gpu_id = None
 
 # Transfomer

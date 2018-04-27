@@ -319,9 +319,17 @@ class Translator(object):
             proc_bpe(bpe_fname, out_fname)
             wlog('done')
 
-        # Luong: remove "rich-text format" --> rich ##AT##-##AT## text format
-        #os.system("sed -r -i 's/( ##AT##)|(##AT## )//g' {}".format(out_fname))
-        #wlog("sed -r -i 's/( ##AT##)|(##AT## )//g' {}".format(out_fname))
+        if wargs.luong_proc is True:
+            # Luong: remove "rich-text format" --> rich ##AT##-##AT## text format
+            luong_fname = '{}.obpe.rich'.format(out_fname)
+            wlog('copy {} to {} ... '.format(out_fname, luong_fname), 0)
+            copyfile(out_fname, luong_fname)
+            assert os.path.exists(luong_fname), 'luong file do not exist ...'
+            wlog('done')
+            wlog("sed -r 's/( ?##AT##-##AT## ?)//g' {} > {} ... ".format(luong_fname, out_fname), 0)
+            proc_luong(luong_fname, out_fname)
+            wlog('done')
+
         if wargs.with_postproc is True:
             opost_name = '{}.opost'.format(out_fname)
             wlog('copy {} to {} ... '.format(out_fname, opost_name), 0)

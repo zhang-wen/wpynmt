@@ -695,4 +695,17 @@ def proc_bpe(input_fname, output_fname):
     fout.write(contend)
     fout.close()
 
+def proc_luong(input_fname, output_fname):
+
+    fin = open(input_fname, 'r')
+    contend = fin.read()
+    fin.close()
+
+    contend = re.sub('( ?##AT##-##AT## ?)', '', contend)
+
+    fout = open(output_fname, 'w')
+    fout.write(contend)
+    fout.close()
+
+
 
