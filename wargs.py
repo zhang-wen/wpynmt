@@ -1,8 +1,8 @@
-dataset = 'L' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
-max_seq_len = 80
+max_seq_len = 50
 
 '''
 Embedding layer
@@ -114,8 +114,8 @@ elif dataset == 'M':
     align_size = 512
     dec_hid_size = 512
     out_size = 512
-    #val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
-    val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
+    val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
+    #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     #val_tst_dir = '/home5/wen/2.data/mt/uy_zh_300w/devtst/'
     #val_tst_dir = '/home/wen/3.corpus/mt/uy_zh_300w/devtst/'
     val_prefix = 'nist02'
@@ -133,7 +133,7 @@ elif dataset == 'M':
     tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
     #tests_prefix = ['tst861']
     with_bpe = False
-    with_postproc = False
+    with_postproc = True
     use_multi_bleu = False
     cased = False
     #char = True
@@ -230,12 +230,12 @@ seg_val_tst_dir = 'orule_1.7'
 
 # model
 enc_rnn_type = 'sru'    # rnn, gru, lstm, sru
-enc_layer_cnt = 4
+enc_layer_cnt = 8
 dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
-dec_layer_cnt = 4
+dec_layer_cnt = 8
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 1
+model = 5
 
 # convolutional layer
 #fltr_windows = [1, 3, 5]   # windows size
@@ -271,7 +271,7 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [2]
+gpu_id = [3]
 #gpu_id = None
 
 # Transfomer

@@ -36,6 +36,7 @@ class Nbs(object):
         #print '-------------------- one sentence ............'
         self.trgs_len = y_mask.sum(0).data.int().tolist() if y_mask is not None else None
         if isinstance(x_LB, list): x_LB = tc.Tensor(x_LB).long().unsqueeze(-1)
+        elif isinstance(x_LB, tuple): x_LB = x_LB[1]
         self.srcL, self.B = x_LB.size()
         if x_mask is None:
             x_mask = tc.ones((self.srcL, 1))

@@ -37,6 +37,9 @@ class NMT(nn.Module):
         self.tanh = nn.Tanh()
         self.decoder = Decoder(trg_vocab_size, with_ln=wargs.laynorm)
 
+    def get_trainable_parameters(self):
+        return ((n, p) for (n, p) in self.named_parameters())
+
     def init_state(self, xs_h, xs_mask=None, hidden=None):
 
         assert xs_h.dim() == 3  # slen, batch_size, enc_size
@@ -63,7 +66,7 @@ class NMT(nn.Module):
 
     def init(self, xs, xs_mask=None, test=True):
 
-        if test:  # for decoding
+        if test is True and not isinstance(xs, Variable):  # for decoding
             if wargs.gpu_id and not xs.is_cuda: xs = xs.cuda()
             xs = Variable(xs, requires_grad=False, volatile=True)
 
