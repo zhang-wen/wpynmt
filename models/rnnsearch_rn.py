@@ -226,7 +226,7 @@ class Decoder(nn.Module):
         #self.lc2 = nn.Linear(wargs.enc_hid_size, out_size)
 
         self.classifier = Classifier(wargs.out_size, trg_vocab_size,
-                                     self.trg_lookup_table if wargs.copy_trg_emb is True else None)
+                                     self.trg_lookup_table if wargs.proj_share_weight is True else None)
 
     #def step(self, s_tm1, xs_h, uh, y_tm1, xs_mask=None, y_mask=None):
     def step(self, s_tm1, xs_h, uh, y_tm1, y_tm1_hypo=None,

@@ -171,7 +171,7 @@ class Decoder(nn.Module):
         #self.map_vocab = nn.Linear(wargs.out_size, trg_vocab_size)
 
         self.classifier = Classifier(wargs.out_size, trg_vocab_size,
-                                     self.trg_lookup_table if wargs.copy_trg_emb is True else None)
+                                     self.trg_lookup_table if wargs.proj_share_weight is True else None)
 
         if wargs.dynamic_cyk_decoding is True:
             self.gru2 = GRU(wargs.trg_wemb_size, wargs.dec_hid_size, enc_hid_size=wargs.dec_hid_size)

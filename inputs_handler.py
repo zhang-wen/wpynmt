@@ -15,6 +15,8 @@ import tools.text_encoder as text_encoder
 import tools.tokenizer as tokenizer
 from collections import defaultdict
 from tools.inputs import *
+from tools.bleu import zh_to_chars
+import io
 
 # English tokens
 EN_SPACE_TOK = 3
@@ -66,8 +68,9 @@ def genVcb(filepath, max_seq_len=50):
                 counter = 0
                 yield line
 
-def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50):
+def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50, char=False):
 
+    wlog('\tmax length {}, char? {}'.format(max_seq_len, char))
     if os.path.exists(vocab_file) is True:
 
         # If vocab file has been exist, we load word dictionary
@@ -77,21 +80,23 @@ def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50):
 
     else:
 
-        vocab = count_vocab(data_file, max_vcb_size, max_seq_len)
+        vocab = count_vocab(data_file, max_vcb_size, max_seq_len, char=char)
         vocab.write_into_file(vocab_file)
         wlog('Save dictionary file into {}'.format(vocab_file))
 
     return vocab
 
-def count_vocab(data_file, max_vcb_size, max_seq_len=50):
+def count_vocab(data_file, max_vcb_size, max_seq_len=50, char=False):
 
     assert data_file and os.path.exists(data_file), 'need file to extract vocabulary ...'
 
     vocab = Dictionary()
-    with open(data_file, 'r') as f:
+    #with open(data_file, 'r') as f:
+    with io.open(data_file, encoding='utf-8') as f:
         for sent in f.readlines():
             sent = sent.strip()
-            words = sent.split()
+            if char is True: words = zh_to_chars(sent)
+            else: words = sent.split()
             if len(words) > max_seq_len: continue
             for word in words: vocab.add(word)
 
@@ -102,15 +107,16 @@ def count_vocab(data_file, max_vcb_size, max_seq_len=50):
 
     return new_vocab
 
-def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix,
-              src_vocab, trg_vocab, shuffle=True, sort_data=True, max_seq_len=50):
+def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_vocab,
+              shuffle=True, sort_data=True, max_seq_len=50, char=False):
 
     srcF = open(os.path.join(data_dir, '{}.{}'.format(file_prefix, src_suffix)), 'r')
     num = len(srcF.readlines())
     srcF.close()
     point_every, number_every = int(math.ceil(num/100)), int(math.ceil(num/10))
 
-    srcF = open(os.path.join(data_dir, '{}.{}'.format(file_prefix, src_suffix)), 'r')
+    srcF = io.open(os.path.join(data_dir, '{}.{}'.format(file_prefix, src_suffix)),
+                   mode='r', encoding='utf-8')
 
     trgFs = []  # maybe have multi-references for valid, we open them together
     for fname in os.listdir(data_dir):
@@ -124,6 +130,7 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix,
     while True:
 
         src_sent = srcF.readline().strip()
+        if char is True: src_sent = ' '.join(zh_to_chars(src_sent))
         trg_refs = [trgF.readline().strip() for trgF in trgFs]
 
         if src_sent == '' and all([trg_ref == '' for trg_ref in trg_refs]):
@@ -212,10 +219,10 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix,
 
     return final_srcs, final_trgs
 
-def wrap_tst_data(src_data, src_vocab):
+def wrap_tst_data(src_data, src_vocab, char=False):
 
     srcs, slens = [], []
-    srcF = open(src_data, 'r')
+    srcF = io.open(src_data, mode='r', encoding='utf-8')
     idx = 0
 
     while True:
@@ -231,6 +238,7 @@ def wrap_tst_data(src_data, src_vocab):
             sys.exit(0)
 
         src_sent = src_sent.strip()
+        if char is True: src_sent = ' '.join(zh_to_chars(src_sent))
         src_words = src_sent.split()
         src_len = len(src_words)
         if wargs.word_piece is True:

@@ -2,7 +2,7 @@ dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
-max_seq_len = 50
+max_seq_len = 100
 
 '''
 Embedding layer
@@ -63,7 +63,6 @@ inputs_data = dir_data + 'inputs.pt'
 with_bpe = False
 with_postproc = False
 luong_proc = False
-copy_trg_emb = False
 # Training
 max_epochs = 20
 epoch_shuffle = False
@@ -74,6 +73,7 @@ eval_small = False
 epoch_eval = False
 final_test = False
 char = False
+src_char = True
 
 if dataset == 'S':
     src_wemb_size = 256
@@ -127,12 +127,12 @@ elif dataset == 'M':
     #val_src_suffix = 'uy.32kbpe.src'
     val_src_suffix = 'src'
     val_ref_suffix = 'ref.plain_'
-    src_dict_size = 30000
-    trg_dict_size = 30000
+    src_dict_size = 50000
+    trg_dict_size = 50000
     ref_cnt = 4
     tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
     #tests_prefix = ['tst861']
-    with_bpe = False
+    with_bpe = True
     with_postproc = True
     use_multi_bleu = False
     cased = False
@@ -203,14 +203,14 @@ beta_cover_penalty = 0.
 Starting learning rate. If adagrad/adadelta/adam is used, then this is the global learning rate.
 Recommended settings: sgd = 1, adagrad = 0.1, adadelta = 1, adam = 0.001
 '''
-opt_mode = 'adadelta'
-learning_rate = 1.0
-rho = 0.95
+#opt_mode = 'adadelta'
+#learning_rate = 1.0
+#rho = 0.95
 
-#opt_mode = 'adam'
-#learning_rate = 1e-3
-#beta_1 = 0.9
-#beta_2 = 0.98
+opt_mode = 'adam'
+learning_rate = 0.001
+beta_1 = 0.9
+beta_2 = 0.98
 
 #opt_mode = 'sgd'
 #learning_rate = 1.
@@ -230,9 +230,9 @@ seg_val_tst_dir = 'orule_1.7'
 
 # model
 enc_rnn_type = 'sru'    # rnn, gru, lstm, sru
-enc_layer_cnt = 8
+enc_layer_cnt = 2
 dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
-dec_layer_cnt = 8
+dec_layer_cnt = 2
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
 model = 5
@@ -284,6 +284,6 @@ d_word_vec=512
 d_inner_hid=1024
 n_layers=1
 n_head=8
-warmup_steps=8000
+warmup_steps=12000
 
 

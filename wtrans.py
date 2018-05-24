@@ -103,7 +103,7 @@ if __name__ == "__main__":
 
     nmtModel = NMT(src_vocab_size, trg_vocab_size)
     #classifier = Classifier(wargs.out_size, trg_vocab_size,
-    #                        nmtModel.decoder.trg_lookup_table if wargs.copy_trg_emb is True else None)
+    #                        nmtModel.decoder.trg_lookup_table if wargs.proj_share_weight is True else None)
 
     if wargs.gpu_id:
         cuda.set_device(wargs.gpu_id[0])

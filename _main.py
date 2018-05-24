@@ -51,7 +51,8 @@ def main():
         trg_vocab = get_or_generate_vocab(trg, wargs.trg_dict, max_seq_len=wargs.max_seq_len)
     else:
         wlog('\n[o/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size, wargs.max_seq_len)
+        src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size,
+                                  wargs.max_seq_len, char=wargs.src_char)
         wlog('\n[o/Subword] Preparing target vocabulary from {} ... '.format(trg))
         trg_vocab = extract_vocab(trg, wargs.trg_dict, wargs.trg_dict_size, wargs.max_seq_len)
     src_vocab_size, trg_vocab_size = src_vocab.size(), trg_vocab.size()
@@ -62,7 +63,8 @@ def main():
     trains = {}
     train_src_tlst, train_trg_tlst = wrap_data(wargs.dir_data, wargs.train_prefix,
                                                wargs.train_src_suffix, wargs.train_trg_suffix,
-                                               src_vocab, trg_vocab, max_seq_len=wargs.max_seq_len)
+                                               src_vocab, trg_vocab, max_seq_len=wargs.max_seq_len,
+                                               char=wargs.src_char)
     '''
     list [torch.LongTensor (sentence), torch.LongTensor, torch.LongTensor, ...]
     no padding
@@ -79,7 +81,8 @@ def main():
                                                    wargs.val_src_suffix, wargs.val_ref_suffix,
                                                    src_vocab, trg_vocab,
                                                    shuffle=False, sort_data=False,
-                                                   max_seq_len=wargs.dev_max_seq_len)
+                                                   max_seq_len=wargs.dev_max_seq_len,
+                                                   char=wargs.src_char)
         batch_valid = Input(valid_src_tlst, valid_trg_tlst, 1, volatile=True, batch_sort=False)
 
     batch_tests = None
@@ -91,7 +94,7 @@ def main():
             init_dir(wargs.dir_tests + '/' + prefix)
             test_file = '{}{}.{}'.format(wargs.val_tst_dir, prefix, wargs.val_src_suffix)
             wlog('\nPreparing test set from {} ... '.format(test_file))
-            test_src_tlst, _ = wrap_tst_data(test_file, src_vocab)
+            test_src_tlst, _ = wrap_tst_data(test_file, src_vocab, char=wargs.src_char)
             batch_tests[prefix] = Input(test_src_tlst, None, 1, volatile=True, batch_sort=False)
     wlog('\n## Finish to Prepare Dataset ! ##\n')
 

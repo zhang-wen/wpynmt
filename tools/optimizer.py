@@ -19,7 +19,7 @@ class Optim(object):
         self.start_decay = False
         self.model_type = model
 
-        if model == 8:
+        if model == 8 or self.opt_mode == 'adam':
             assert wargs.d_model is not None and self.opt_mode == 'adam'
             self.d_model = wargs.d_model
             self.n_current_steps = 0
@@ -76,20 +76,23 @@ class Optim(object):
 
     def step(self):
 
-        #self.step_num += 1
-
-        # attention is all you need
-        #lr_vary = math.pow(wargs.enc_hid_size, -0.5) * min(
-        #    math.pow(self.step_num, -0.5), self.step_num * math.pow(self.warmup_steps, -1.5))
-        #self.learning_rate = wargs.learning_rate * lr_vary
-        #self.optimizer.param_groups[0]['lr'] = self.learning_rate
-
         # clip by the gradients norm
         if self.max_grad_norm is not None:
             #wlog('L2 norm Grad clip ... {}'.format(self.max_grad_norm))
             clip_grad_norm(self.params, max_norm=self.max_grad_norm)
 
         self.optimizer.step()
+
+        # attention is all you need
+        if self.opt_mode == 'adam':
+            self.n_current_steps += 1
+            self.learning_rate = math.pow(self.d_model, -0.5) * min(
+                math.pow(self.n_current_steps, -0.5),
+                self.n_current_steps * math.pow(self.warmup_steps, -1.5)
+            )
+            #self.learning_rate = wargs.learning_rate * lr_vary
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = self.learning_rate
 
     def update_learning_rate(self, bleu, epoch):
 
@@ -107,8 +110,9 @@ class Optim(object):
             self.learning_rate = self.learning_rate * self.lr_decay
             wlog('Decaying learning rate to {}'.format(self.learning_rate))
 
-        self.last_valid_bleu = bleu
-        self.optimizer.param_groups[0]['lr'] = self.learning_rate
+        if not self.opt_mode == 'adam':
+            self.last_valid_bleu = bleu
+            self.optimizer.param_groups[0]['lr'] = self.learning_rate
 
         '''
         param_groups:
