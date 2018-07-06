@@ -69,7 +69,7 @@ epoch_shuffle = False
 epoch_shuffle_minibatch = 1
 
 small = False
-eval_small = True
+eval_small = False
 epoch_eval = False
 final_test = False
 char = True
@@ -101,7 +101,7 @@ if dataset == 'S':
     max_epochs = 50
     #src_dict_size = 32009
     #trg_dict_size = 22822
-    epoch_eval = False
+    epoch_eval = True
     small = True
     use_multi_bleu = False
     #eval_small = True
@@ -171,7 +171,7 @@ display_freq = 10 if small else 1000
 sampling_freq = 100 if small else 5000
 sample_size = 5
 if_fixed_sampling = False
-eval_valid_from = 100 if eval_small else 100000
+eval_valid_from = 500 if eval_small else 100000
 eval_valid_freq = 100 if eval_small else 20000
 
 save_one_model = True

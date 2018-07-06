@@ -212,12 +212,12 @@ def bleu(hypo_c, refs_c, n=4, logfun=wlog, cased=False, char=False):
     for num in range(len(hypo_sen)):
 
         hypo = hypo_sen[num]
-        if char is True: hypo = ' '.join(zh_to_chars(hypo))
+        if char is True: hypo = ' '.join(zh_to_chars(hypo.decode('utf-8')))
         else: hypo = token(hypo, cased)
 
         h_length = len(hypo.split(' '))
 
-        if char is True: refs = [' '.join(zh_to_chars(refs_sen[i][num])) for i in range(len(refs_c))]
+        if char is True: refs = [' '.join(zh_to_chars(refs_sen[i][num].decode('utf-8'))) for i in range(len(refs_c))]
         else: refs = [token(refs_sen[i][num], cased) for i in range(len(refs_c))]
         ref_lengths = sorted([len(refs[i].split(' ')) for i in range(len(refs))])
 
