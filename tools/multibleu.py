@@ -49,13 +49,13 @@ def bleu(candidate, references, maxn=4):
 
 def tokenize(txt, char=False):
     txt = txt.strip()
-    if char is True: txt = zh_to_chars(txt)
+    if char is True: txt = zh_to_chars(txt.decode('utf-8'))
     else: txt = txt.split()
     return txt
 
 def tokenize_lower(txt, char=False):
     txt = txt.strip().lower()
-    if char is True: txt = zh_to_chars(txt)
+    if char is True: txt = zh_to_chars(txt.decode('utf-8'))
     else: txt = txt.split()
     return txt
 

@@ -213,7 +213,7 @@ class Translator(object):
                         if isinstance(attent_matrix, list) and len(attent_matrix) == 0: alnStr = ''
                         else:
                             if isinstance(self.svcb_i2w, dict):
-                                src_toks = [self.svcb_i2w[wid] for wid in s_filter]
+                                src_toks = [self.svcb_i2w[wid.item()] for wid in s_filter]
                             else:
                                 #print type(self.svcb_i2w)
                                 # <class 'tools.text_encoder.SubwordTextEncoder'>

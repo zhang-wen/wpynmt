@@ -171,7 +171,7 @@ display_freq = 10 if small else 1000
 sampling_freq = 100 if small else 5000
 sample_size = 5
 if_fixed_sampling = False
-eval_valid_from = 500 if eval_small else 100000
+eval_valid_from = 100 if eval_small else 100000
 eval_valid_freq = 100 if eval_small else 20000
 
 save_one_model = True

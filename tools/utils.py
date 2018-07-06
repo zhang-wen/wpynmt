@@ -322,7 +322,7 @@ def sent_filter(sent):
 def idx2sent(vec, vcb_i2w):
     # vec: [int, int, ...]
     if isinstance(vcb_i2w, dict):
-        r = [vcb_i2w[int(idx)] for idx in vec]
+        r = [vcb_i2w[idx.item()] for idx in vec]
         sent = ' '.join(r)
     else:
         sent = vcb_i2w.decode(vec)

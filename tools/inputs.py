@@ -127,12 +127,15 @@ class Input(object):
 
             if x is None: return x
             # (batch_size, max_len_batch) -> (max_len_batch, batch_size)
-            if isinstance(x, tuple) or isinstance(x, list):
-                x = tc.stack(x, dim=0).t().contiguous()
-            else: x = x.t()
+            if isinstance(x, tuple): x = tc.stack(x, dim=0).t().contiguous()
+            else: x = x.t().contiguous()
             if wargs.gpu_id: x = x.cuda()    # push into GPU
 
-            return Variable(x, volatile=self.volatile)
+            if self.volatile is True:
+                with tc.no_grad(): x = Variable(x)
+            else:
+                with tc.enable_grad(): x = Variable(x)
+            return x
 
         tsrcs, tspos = tuple2Tenser(srcs), tuple2Tenser(spos)
         src_mask = tsrcs.ne(0).float()
