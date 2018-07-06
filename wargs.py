@@ -1,4 +1,4 @@
-dataset = 'M' # S for 40k, M for 1.2M, L for wmt en-de
+dataset = 'S' # S for 40k, M for 1.2M, L for wmt en-de
 
 # Maximal sequence length in training data
 #max_seq_len = 10000000
@@ -69,11 +69,11 @@ epoch_shuffle = False
 epoch_shuffle_minibatch = 1
 
 small = False
-eval_small = False
+eval_small = True
 epoch_eval = False
 final_test = False
-char = False
-src_char = True
+char = True
+src_char = False
 
 if dataset == 'S':
     src_wemb_size = 256
@@ -83,11 +83,11 @@ if dataset == 'S':
     dec_hid_size = 256
     out_size = 256
     val_tst_dir = './data/'
-    val_prefix = 'devset1_2.lc'
+    val_prefix = 'valid'
     #dev_prefix = 'devset1_2.lc'
-    val_src_suffix = 'zh'
-    val_ref_suffix = 'en'
-    tests_prefix = ['devset3.lc']
+    val_src_suffix = 'src'
+    val_ref_suffix = 'ref'
+    tests_prefix = ['test']
     #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
     #val_tst_dir = '/home/wen/3.corpus/mt/iwslt14-de-en/'
     #val_prefix = 'valid.de-en'
@@ -96,12 +96,12 @@ if dataset == 'S':
     #ref_cnt = 16
     #tests_prefix = ['devset3.lc']
     #tests_prefix = ['test.de-en']
-    ref_cnt = 16
-    batch_size = 40
+    ref_cnt = 1
+    batch_size = 80
     max_epochs = 50
     #src_dict_size = 32009
     #trg_dict_size = 22822
-    epoch_eval = True
+    epoch_eval = False
     small = True
     use_multi_bleu = False
     #eval_small = True
@@ -203,14 +203,14 @@ beta_cover_penalty = 0.
 Starting learning rate. If adagrad/adadelta/adam is used, then this is the global learning rate.
 Recommended settings: sgd = 1, adagrad = 0.1, adadelta = 1, adam = 0.001
 '''
-#opt_mode = 'adadelta'
-#learning_rate = 1.0
-#rho = 0.95
+opt_mode = 'adadelta'
+learning_rate = 1.0
+rho = 0.95
 
-opt_mode = 'adam'
-learning_rate = 0.001
-beta_1 = 0.9
-beta_2 = 0.98
+#opt_mode = 'adam'
+#learning_rate = 0.001
+#beta_1 = 0.9
+#beta_2 = 0.98
 
 #opt_mode = 'sgd'
 #learning_rate = 1.
@@ -235,7 +235,7 @@ dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
 dec_layer_cnt = 2
 
 # 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 5
+model = 1
 
 # convolutional layer
 #fltr_windows = [1, 3, 5]   # windows size
@@ -271,7 +271,7 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 #tests_prefix = None
 #dec_gpu_id = [1]
 #dec_gpu_id = None
-gpu_id = [3]
+gpu_id = [2]
 #gpu_id = None
 
 # Transfomer

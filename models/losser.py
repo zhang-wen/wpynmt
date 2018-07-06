@@ -106,10 +106,10 @@ class Classifier(nn.Module):
 
         for shard in shards(shard_state, shard_size):
             loss, pred_correct, _batch_Z = self(**shard)
-            batch_loss += loss.data.clone()[0]
-            batch_correct_num += pred_correct.data.clone()[0]
-            batch_Z += _batch_Z.data.clone()[0]
-            loss.div(cur_batch_count).backward()
+            batch_loss += loss.data.clone()
+            batch_correct_num += pred_correct.data.clone()
+            batch_Z += _batch_Z.data.clone()
+            loss.div(cur_batch_count).backward(retain_graph=True)
 
         return batch_loss, batch_correct_num, batch_Z
 

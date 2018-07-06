@@ -36,9 +36,13 @@ class NMT(nn.Module):
 
     def init(self, xs, xs_mask=None, test=True):
 
-        if test is True and not isinstance(xs, Variable):  # for decoding
+        #if test is True and not isinstance(xs, Variable):  # for decoding
+        if test is True:  # for decoding
             if wargs.gpu_id and not xs.is_cuda: xs = xs.cuda()
-            xs = Variable(xs, requires_grad=False, volatile=True)
+            #xs = Variable(xs, requires_grad=False, volatile=True)
+            # for pytorch v4.0
+            with tc.no_grad():
+                xs = Variable(xs, requires_grad=False)
 
         xs = self.encoder(xs, xs_mask)
         s0 = self.init_state(xs, xs_mask)
@@ -279,11 +283,13 @@ class Decoder(nn.Module):
             if isinstance(y_tm1, int): y_tm1 = tc.Tensor([y_tm1]).long()
             elif isinstance(y_tm1, list): y_tm1 = tc.Tensor(y_tm1).long()
             if wargs.gpu_id: y_tm1 = y_tm1.cuda()
-            y_tm1 = Variable(y_tm1, requires_grad=False, volatile=True)
+            with tc.no_grad():
+                y_tm1 = Variable(y_tm1, requires_grad=False)
             y_tm1 = self.trg_lookup_table(y_tm1)
 
-        if xs_mask is not None and not isinstance(xs_mask, Variable):
-            xs_mask = Variable(xs_mask, requires_grad=False, volatile=True)
+        if xs_mask is not None:
+            with tc.no_grad():
+                xs_mask = Variable(xs_mask, requires_grad=False)
             if wargs.gpu_id: xs_mask = xs_mask.cuda()
 
         #if y_tm1_hypo is None: y_tm1_hypo = y_tm1.clone()

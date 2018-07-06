@@ -145,9 +145,9 @@ class Trainer(object):
                 self.optim.step()
                 grad_checker(self.model, _checks)
 
-                batch_src_words = srcs.data.ne(PAD).sum()
-                assert batch_src_words == slens.data.sum()
-                batch_trg_words = trgs[1:].data.ne(PAD).sum()
+                batch_src_words = int(srcs.data.ne(PAD).sum())
+                assert batch_src_words == int(slens.data.sum())
+                batch_trg_words = int(trgs[1:].data.ne(PAD).sum())
 
                 show_loss += batch_loss
                 show_correct_num += batch_correct_num

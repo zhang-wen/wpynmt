@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import torch as tc
 from utils import *
 
@@ -95,7 +96,10 @@ class Dictionary(object):
     def keys2idx(self, list_words, unk_word, bos_word=None, eos_word=None):
 
         list_idx = [self.key2idx[bos_word]] if bos_word else []
+        #print list_words
         for w in list_words:
+            w = str(w)
+            #print w, w in self.key2idx, self.key2idx[w]
             list_idx.extend(
                 [self.key2idx[w] if w in self.key2idx else self.key2idx[unk_word]]
             )

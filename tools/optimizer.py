@@ -1,6 +1,6 @@
 import torch.optim as opt
 import torch.nn as nn
-from torch.nn.utils import clip_grad_norm
+from torch.nn.utils import clip_grad_norm_
 from utils import wlog
 import math
 import wargs
@@ -79,7 +79,7 @@ class Optim(object):
         # clip by the gradients norm
         if self.max_grad_norm is not None:
             #wlog('L2 norm Grad clip ... {}'.format(self.max_grad_norm))
-            clip_grad_norm(self.params, max_norm=self.max_grad_norm)
+            clip_grad_norm_(self.params, max_norm=self.max_grad_norm)
 
         self.optimizer.step()
 

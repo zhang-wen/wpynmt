@@ -116,13 +116,20 @@ class Input(object):
                 tpos_for_files = [tc.stack(pos) for pos in zip(*list(tpos))]
 
         lengths = tc.IntTensor(slens).view(1, -1)   # (1, batch_size)
-        lengths = Variable(lengths, volatile=self.volatile)
+        #lengths = Variable(lengths, volatile=self.volatile)
+        # for pytorch v4.0
+        if self.volatile is True:
+            with tc.no_grad(): lengths = Variable(lengths)
+        else:
+            with tc.enable_grad(): lengths = Variable(lengths)
 
         def tuple2Tenser(x):
 
             if x is None: return x
             # (batch_size, max_len_batch) -> (max_len_batch, batch_size)
-            x = tc.stack(x, dim=0).t().contiguous()
+            if isinstance(x, tuple) or isinstance(x, list):
+                x = tc.stack(x, dim=0).t().contiguous()
+            else: x = x.t()
             if wargs.gpu_id: x = x.cuda()    # push into GPU
 
             return Variable(x, volatile=self.volatile)

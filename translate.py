@@ -70,8 +70,8 @@ class Translator(object):
 
     def trans_samples(self, srcs, trgs, spos=None):
 
-        if isinstance(srcs, tc.autograd.variable.Variable): t_srcs = srcs.data
-        if isinstance(trgs, tc.autograd.variable.Variable): t_trgs = trgs.data
+        if isinstance(srcs, tc.autograd.Variable): t_srcs = srcs.data
+        if isinstance(trgs, tc.autograd.Variable): t_trgs = trgs.data
 
         # srcs: (sample_size, max_sLen)
         for idx in range(len(t_srcs)):

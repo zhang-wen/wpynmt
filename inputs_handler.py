@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 from __future__ import division
 from __future__ import absolute_import
 
@@ -16,6 +17,7 @@ import tools.tokenizer as tokenizer
 from collections import defaultdict
 from tools.inputs import *
 from tools.bleu import zh_to_chars
+import json
 import io
 
 # English tokens
@@ -94,6 +96,7 @@ def count_vocab(data_file, max_vcb_size, max_seq_len=50, char=False):
     #with open(data_file, 'r') as f:
     with io.open(data_file, encoding='utf-8') as f:
         for sent in f.readlines():
+            #sent = sent.strip().encode('utf-8')
             sent = sent.strip()
             if char is True: words = zh_to_chars(sent)
             else: words = sent.split()
@@ -104,6 +107,9 @@ def count_vocab(data_file, max_vcb_size, max_seq_len=50, char=False):
     new_vocab, new_words_cnt = vocab.keep_vocab_size(max_vcb_size)
     wlog('|Final vocabulary| / |Original vocabulary| = {} / {} = {:4.2f}%'
          .format(new_words_cnt, words_cnt, (new_words_cnt/words_cnt) * 100))
+
+    new_vocab.idx2key = {k: str(v) for k, v in new_vocab.idx2key.items()}
+    new_vocab.key2idx = {str(k): v for k, v in new_vocab.key2idx.items()}
 
     return new_vocab
 
@@ -130,12 +136,15 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
     while True:
 
         src_sent = srcF.readline().strip()
+        if not src_sent:
+            wlog('\nFinish to read bilingual corpus.')
+            break
+
         if char is True: src_sent = ' '.join(zh_to_chars(src_sent))
         trg_refs = [trgF.readline().strip() for trgF in trgFs]
 
         if src_sent == '' and all([trg_ref == '' for trg_ref in trg_refs]):
-            wlog('\nFinish to read bilingual corpus.')
-            break
+            continue
 
         if numpy.mod(idx + 1, point_every) == 0: wlog('.', False)
         if numpy.mod(idx + 1, number_every) == 0: wlog('{}'.format(idx + 1), False)

@@ -40,7 +40,11 @@ class Nbs(object):
         self.srcL, self.B = x_LB.size()
         if x_mask is None:
             x_mask = tc.ones((self.srcL, 1))
-            x_mask = Variable(x_mask, requires_grad=False, volatile=True).cuda()
+            # for pytorch v4.0
+            with tc.no_grad():
+                x_mask = Variable(x_mask, requires_grad=False).cuda()
+            # for pytorch before v3.0
+            #x_mask = Variable(x_mask, requires_grad=False, volatile=True).cuda()
         assert not ( self.batch_sample ^ (self.trgs_len is not None) ), 'sample ^ trgs_len'
 
         self.beam, self.hyps = [], [[] for _ in range(self.B)]
@@ -74,7 +78,7 @@ class Nbs(object):
             debug([ (a[0], a[1]) for a in self.batch_tran_cands[bidx] ])
             best_trans, best_loss = self.batch_tran_cands[bidx][0][0], self.batch_tran_cands[bidx][0][1]
             debug('Src[{}], maskL[{}], hyp (w/o EOS)[{}], maxL[{}], loss[{}]'.format(
-                x_mask[:, bidx].sum().data[0], self.srcL, len(best_trans), self.maxL, best_loss))
+                int(x_mask[:, bidx].sum()), self.srcL, len(best_trans), self.maxL, best_loss))
         debug('Average location of bp [{}/{}={:6.4f}]'.format(self.C[1], self.C[0], self.C[1] / self.C[0]))
         debug('Step[{}] stepout[{}]'.format(*self.C[2:]))
 
