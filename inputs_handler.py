@@ -169,7 +169,7 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
                 trg_refs_tensor = [ids2Tensor(trg_ref_wids, bos_id=BOS, eos_id=EOS)
                                    for trg_ref_wids in trg_refs_wids]
             else:
-                src_tensor = src_vocab.keys2idx(src_words, UNK_WORD)
+                src_tensor = [ src_vocab.keys2idx(src_words, UNK_WORD) ]
                 trg_refs_tensor = [trg_vocab.keys2idx(trg_ref_words, UNK_WORD,
                                                   bos_word=BOS_WORD, eos_word=EOS_WORD)
                                    for trg_ref_words in trg_refs_words]
@@ -250,12 +250,14 @@ def wrap_tst_data(src_data, src_vocab, char=False):
         if char is True: src_sent = ' '.join(zh_to_chars(src_sent))
         src_words = src_sent.split()
         src_len = len(src_words)
+
         if wargs.word_piece is True:
             src_wids = src_vocab.encode(src_sent)
-            srcs.append(ids2Tensor(src_wids))
+            src_tensor = ids2Tensor(src_wids)
         else:
-            srcs.append(src_vocab.keys2idx(src_words, UNK_WORD))
+            src_tensor = [ src_vocab.keys2idx(src_words, UNK_WORD) ]
 
+        srcs.append(src_tensor)
         slens.append(src_len)
 
     srcF.close()

@@ -4,8 +4,60 @@
 from __future__ import division, print_function
 from math import exp, log
 from collections import Counter
-from tools.utils import *
-from tools.bleu import zh_to_chars
+import os
+import sys
+import argparse
+
+def wlog(obj, newline=1):
+
+    if newline == 1: sys.stderr.write('{}\n'.format(obj))
+    else: sys.stderr.write('{}'.format(obj))
+
+def zh_to_chars(s):
+
+    regex = []
+
+    # Match a whole word:
+    regex += [ur'[A-Za-z]+']
+
+    # Match a single CJK character:
+    regex += [ur'[\u4e00-\ufaff]']
+
+    # Match one of anything else, except for spaces:
+    #regex += [ur'^\s']
+
+    # Match the float
+    regex += [ur'[-+]?\d*\.\d+|\d+']
+
+    # Match chinese float
+    ch_punc = hanzi.punctuation
+    regex += [ur'[{}]'.format(ch_punc)]	# point .
+
+    # Match the punctuation
+    regex += [ur'[.]+']	# point .
+
+    punc = string.punctuation
+    punc = punc.replace('.', '')
+    regex += [ur'[{}]'.format(punc)]
+
+    regex = "|".join(regex)
+    r = re.compile(regex)
+
+    return r.findall(s)
+
+def grab_all_trg_files(filename):
+
+    file_names = []
+    file_realpath = os.path.realpath(filename)
+    data_dir = os.path.dirname(file_realpath)  # ./data
+    file_prefix = os.path.basename(file_realpath)  # train.trg
+    for fname in os.listdir(data_dir):
+        if fname.startswith(file_prefix):
+            file_path = os.path.join(data_dir, fname)
+            #wlog('\t{}'.format(file_path))
+            file_names.append(file_path)
+    wlog('NOTE: Target side has {} references.'.format(len(file_names)))
+    return file_names
 
 def ngram_count(words, n):
     if n <= len(words):
@@ -14,10 +66,17 @@ def ngram_count(words, n):
 
 
 def max_count(c1, c2):
-    return Counter({k: max(c1[k], c2[k]) for k in c1})
+    keys = set(list(c1) + list(c2))
+    #keys = c1
+    #for k in keys:
+    #    print(k, max(c1[k], c2[k]))
+    return Counter({k: max(c1[k], c2[k]) for k in keys})
+    #return Counter({k: max(c1[k], c2[k]) for k in c1}) # problem here ...
 
 
 def min_count(c1, c2):
+    #keys = set(list(c1) + list(c2))
+    #return Counter({k: max(c1[k], c2[k]) for k in keys})
     return Counter({k: min(c1[k], c2[k]) for k in c1})
 
 
@@ -31,21 +90,23 @@ def safe_log(n):
         return -9999999999
     return log(n)
 
-
 def precision_n(candidate, references, n):
+    '''
+    print(candidate)
+    print(references)
+    counts = []
+    for ref in references:
+        print('---------------------------------')
+        print(ngram_count(ref, n)['sb'])
+        counts.append(ngram_count(ref, n))
+    ref_max = reduce(max_count, counts)
+    '''
     ref_max = reduce(max_count, [ngram_count(ref, n) for ref in references])
     candidate_ngram_count = ngram_count(candidate, n)
     total = sum(candidate_ngram_count.values())
     correct = sum(reduce(min_count, (ref_max, candidate_ngram_count)).values())
     score = (correct / total) if total else 0
     return score, correct, total
-
-
-def bleu(candidate, references, maxn=4):
-    precs = [precision_n(candidate, references, n) for n in range(1, maxn+1)]
-    bp = exp(1 - closest_min_length(candidate, references) / len(candidate))
-    return bp * exp(sum(safe_log(precs[n]) for n in range(maxn)) / maxn)
-
 
 def tokenize(txt, char=False):
     txt = txt.strip()
@@ -59,9 +120,9 @@ def tokenize_lower(txt, char=False):
     else: txt = txt.split()
     return txt
 
-def multi_bleu(candidates, all_references, tokenize_fn=tokenize, maxn=4, char=False):
-    correct = [0] * maxn
-    total = [0] * maxn
+def multi_bleu(candidates, all_references, tokenize_fn=tokenize, ngram=4, char=False):
+    correct = [0] * ngram
+    total = [0] * ngram
     cand_tot_length = 0
     ref_closest_length = 0
 
@@ -70,28 +131,29 @@ def multi_bleu(candidates, all_references, tokenize_fn=tokenize, maxn=4, char=Fa
         references = map(tokenize_fn, references, [char for _ in references])
         cand_tot_length += len(candidate)
         ref_closest_length += closest_min_length(candidate, references)
-        for n in range(maxn):
+        for n in range(ngram):
             sc, cor, tot = precision_n(candidate, references, n + 1)
             correct[n] += cor
             total[n] += tot
 
-    precisions = [(correct[n] / total[n]) if correct[n] else 0 for n in range(maxn)]
+    precisions = [(correct[n] / total[n]) if correct[n] else 0 for n in range(ngram)]
 
     if cand_tot_length < ref_closest_length:
-        brevity_penalty = exp(1 - ref_closest_length / cand_tot_length)
+        brevity_penalty = exp(1 - ref_closest_length / cand_tot_length) if cand_tot_length != 0 else 0
     else:
         brevity_penalty = 1
+    #print(precisions[1])
     score = 100 * brevity_penalty * exp(
-                    sum(safe_log(precisions[n]) for n in range(maxn)) / maxn)
+        sum(safe_log(precisions[n]) for n in range(ngram)) / ngram)
     prec_pc = [100 * p for p in precisions]
+
     return score, prec_pc, brevity_penalty, cand_tot_length, ref_closest_length
 
+def print_multi_bleu(cand_file, ref_fpaths, cased=False, ngram=4, char=False):
 
-def print_multi_bleu(cand_file, ref_fpaths, cased=False, maxn=4, char=False):
-
+    wlog('\n' + '#' * 30 + ' multi-bleu ' + '#' * 30)
     tokenize_fn = tokenize if cased is True else tokenize_lower
-    if cased is False: wlog('Calculating case-insensitive {}-gram BLEU ...'.format(maxn))
-    else: wlog('Calculating case-sensitive {}-gram BLEU ...'.format(maxn))
+    wlog('Calculating case-{}sensitive tokenized {}-gram BLEU ...'.format('' if cased else 'in', ngram))
     wlog('\tcandidate file: {}'.format(cand_file))
     wlog('\treferences file:')
     for ref in ref_fpaths: wlog('\t\t{}'.format(ref))
@@ -100,32 +162,29 @@ def print_multi_bleu(cand_file, ref_fpaths, cased=False, maxn=4, char=False):
     refs = [open(ref_fpath, 'r') for ref_fpath in ref_fpaths]
 
     score, precisions, brevity_penalty, cand_tot_length, ref_closest_length = \
-        multi_bleu(cand, refs, tokenize_fn, maxn, char=char)
+        multi_bleu(cand, refs, tokenize_fn, ngram, char=char)
 
     cand.close()
     for fd in refs: fd.close()
 
-    wlog('BLEU = {:.2f}, {:.1f}/{:.1f}/{:.1f}/{:.1f} '
-         '(BP={:.3f}, ratio={:.3f}, hyp_len={:d}, ref_len={:d})'.format(
-            score, precisions[0], precisions[1], precisions[2], precisions[3],
-            brevity_penalty, cand_tot_length / ref_closest_length, cand_tot_length,
-            ref_closest_length))
+    precs_list = []
+    for prec in precisions: precs_list.append('{:.1f}'.format(prec))
+    wlog('BLEU = {:.2f}, {} (BP={:.3f}, ratio={:.3f}, hyp_len={:d}, ref_len={:d})\n'.format(
+            score, '/'.join(precs_list), brevity_penalty,
+        cand_tot_length / ref_closest_length, cand_tot_length, ref_closest_length))
 
     score = float('%.2f' % (score))
     return score
 
 if __name__ == "__main__":
-    import os
-    import sys
-    import argparse
 
     parser = argparse.ArgumentParser(description='BLEU score on multiple references.')
     parser.add_argument('-lc', help='Lowercase', action='store_true')
-    parser.add_argument('-c', help='translation file')
-    parser.add_argument('reference', help='Reads the reference_[0, 1, ...]')
+    parser.add_argument('-c', '--candidate', dest='c', required=True, help='translation file')
+    parser.add_argument('-r', '--references', dest='r', required=True, help='reference[0, 1, ...]')
     args = parser.parse_args()
-    tokenize_fn = tokenize_lower if args.lc else tokenize
 
+    '''
     ref_fpaths = []
     ref_cnt = 2
     if ref_cnt == 1:
@@ -136,13 +195,15 @@ if __name__ == "__main__":
             ref_fpath = '{}_{}'.format(args.reference, idx)
             if not os.path.exists(ref_fpath): continue
             ref_fpaths.append(ref_fpath)
-
-    #print(args.reference)
+    '''
     # TODO: Multiple references
-    #reference_files = [args.reference]
-    print(ref_fpaths)
+    #ref_fpaths = grab_all_trg_files('/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/mt06_u8.trg.tok.sb')
+    ref_fpaths = grab_all_trg_files(args.r)
 
     #open_files = map(open, ref_fpaths)
     cand_file = args.c
     cased = ( not args.lc )
     print_multi_bleu(cand_file, ref_fpaths, cased, 4)
+
+
+

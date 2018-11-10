@@ -1,3 +1,4 @@
+from __future__ import division
 import torch.optim as opt
 import torch.nn as nn
 from torch.nn.utils import clip_grad_norm_
@@ -8,7 +9,7 @@ import wargs
 class Optim(object):
 
     def __init__(self, opt_mode, learning_rate, max_grad_norm, learning_rate_decay=1,
-                 start_decay_from=None, last_valid_bleu=None, model=1):
+                 start_decay_from=None, last_valid_bleu=None):
 
         self.opt_mode = opt_mode
         self.learning_rate = learning_rate
@@ -17,36 +18,19 @@ class Optim(object):
         self.start_decay_from = start_decay_from
         self.last_valid_bleu = last_valid_bleu
         self.start_decay = False
-        self.model_type = model
 
-        if model == 8 or self.opt_mode == 'adam':
-            assert wargs.d_model is not None and self.opt_mode == 'adam'
-            self.d_model = wargs.d_model
-            self.n_current_steps = 0
-            self.warmup_steps = wargs.warmup_steps
-        else:
-            self.d_model = 0
-            self.n_current_steps = 0
-            self.warmup_steps = 0
+        self.d_model = wargs.d_model
+        self.n_current_steps = 0
+        self.warmup_steps = wargs.warmup_steps
 
     def __repr__(self):
 
-        return '\nMode: {}\nLearning rate: {}\nGrad norm: {}\nlearning rate decay: {}\nstart '\
-                    'decay from: {}\nlast valid bleu: {}'.format(
-                    self.opt_mode, self.learning_rate, self.max_grad_norm, self.lr_decay,
-                        self.start_decay_from, self.last_valid_bleu)
-        '''
         return '\nMode: {}\nLearning rate: {}\nGrad norm: {}\nLearning rate decay: {}\nStart '\
-                'decay from: {}\nPrevious valid BLEU: {}\n\nTransformer-d_model: {}\n'\
-                'Transformer-n_current_steps: {}\nTransformer-n_warmup_steps: {}'.format(
+                'decay from: {}\nPrevious valid BLEU: {}\n\nd_model: {}\n'\
+                'n_current_steps: {}\nn_warmup_steps: {}'.format(
                     self.opt_mode, self.learning_rate, self.max_grad_norm, self.lr_decay,
                     self.start_decay_from, self.last_valid_bleu, self.d_model,
                     self.n_current_steps, self.warmup_steps)
-        '''
-
-    def zero_grad(self):
-
-        self.optimizer.zero_grad()
 
     def init_optimizer(self, params):
 
@@ -70,27 +54,38 @@ class Optim(object):
         elif self.opt_mode == 'adam':
             wlog('Adam ... lr: {}, beta_1: {}, beta_2: {}'.format(self.learning_rate, wargs.beta_1, wargs.beta_2))
             self.optimizer = opt.Adam(self.params, lr=self.learning_rate,
-                                      betas=[wargs.beta_1, wargs.beta_2], eps=10e-9)
+                                      betas=[wargs.beta_1, wargs.beta_2], eps=1e-6)
         else:
             wlog('Do not support this opt_mode {}'.format(self.opt_mode))
 
     def step(self):
 
         # clip by the gradients norm
-        if self.max_grad_norm is not None:
+        if self.max_grad_norm:
             #wlog('L2 norm Grad clip ... {}'.format(self.max_grad_norm))
             clip_grad_norm_(self.params, max_norm=self.max_grad_norm)
 
         self.optimizer.step()
 
         # attention is all you need
-        if self.opt_mode == 'adam':
+        if self.opt_mode == 'adam' and wargs.encoder_type in ('att','tgru') and \
+           wargs.decoder_type in ('att', 'tgru'):
             self.n_current_steps += 1
-            self.learning_rate = math.pow(self.d_model, -0.5) * min(
-                math.pow(self.n_current_steps, -0.5),
-                self.n_current_steps * math.pow(self.warmup_steps, -1.5)
-            )
-            #self.learning_rate = wargs.learning_rate * lr_vary
+            if wargs.lr_update_way == 't2t':
+                factor = math.pow(self.d_model, -0.5) * min(
+                    math.pow(self.n_current_steps, -0.5),
+                    self.n_current_steps * math.pow(self.warmup_steps, -1.5)
+                )
+                #self.learning_rate = factor
+                #wlog('lrate = {}'.format(factor))
+            elif wargs.lr_update_way == 'chen':
+                n, s, e = wargs.n_co_models, wargs.s_step_decay, wargs.e_step_decay
+                factor = min( 1 + ( self.n_current_steps * (n - 1) ) / ( n * self.warmup_steps ),
+                             n,
+                             n * math.pow(2 * n, ( s - n * self.n_current_steps ) / ( e - s ) ) )
+
+            self.learning_rate = wargs.learning_rate * factor
+            #wlog('lr0 * factor = {} * {} = {}'.format(wargs.learning_rate, factor, self.learning_rate))
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = self.learning_rate
 

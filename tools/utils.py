@@ -32,6 +32,7 @@ DEBUG = False
 #BOS = 2
 #EOS = 3
 
+MAX_SEQ_SIZE = 5000
 PAD_WORD = '<pad>'
 UNK_WORD = 'unk'
 BOS_WORD = '<b>'
@@ -48,17 +49,6 @@ PAD = RESERVED_TOKENS.index(PAD_WORD)  # Normally 0
 UNK = RESERVED_TOKENS.index(UNK_WORD) if UNK_WORD in RESERVED_TOKENS else None
 BOS = RESERVED_TOKENS.index(BOS_WORD)  # Normally 1 or 2
 EOS = RESERVED_TOKENS.index(EOS_WORD)  # Normally 2 or 3
-
-epsilon = 1e-20
-
-class XavierLinear(nn.Module):
-    ''' Simple Linear layer with xavier init '''
-    def __init__(self, d_in, d_out, bias=True):
-        super(XavierLinear, self).__init__()
-        self.linear = nn.Linear(d_in, d_out, bias=bias)
-        init.xavier_normal(self.linear.weight)
-    def forward(self, x):
-        return self.linear(x)
 
 def _load_model(model_path):
     wlog('Loading pre-trained model ... from {} '.format(model_path), 0)
@@ -179,22 +169,26 @@ def BLToStrList(x, xs_L, return_list=False):
         xs.append(x_one)
     return xs if return_list is True else '\n'.join(xs)
 
-def init_params(p, name='what', uniform=False):
+def init_params(p, name='what', init_D='U'):
 
-    if uniform is True:
+    p_dim = p.dim()
+    if init_D == 'U':           # uniform distribution for all parameters
         p.data.uniform_(-0.1, 0.1)
         wlog('{:7} -> grad {}\t{}'.format('Uniform', p.requires_grad, name))
-    else:
-        if len(p.size()) == 2:
-            if p.size(0) == 1 or p.size(1) == 1:
-                p.data.zero_()
-                wlog('{:7}-> grad {}\t{}'.format('Zero', p.requires_grad, name))
-            else:
-                p.data.normal_(0, 0.01)
-                wlog('{:7}-> grad {}\t{}'.format('Normal', p.requires_grad, name))
-        elif len(p.size()) == 1:
+    elif init_D == 'X':         # xavier distribution for 2-d parameters
+        if p_dim == 1 or (p_dim == 2 and (p.size(0) == 1 or p.size(1) == 1)):
             p.data.zero_()
-            wlog('{:7}-> grad {}\t{}'.format('Zero', p.requires_grad, name))
+            wlog('{:7} -> grad {}\t{}'.format('Zero', p.requires_grad, name))
+        else:
+            init.xavier_uniform_(p)
+            wlog('{:7} -> grad {}\t{}'.format('Xavier', p.requires_grad, name))
+    elif init_D == 'N':         # normal distribution for 2-d parameters
+        if p_dim == 1 or (p_dim == 2 and (p.size(0) == 1 or p.size(1) == 1)):
+            p.data.zero_()
+            wlog('{:7} -> grad {}\t{}'.format('Zero', p.requires_grad, name))
+        else:
+            p.data.normal_(0, 0.01)
+            wlog('{:7} -> grad {}\t{}'.format('Normal', p.requires_grad, name))
 
 def init_dir(dir_name, delete=False):
 
@@ -299,7 +293,7 @@ def back_tracking(beam, bidx, best_sample_endswith_eos, attent_probs=None):
     # att (---, a0, a1, a2, a3, a4 ) 
     return seq[::-1], best_loss, attent_matrix # reverse
 
-def filter_reidx(best_trans, tV_i2w=None, ifmv=False, ptv=None):
+def filter_reidx(best_trans, tV_i2w=None, attent_matrix=None, ifmv=False, ptv=None):
 
     if ifmv and ptv is not None:
         # OrderedDict([(0, 0), (1, 1), (3, 5), (8, 2), (10, 3), (100, 4)])
@@ -309,9 +303,16 @@ def filter_reidx(best_trans, tV_i2w=None, ifmv=False, ptv=None):
     else:
         true_idx = best_trans
 
-    true_idx = filter(lambda y: y != BOS and y != EOS, true_idx)
+    remove_ids, filter_ids = [], []
+    for idx in range(1, len(true_idx)):
+        widx = true_idx[idx]
+        if widx == BOS or widx == EOS:
+            remove_ids.append(idx - 1)
+        else:
+            filter_ids.append(widx)
+    #true_idx = filter(lambda y: y != BOS and y != EOS, true_idx)
 
-    return idx2sent(true_idx, tV_i2w), true_idx
+    return idx2sent(filter_ids, tV_i2w), filter_ids, numpy.delete(attent_matrix, remove_ids, 0)
 
 def sent_filter(sent):
 
@@ -322,7 +323,7 @@ def sent_filter(sent):
 def idx2sent(vec, vcb_i2w):
     # vec: [int, int, ...]
     if isinstance(vcb_i2w, dict):
-        r = [vcb_i2w[idx.item()] for idx in vec]
+        r = [vcb_i2w[idx] for idx in vec]
         sent = ' '.join(r)
     else:
         sent = vcb_i2w.decode(vec)
@@ -363,8 +364,15 @@ def print_attention_text(attention_matrix, source_tokens, target_tokens, thresho
     :param target_tokens: A list of target tokens, List[str]
     :param threshold: The threshold for including an alignment link in the result, float
     """
+    if not attention_matrix.shape[0] == len(target_tokens):
+        print attention_matrix
+        print '-------------------------'
+        print target_tokens
 
-    assert attention_matrix.shape[0] == len(target_tokens)
+    if len(target_tokens) == 0: return ''
+
+    assert attention_matrix.shape[0] == len(target_tokens), \
+            'attention shape: ' + str(attention_matrix.shape) + ', target: ' + str(len(target_tokens))
 
     if isP is True:
         wlog('  ', 0)
@@ -487,73 +495,23 @@ def ids2Tensor(list_wids, bos_id=None, eos_id=None):
 def lp_cp(bp, beam_idx, bidx, beam):
     ys_pi = []
     assert len(beam[0][0][0]) == 6, 'require attention prob for alpha'
+    '''
     for i in reversed(xrange(1, beam_idx)):
         _, p_im1, _, _, w, bp = beam[i][bidx][bp]
         ys_pi.append(p_im1)
     if len(ys_pi) == 0: return 1.0, 0.0
     ys_pi = tc.stack(ys_pi, dim=0).sum(0)   # (part_trg_len, src_len) -> (src_len, )
-    m = ( ys_pi > 1.0 ).float()
-    ys_pi = ys_pi * ( 1. - m ) + m
-    lp = ( ( 5 + beam_idx - 1 ) ** wargs.alpha_len_norm ) / ( (5 + 1) ** wargs.alpha_len_norm )
-    cp = wargs.beta_cover_penalty * ( ys_pi.log().sum().data[0] )
+    #m = ( ys_pi > 1.0 ).float()
+    #ys_pi = ys_pi * ( 1. - m ) + m
+    penalty = tc.min(ys_pi, ys_pi.clone().fill_(1.0)).log().sum().item()
+    cp = wargs.beta_cover_penalty * penalty
+    '''
+    #lp = ( ( 5 + beam_idx - 1 ) ** wargs.alpha_len_norm ) / ( (5 + 1) ** wargs.alpha_len_norm )
+    lp = ( ( 5 + beam_idx ) ** wargs.alpha_len_norm ) / ( (5 + 1) ** wargs.alpha_len_norm )
+    cp = 0.
 
     return lp, cp
 
-class MaskSoftmax(nn.Module):
-
-    def __init__(self):
-
-        super(MaskSoftmax, self).__init__()
-
-    def forward(self, x, mask=None, dim=-1):
-
-        # input torch tensor or variable, take max for numerical stability
-        x_max = tc.max(x, dim=dim, keepdim=True)[0]
-        x_minus = x - x_max
-        x_exp = tc.exp(x_minus)
-        if mask is not None: x_exp = x_exp * mask
-        x = x_exp / ( tc.sum( x_exp, dim=dim, keepdim=True ) + epsilon )
-
-        return x
-
-class MyLogSoftmax(nn.Module):
-
-    def __init__(self, self_norm_alpha=None):
-
-        super(MyLogSoftmax, self).__init__()
-        self.sna = self_norm_alpha
-
-    def forward(self, x):
-
-        # input torch tensor or variable
-        x_max = tc.max(x, dim=-1, keepdim=True)[0]  # take max for numerical stability
-        log_norm = tc.log( tc.sum( tc.exp( x - x_max ), dim=-1, keepdim=True ) + epsilon ) + x_max
-        x = x - log_norm    # get log softmax
-
-        # Sum_( log(P(xi)) - alpha * square( log(Z(xi)) ) )
-        if self.sna is not None: x = x - self.sna * tc.pow(log_norm, 2)
-
-        return log_norm, x
-
-'''Layer normalize the tensor x, averaging over the last dimension.'''
-class Layer_Norm(nn.Module):
-
-    def __init__(self, d_hid, eps=1e-3):
-        super(Layer_Norm, self).__init__()
-        self.eps = eps
-        self.g = nn.Parameter(tc.ones(d_hid), requires_grad=True)
-        self.b = nn.Parameter(tc.zeros(d_hid), requires_grad=True)
-
-    def forward(self, z):
-
-        if z.size(-1) == 1: return z
-        mu = tc.mean(z, dim=-1, keepdim=True)
-        #sigma = tc.std(z, dim=-1, keepdim=True) # std has problems
-        variance = tc.mean(tc.pow(z - mu, 2), dim=-1, keepdim=True)
-        sigma = tc.sqrt(variance)
-        z_norm = tc.div((z - mu), (sigma + self.eps))
-        z_norm = z_norm * self.g.expand_as(z_norm) + self.b.expand_as(z_norm)
-        return z_norm
 '''
     a: add previous input tensor
     n: apply normalization
@@ -577,7 +535,7 @@ def layer_prepostprocess(pre_layer_out, pre_layer_in=None, handle_type=None, nor
       if c == 'a': pre_layer_out += pre_layer_in
       elif c == 'n':
         if normlizer == 'noam': # One version of layer normalization
-            pre_layer_out = F.normalize(pre_layer_out, p=2, dim=-1, eps=epsilon)
+            pre_layer_out = F.normalize(pre_layer_out, p=2, dim=-1, eps=1e-20)
         else: pre_layer_out = normlizer(pre_layer_out)
       elif c == 'd': pre_layer_out = F.dropout(pre_layer_out, p=dropout_rate, training=training)
       else: wlog('Unknown handle type {}'.format(c))
@@ -594,6 +552,9 @@ def schedule_sample(ss_eps, y_tm1_gold, y_tm1_hypo):
     if y_tm1_hypo is None: return y_tm1_gold
 
     return y_tm1_hypo if random.random() > ss_eps else y_tm1_gold
+
+def schedule_bow_lambda(epo_idx, max_lambda=3.0, k=0.1, alpha=0.1):
+    return min(max_lambda, k + alpha * epo_idx)
 
 def schedule_sample_eps_decay(i, ss_eps_cur):
 
@@ -707,5 +668,18 @@ def proc_luong(input_fname, output_fname):
     fout.write(contend)
     fout.close()
 
+def grab_all_trg_files(filename):
+
+    file_names = []
+    file_realpath = os.path.realpath(filename)
+    data_dir = os.path.dirname(file_realpath)  # ./data
+    file_prefix = os.path.basename(file_realpath)  # train.trg
+    for fname in os.listdir(data_dir):
+        if fname.startswith(file_prefix):
+            file_path = os.path.join(data_dir, fname)
+            #wlog('\t{}'.format(file_path))
+            file_names.append(file_path)
+    wlog('NOTE: Target side has {} references.'.format(len(file_names)))
+    return file_names
 
 

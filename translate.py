@@ -11,12 +11,8 @@ from shutil import copyfile
 from torch.autograd import Variable
 
 import wargs
-if wargs.model == 0 or wargs.model == 1: from searchs.nbs import *
-elif wargs.model == 2: from searchs.nbs_ia import *
-elif wargs.model == 3: from searchs.nbs_layers import *
-elif wargs.model == 5: from searchs.nbs_sru import *
-elif wargs.model == 6: from searchs.nbs_cyk import *
-elif wargs.model == 8: from searchs.nbs_t2t import *
+if wargs.decoder_type in ('rnn', 'tgru'): from searchs.nbs import *
+elif wargs.decoder_type == 'att': from searchs.nbs_t2t import *
 
 if wargs.search_mode == 2: from searchs.cp import *
 
@@ -59,7 +55,7 @@ class Translator(object):
         #elif self.search_mode == 2: (trans, ids), loss = self.wcp.cube_prune_trans(s)
         elif self.search_mode == 2: batch_tran_cands = self.wcp.cube_prune_trans(s)
         trans, loss, attent_matrix = batch_tran_cands[0][0] # first sent, best cand
-        trans, ids = filter_reidx(trans, self.tvcb_i2w)
+        trans, ids, attent_matrix = filter_reidx(trans, self.tvcb_i2w, attent_matrix)
 
         #spend = time.time() - trans_start
         #wlog('Word-Level spend: {} / {} = {}'.format(
@@ -68,52 +64,45 @@ class Translator(object):
         # attent_matrix: (trgL, srcL) numpy
         return trans, ids, attent_matrix
 
-    def trans_samples(self, srcs, trgs, spos=None):
+    def trans_samples(self, xs_nL, ys_nL):
 
-        if isinstance(srcs, tc.autograd.Variable): t_srcs = srcs.data
-        if isinstance(trgs, tc.autograd.Variable): t_trgs = trgs.data
+        # xs_nL: (sample_size, max_sLen)
+        for idx in range(len(xs_nL)):
 
-        # srcs: (sample_size, max_sLen)
-        for idx in range(len(t_srcs)):
+            x_filter = sent_filter(xs_nL[idx].tolist())
+            wlog('\n[{:3}] {}'.format('Ids', x_filter))
+            x_sent = idx2sent(x_filter, self.svcb_i2w)
+            if len(x_sent) == 2: x_sent, ori_src_toks = x_sent
+            wlog('[{:3}] {}'.format('Src', x_sent))
+            y_filter = sent_filter(ys_nL[idx].tolist())
+            y_sent = idx2sent(y_filter, self.tvcb_i2w)
+            if len(y_sent) == 2: y_sent, ori_ref_toks = y_sent
+            wlog('[{:3}] {}'.format('Ref', y_sent))
 
-            s_filter = sent_filter(list(t_srcs[idx]))
-            src_sent = idx2sent(s_filter, self.svcb_i2w)
-            if len(src_sent) == 2: src_sent, ori_src_toks = src_sent
-            wlog('\n[{:3}] {}'.format('Src', src_sent))
-            t_filter = sent_filter(list(t_trgs[idx]))
-            ref_sent = idx2sent(t_filter, self.tvcb_i2w)
-            if len(ref_sent) == 2: ref_sent, ori_ref_toks = ref_sent
-            wlog('[{:3}] {}'.format('Ref', ref_sent))
+            one_sent = xs_nL[idx]
+            trans, ids, attent_matrix = self.trans_onesent(one_sent[one_sent.nonzero()])
 
-            if wargs.model == 8:
-                src_seq, src_pos = srcs[idx], spos[idx]
-                non_zero_idx = src_seq.data.cpu().nonzero().squeeze().numpy()
-                src_seq, src_pos = src_seq[non_zero_idx], src_pos[non_zero_idx]
-                s_filter = (src_seq[None, :], src_pos[None, :])
-
-            trans, ids, attent_matrix = self.trans_onesent(s_filter)
-
-            if len(trans) == 2:
-                trans, trg_toks = trans
-                trans_subwords = '###'.join(trg_toks)
-                wlog('[{:3}] {}'.format('Sub', trans_subwords))
-            else: src_toks, trg_toks = src_sent.split(' '), trans.split(' ')
+            #if len(trans) == 2:
+            #    trans, trg_toks = trans
+            #    trans_subwords = '###'.join(trg_toks)
+            #    wlog('[{:3}] {}'.format('Sub', trans_subwords))
+            #else: src_toks, trg_toks = x_sent.split(' '), trans.split(' ')
+            src_toks = [] if x_sent == '' else x_sent.split(' ')
+            trg_toks = [] if trans == '' else trans.split(' ')
 
             if wargs.with_bpe is True:
                 wlog('[{:3}] {}'.format('Bpe', trans))
-                #trans = trans.replace('@@ ', '')
                 trans = re.sub('(@@ )|(@@ ?$)', '', trans)
 
             if self.print_att is True:
                 if isinstance(self.svcb_i2w, dict):
-                    src_toks = [self.svcb_i2w[wid] for wid in s_filter]
+                    src_toks = [self.svcb_i2w[wid] for wid in x_filter]
                 else:
-                    src = self.svcb_i2w.decode(s_filter)
-                    if len(src) == 2: src_sent, src_toks = src
+                    src = self.svcb_i2w.decode(x_filter)
+                    if len(src) == 2: x_sent, src_toks = src
                 print_attention_text(attent_matrix, src_toks, trg_toks, isP=True)
                 plot_attention(attent_matrix, src_toks, trg_toks, 'att.svg')
 
-            #trans = re.sub('( ##AT##)|(##AT## )', '', trans)
             wlog('[{:3}] {}'.format('Out', trans))
 
     def force_decoding(self, batch_tst_data):
@@ -146,10 +135,10 @@ class Translator(object):
         assert len(attent_matrixs) == len(trg_toks)
         return attent_matrixs, trg_toks
 
-    def single_trans_file(self, src_input_data, src_labels_fname=None, batch_tst_data=None):
+    def single_trans_file(self, xs_inputs, src_labels_fname=None, batch_tst_data=None):
 
-        batch_count = len(src_input_data)   # number of batchs, here is sentences number
-        point_every, number_every = int(math.ceil(batch_count/100)), int(math.ceil(batch_count/10))
+        n_batches = len(xs_inputs)   # number of batchs, here is sentences number
+        point_every, number_every = int(math.ceil(n_batches/100)), int(math.ceil(n_batches/10))
         total_trans = []
         total_aligns = [] if self.print_att is True else None
         sent_no, words_cnt = 0, 0
@@ -162,21 +151,17 @@ class Translator(object):
             wlog('Finish force decoding ...')
 
         trans_start = time.time()
-        for bid in range(batch_count):
-            n_bid_src = src_input_data[bid]
-            # n_bid_src: (idxs, tsrcs, tspos, lengths, src_mask)
-            # idxs, tsrcs, tspos, ttrgs_for_files, ttpos_for_files, lengths, src_mask, trg_mask_for_files
-            batch_srcs_LB = n_bid_src[1]
-            #batch_srcs_LB = src_input_data[bid][1] # (dxs, tsrcs, lengths, src_mask)
-            #batch_srcs_LB = batch_srcs_LB.squeeze()
-            for no in range(batch_srcs_LB.size(1)): # batch size, 1 for valid
-                s_filter = sent_filter(list(batch_srcs_LB[:,no].data))
-
+        for bidx in range(n_batches):
+            # (idxs, tsrcs, lengths, src_mask)
+            xs_nL = xs_inputs[bidx][1]
+            # idxs, tsrcs, ttrgs_for_files, lengths, src_mask, trg_mask_for_files
+            for no in range(xs_nL.size(0)): # batch size, 1 for valid
+                x_filter = sent_filter(xs_nL[no].tolist())
                 if wargs.word_piece is True: trans_subwords = []
                 if src_labels_fname is not None:
                     assert self.print_att is None, 'split sentence does not suport print attention'
                     # split by segment labels file
-                    segs = self.segment_src(s_filter, labels[bid].strip().split(' '))
+                    segs = self.segment_src(x_filter, labels[bidx].strip().split(' '))
                     trans = []
                     for seg in segs:
                         seg_trans, ids, _ = self.trans_onesent(seg)
@@ -191,18 +176,18 @@ class Translator(object):
                     if wargs.word_piece is True: trans_subwords = '###'.join(trans_subwords)
                 else:
                     if fd_attent_matrixs is None:   # need translate
-                        trans, ids, attent_matrix = self.trans_onesent(n_bid_src)
+                        trans, ids, attent_matrix = self.trans_onesent(xs_nL[no].unsqueeze(-1))
                         if len(trans) == 2:
                             trans, trg_toks = trans
                             trans_subwords = '###'.join(trg_toks)
-                        else: trg_toks = trans.split(' ')
+                        else: trg_toks = [] if trans == '' else trans.split(' ')
                         if trans == '': wlog('What ? null translation ... !')
                         words_cnt += len(ids)
                     else:
                         # attention: feed previous word -> get the alignment of next word !!!
-                        attent_matrix = fd_attent_matrixs[bid] # do not remove <b>
+                        attent_matrix = fd_attent_matrixs[bidx] # do not remove <b>
                         #print attent_matrix
-                        trg_toks = sent_filter(trgs[bid]) # remove <b> and <e>
+                        trg_toks = sent_filter(trgs[bidx]) # remove <b> and <e>
                         trg_toks = [self.tvcb_i2w[wid] for wid in trg_toks]
                         trans = ' '.join(trg_toks)
                         words_cnt += len(trg_toks)
@@ -213,11 +198,11 @@ class Translator(object):
                         if isinstance(attent_matrix, list) and len(attent_matrix) == 0: alnStr = ''
                         else:
                             if isinstance(self.svcb_i2w, dict):
-                                src_toks = [self.svcb_i2w[wid.item()] for wid in s_filter]
+                                src_toks = [self.svcb_i2w[wid] for wid in x_filter]
                             else:
                                 #print type(self.svcb_i2w)
                                 # <class 'tools.text_encoder.SubwordTextEncoder'>
-                                src_toks = self.svcb_i2w.decode(s_filter)
+                                src_toks = self.svcb_i2w.decode(x_filter)
                                 if len(src_toks) == 2: _, src_toks = src_toks
                                 #print src_toks
                             # attent_matrix: (trgL, srcL) numpy
@@ -230,7 +215,7 @@ class Translator(object):
                 if numpy.mod(sent_no + 1, number_every) == 0: wlog('{}'.format(sent_no + 1), False)
 
                 sent_no += 1
-        wlog('')
+        wlog('{}'.format(sent_no))
 
         if self.search_mode == 1:
             C = self.nbs.C
@@ -295,16 +280,9 @@ class Translator(object):
         fout.writelines(trans)
         fout.close()
 
-        ref_fpaths = []
         # *.ref
         ref_fpath = '{}{}.{}'.format(wargs.val_tst_dir, data_prefix, wargs.val_ref_suffix)
-        if os.path.exists(ref_fpath): ref_fpaths.append(ref_fpath)
-        for idx in range(wargs.ref_cnt):
-            # *.ref0, *.ref1, ...
-            ref_fpath = '{}{}.{}{}'.format(wargs.val_tst_dir, data_prefix, wargs.val_ref_suffix, idx)
-            if not os.path.exists(ref_fpath): continue
-            ref_fpaths.append(ref_fpath)
-
+        ref_fpaths = grab_all_trg_files(ref_fpath)
         assert os.path.exists(out_fname), 'translation do not exist ...'
         if wargs.with_bpe is True:
             bpe_fname = '{}.bpe'.format(out_fname)
@@ -316,17 +294,6 @@ class Translator(object):
             wlog("sed -r 's/(@@ )|(@@ ?$)//g' {} > {} ... ".format(bpe_fname, out_fname), 0)
             #os.system("sed -r 's/(@@ )|(@@ ?$)//g' {} > {}".format(bpe_fname, out_fname))
             proc_bpe(bpe_fname, out_fname)
-            wlog('done')
-
-        if wargs.luong_proc is True:
-            # Luong: remove "rich-text format" --> rich ##AT##-##AT## text format
-            luong_fname = '{}.obpe.rich'.format(out_fname)
-            wlog('copy {} to {} ... '.format(out_fname, luong_fname), 0)
-            copyfile(out_fname, luong_fname)
-            assert os.path.exists(luong_fname), 'luong file do not exist ...'
-            wlog('done')
-            wlog("sed -r 's/( ?##AT##-##AT## ?)//g' {} > {} ... ".format(luong_fname, out_fname), 0)
-            proc_luong(luong_fname, out_fname)
             wlog('done')
 
         if wargs.with_postproc is True:
@@ -342,23 +309,13 @@ class Translator(object):
             mteval_bleu_opost = bleu_file(opost_name, ref_fpaths, cased=wargs.cased)
             os.rename(opost_name, "{}_{}.txt".format(opost_name, mteval_bleu_opost))
 
-        mteval_bleu = bleu_file(out_fname, ref_fpaths, cased=wargs.cased)
-
-        multi_bleu = print_multi_bleu(out_fname, ref_fpaths, cased=wargs.cased)
+        mteval_bleu = bleu_file(out_fname, ref_fpaths, cased=wargs.cased, char=wargs.char_bleu)
+        multi_bleu = print_multi_bleu(out_fname, ref_fpaths, cased=wargs.cased, char=wargs.char_bleu)
         #mteval_bleu = bleu_file(out_fname + '.seg.plain', ref_fpaths)
-        if wargs.char is True:
-            c_mteval_bleu = bleu_file(out_fname, ref_fpaths, cased=wargs.cased, char=True)
-            c_multi_bleu = print_multi_bleu(out_fname, ref_fpaths, cased=wargs.cased, char=True)
-            os.rename(out_fname, "{}_{}_{}_c_{}_{}.txt".format(
-                out_fname, mteval_bleu, multi_bleu, c_mteval_bleu, c_multi_bleu))
-        else: os.rename(out_fname, "{}_{}_{}.txt".format(out_fname, mteval_bleu, multi_bleu))
+        os.rename(out_fname, '{}{}_{}_{}.txt'.format(
+            out_fname, '_char' if wargs.char_bleu is True else '', mteval_bleu, multi_bleu))
 
-        if wargs.use_multi_bleu is False:
-            if wargs.char is False: final_bleu = mteval_bleu
-            else: final_bleu = c_mteval_bleu
-        else:
-            if wargs.char is False: final_bleu = multi_bleu
-            else: final_bleu = c_multi_bleu
+        final_bleu = multi_bleu if wargs.use_multi_bleu is True else mteval_bleu
 
         return final_bleu
         #return mteval_bleu_opost if wargs.with_postproc is True else mteval_bleu
@@ -404,7 +361,7 @@ class Translator(object):
             copyfile(model_file, wargs.best_model)
             wlog('Better, cp {} {}'.format(model_file, wargs.best_model))
             bleu_content = 'epoch [{}], batch[{}], BLEU score*: {}'.format(eid, bid, bleu_score)
-            if wargs.final_test is False and tests_data is not None: self.trans_tests(tests_data, eid, bid)
+            if tests_data is not None: self.trans_tests(tests_data, eid, bid)
         else:
             wlog('Worse')
             bleu_content = 'epoch [{}], batch[{}], BLEU score : {}'.format(eid, bid, bleu_score)

@@ -8,10 +8,10 @@ import subprocess
 
 import numpy as np
 import torch as tc
-from torch.autograd import Variable
 
 import wargs
 from tools.utils import *
+from searchs.nbs import Nbs
 from translate import Translator
 
 class Trainer(object):
@@ -19,17 +19,147 @@ class Trainer(object):
     def __init__(self, model, train_data, vocab_data, optim, valid_data=None, tests_data=None):
 
         self.model = model
-        if isinstance(model, tc.nn.DataParallel): self.classifier = model.module.decoder.classifier
-        else: self.classifier = model.decoder.classifier
+        if isinstance(model, tc.nn.DataParallel): self.classifier = model.module.classifier
+        else: self.classifier = model.classifier
 
-        self.train_data = train_data
+        self.optim = optim
         self.sv = vocab_data['src'] if wargs.word_piece else vocab_data['src'].idx2key
         self.tv = vocab_data['trg'] if wargs.word_piece else vocab_data['trg'].idx2key
-        self.optim = optim
+        self.train_data = train_data
         self.valid_data = valid_data
         self.tests_data = tests_data
 
         self.model.train()
+        self.max_epochs = wargs.max_epochs
+        self.start_epoch = wargs.start_epoch
+
+        wlog('self-normalization alpha -> {}'.format(wargs.self_norm_alpha))
+
+        self.n_look = wargs.n_look
+        assert self.n_look <= wargs.batch_size, 'eyeball count > batch size'
+        # [low, high)
+        self.n_batches = len(train_data)
+        self.look_xs, self.look_ys = None, None
+        if wargs.fix_looking:
+            look_bidx = tc.randperm(self.n_batches)[-1]
+            wlog('randomly look {} samples in the {}th/{} batch'.format(
+                self.n_look, look_bidx, self.n_batches))
+            _, xs, y_for_files, _, _, _, _, _ = train_data[look_bidx]
+            ys, _batch_size = y_for_files[0], xs.size(0)
+            rand_rows = np.random.choice(_batch_size, self.n_look, replace=False)
+            self.look_xs = tc.LongTensor(self.n_look, xs.size(1))
+            self.look_xs.fill_(PAD)
+            self.look_ys = tc.LongTensor(self.n_look, ys.size(1))
+            self.look_ys.fill_(PAD)
+            for _idx in xrange(self.n_look):
+                self.look_xs[_idx, :] = xs[rand_rows[_idx], :]
+                self.look_ys[_idx, :] = ys[rand_rows[_idx], :]
+        self.look_tor = Translator(self.model, self.sv, self.tv)
+        self.n_eval = 0
+
+        self.snip_size = wargs.snip_size
+        self.trunc_size = wargs.trunc_size
+        self.grad_accum_count = wargs.grad_accum_count
+        self.norm_type = wargs.normalization
+
+        self.epoch_shuffle_train = wargs.epoch_shuffle_train
+        self.epoch_shuffle_batch = wargs.epoch_shuffle_batch
+        self.ss_eps_cur = wargs.ss_eps_begin
+        if wargs.ss_type is not None:
+            wlog('word-level optimizing bias between training and decoding ...')
+            if wargs.bleu_sampling is True: wlog('sentence-level optimizing ...')
+            wlog('schedule sampling value {}'.format(self.ss_eps_cur))
+            if self.ss_eps_cur < 1. and wargs.bleu_sampling:
+                self.sampler = Nbs(self.model, self.tv, k=3, noise=wargs.bleu_gumbel_noise,
+                                   batch_sample=True)
+        if self.grad_accum_count > 1:
+            assert(self.trunc_size == 0), 'to accumulate grads, disable target sequence truncating'
+
+    def accum_matrics(self, batch_size, xtoks, ytoks, nll, ok_ytoks, logZ):
+
+        self.look_sents += batch_size
+        self.e_sents += batch_size
+        self.look_nll += nll
+        self.look_ok_ytoks += ok_ytoks
+        self.e_nll += nll
+        self.e_ok_ytoks += ok_ytoks
+        self.look_xtoks += xtoks
+        self.look_ytoks += ytoks
+        self.e_ytoks += ytoks
+        self.look_batch_logZ += logZ
+        self.e_batch_logZ += logZ
+
+    def grad_accumulate(self, real_batches, epo, norm_type='sents'):
+
+        if self.grad_accum_count > 1:
+            self.model.zero_grad()
+
+        for batch in real_batches:
+
+            # (batch_size, max_slen_batch)
+            _, xs, y_for_files, bows, x_lens, xs_mask, y_mask_for_files, bows_mask = batch
+            _batch_size = xs.size(0)
+            ys, ys_mask = y_for_files[0], y_mask_for_files[0]
+            #wlog('x: {}, x_mask: {}, y: {}, y_mask: {}'.format(
+            #    xs.size(), xs_mask.size(), ys.size(), ys_mask.size()))
+            if bows is not None:
+                bows, bows_mask = bows[0], bows_mask[0]
+                #wlog('bows: {}, bows_mask: {})'.format(bows.size(), bows_mask.size()))
+            _xtoks = xs.data.ne(PAD).sum().item()
+            assert _xtoks == x_lens.data.sum().item()
+            _ytoks = ys[1:].data.ne(PAD).sum().item()
+
+            ys_len = ys.size(1)
+            # Truncated BPTT
+            trunc_size = self.trunc_size if self.trunc_size else ys_len
+
+            for j in range(0, ys_len - 1, trunc_size):
+                # 1. Create truncated target.
+                part_ys = ys[:, j : j + trunc_size]
+                part_ys_mask = ys_mask[:, j : j + trunc_size]
+                # 2. F-prop all but generator.
+                if self.grad_accum_count == 1: self.model.zero_grad()
+                # exclude last target word from inputs
+                logits, alphas = self.model(xs, part_ys[:, :-1], xs_mask, part_ys_mask[:, :-1])
+                # (batch_size, max_tlen_batch - 1, out_size)
+
+                gold, gold_mask = part_ys[:, 1:].contiguous(), part_ys_mask[:, 1:].contiguous()
+                # 3. Compute loss in shards for memory efficiency.
+                _nll, _ok_ytoks, _logZ = self.classifier.snip_back_prop(
+                    logits, gold, gold_mask, bows, bows_mask, epo, self.snip_size, self.norm_type)
+
+            self.accum_matrics(_batch_size, _xtoks, _ytoks, _nll, _ok_ytoks, _logZ)
+        # 3. Update the parameters and statistics.
+        self.optim.step()
+
+    def look_samples(self, bidx, batch):
+
+        if bidx % wargs.look_freq == 0:
+
+            look_start = time.time()
+            self.model.eval()   # affect the dropout !!!
+            if self.look_xs and self.look_ys:
+                _xs, _ys = self.look_xs, self.look_ys
+            else:
+                _, xs, y_for_files, _, _, _, _, _ = batch
+                ys = y_for_files[0]
+                # (batch_size, max_len_batch)
+                rand_bids = np.random.choice(xs.size(0), self.n_look, replace=False)
+                _xs, _ys = xs[rand_bids], ys[rand_bids]
+            self.look_tor.trans_samples(_xs, _ys)
+            wlog('')
+            self.look_spend = time.time() - look_start
+            self.model.train()
+
+    def try_valid(self, epo, e_bidx, b_counter):
+
+        if wargs.epoch_eval is not True and b_counter > wargs.eval_valid_from and \
+           b_counter % wargs.eval_valid_freq == 0:
+            eval_start = time.time()
+            self.n_eval += 1
+            wlog('\nAmong epo, batch [{}], [{}] eval save model ...'.format(e_bidx, self.n_eval))
+            self.mt_eval(epo, e_bidx)
+            self.eval_spend = time.time() - eval_start
 
     def mt_eval(self, eid, bid):
 
@@ -51,192 +181,89 @@ class Trainer(object):
 
     def train(self):
 
-        wlog('Start training ... ')
-        assert wargs.sample_size < wargs.batch_size, 'Batch size < sample count'
-        # [low, high)
-        batch_count = len(self.train_data)
-        batch_start_sample = tc.randperm(batch_count)[-1]
-        wlog('Randomly select {} samples in the {}th/{} batch'.format(wargs.sample_size, batch_start_sample, batch_count))
-        bidx, eval_cnt, ss_eps_cur = 0, [0], wargs.ss_eps_begin
-        wlog('Self-normalization alpha -> {}'.format(wargs.self_norm_alpha))
-        tor_hook = Translator(self.model, self.sv, self.tv)
-        if wargs.ss_type is not None:
-            wlog('Word-level optimizing bias between training and decoding ...')
-            if bleu_sampling is True: wlog('Sentence-level optimizing ...')
-
+        wlog('start training ... ')
         train_start = time.time()
         wlog('\n' + '#' * 120 + '\n' + '#' * 30 + ' Start Training ' + '#' * 30 + '\n' + '#' * 120)
+        batch_oracles, _checks, accum_batches, real_batches = None, None, 0, []
 
-        batch_oracles, _checks = None, None
-        for epoch in range(wargs.start_epoch, wargs.max_epochs + 1):
+        for epo in range(self.start_epoch, self.max_epochs + 1):
 
-            epoch_start = time.time()
+            wlog('\n{} Epoch [{}/{}] {}'.format('$'*30, epo, self.max_epochs, '$'*30))
+            # shuffle the training data for each epoch
+            if self.epoch_shuffle_train: self.train_data.shuffle()
 
-            # train for one epoch on the training data
-            wlog('\n' + '$' * 30, 0)
-            wlog(' Epoch [{}/{}] '.format(epoch, wargs.max_epochs) + '$' * 30)
-            wlog('Schedule sampling value {}'.format(ss_eps_cur))
-            from searchs.nbs import Nbs
-            if wargs.ss_type is not None and ss_eps_cur < 1. and bleu_sampling is True:
-                self.sampler = Nbs(self.model, self.tv, k=3, noise=wargs.bleu_gumbel_noise,
-                                   print_att=False, batch_sample=True)
-            if wargs.epoch_shuffle and epoch > wargs.epoch_shuffle_minibatch: self.train_data.shuffle()
-            # shuffle the original batch
-            shuffled_batch_idx = tc.randperm(batch_count)
+            self.e_nll, self.e_ytoks, self.e_ok_ytoks, self.e_batch_logZ, self.e_sents \
+                    = 0, 0, 0, 0, 0
+            self.look_nll, self.look_ytoks, self.look_ok_ytoks, self.look_batch_logZ, \
+                    self.look_sents = 0, 0, 0, 0, 0
+            self.look_xtoks, self.look_spend, b_counter, eval_spend = 0, 0, 0, 0
+            epo_start = show_start = time.time()
+            if self.epoch_shuffle_batch: shuffled_bidx = tc.randperm(self.n_batches)
 
-            sample_size = wargs.sample_size
-            epoch_loss, epoch_trg_words, epoch_num_correct, \
-                    epoch_batch_logZ, epoch_n_sents = 0, 0, 0, 0, 0
-            show_loss, show_src_words, show_trg_words, show_correct_num, \
-                    show_batch_logZ, show_n_sents = 0, 0, 0, 0, 0, 0
-            sample_spend, eval_spend, epoch_bidx = 0, 0, 0
-            show_start = time.time()
+            for bidx in range(self.n_batches):
 
-            for k in range(batch_count):
-
-                bidx += 1
-                epoch_bidx = k + 1
-                batch_idx = shuffled_batch_idx[k] if epoch >= wargs.epoch_shuffle_minibatch else k
-
-                # (max_slen_batch, batch_size)
-                #_, srcs, ttrgs_for_files, slens, srcs_m, trg_mask_for_files = self.train_data[batch_idx]
-                _, srcs, spos, ttrgs_for_files, ttpos_for_files, slens, srcs_m, trg_mask_for_files = self.train_data[batch_idx]
-                trgs, tpos, trgs_m = ttrgs_for_files[0], ttpos_for_files[0], trg_mask_for_files[0]
-                #wlog(trgs)
-                if wargs.ss_type is not None and ss_eps_cur < 1. and bleu_sampling is True:
-                    batch_beam_trgs = self.sampler.beam_search_trans(srcs, srcs_m, trgs_m)
+                b_counter += 1
+                e_bidx = shuffled_bidx[bidx] if self.epoch_shuffle_batch else bidx
+                if wargs.ss_type is not None and self.ss_eps_cur < 1. and wargs.bleu_sampling:
+                    batch_beam_trgs = self.sampler.beam_search_trans(xs, xs_mask, ys_mask)
                     batch_beam_trgs = [list(zip(*b)[0]) for b in batch_beam_trgs]
                     #wlog(batch_beam_trgs)
-                    batch_oracles = batch_search_oracle(batch_beam_trgs, trgs[1:], trgs_m[1:])
+                    batch_oracles = batch_search_oracle(batch_beam_trgs, ys[1:], ys_mask[1:])
                     #wlog(batch_oracles)
                     batch_oracles = batch_oracles[:-1].cuda()
                     batch_oracles = self.model.decoder.trg_lookup_table(batch_oracles)
 
-                #self.model.zero_grad()
-                self.optim.zero_grad()
-                # (max_tlen_batch - 1, batch_size, out_size)
-                if wargs.model == 8:
-                    gold, gold_mask = trgs[1:], trgs_m[1:]
-                    # (L, B) -> (B, L)
-                    T_srcs, T_spos, T_trgs, T_tpos = srcs.t(), spos.t(), trgs.t(), tpos.t()
-                    src, trg = (T_srcs, T_spos), (T_trgs, T_tpos)
-                    gold, gold_mask = gold.t(), gold_mask.t()
-                    #gold, gold_mask = trg[0][:, 1:], trgs_m.t()[:, 1:]
-                    if gold.is_contiguous() is False: gold = gold.contiguous()
-                    if gold_mask.is_contiguous() is False: gold_mask = gold_mask.contiguous()
-                    outputs = self.model(src, trg)
-                else:
-                    gold, gold_mask = trgs[1:], trgs_m[1:]
-                    outputs = self.model(srcs, trgs[:-1], srcs_m, trgs_m[:-1],
-                                         ss_eps=ss_eps_cur, oracles=batch_oracles)
-                    if len(outputs) == 2: (outputs, _checks) = outputs
-                    if len(outputs) == 2: (outputs, attends) = outputs
+                batch = self.train_data[e_bidx]
+                real_batches.append(batch)
+                accum_batches += 1
+                if accum_batches == self.grad_accum_count:
 
-                this_bnum = outputs.size(1)
-                epoch_n_sents += this_bnum
-                show_n_sents += this_bnum
-                #batch_loss, batch_correct_num, batch_log_norm = self.classifier(outputs, trgs[1:], trgs_m[1:])
-                #batch_loss.div(this_bnum).backward()
-                #batch_loss = batch_loss.data[0]
-                #batch_correct_num = batch_correct_num.data[0]
-                batch_loss, batch_correct_num, batch_Z = self.classifier.snip_back_prop(
-                    outputs, gold, gold_mask, wargs.snip_size)
+                    self.grad_accumulate(real_batches, epo)
+                    accum_batches, real_batches = 0, []
+                    grad_checker(self.model, _checks)
+                    if bidx % wargs.display_freq == 0:
+                        #print self.look_ok_ytoks, self.look_nll, self.look_ytoks, self.look_nll/self.look_ytoks
+                        ud = time.time() - show_start - self.look_spend - eval_spend
+                        wlog(
+                            'Epo:{:>2}/{:>2} |[{:^5}/{} {:^5} {:^5}k] |acc:{:5.2f}% |loss:{:4.2f}'
+                            ' |w-ppl:{:4.2f} |w(s)-logZ|:{:.2f}({:.2f}) '
+                            ' |x(y)/s:{:>4}({:>4})/{}={}({}) |x(y)/sec:{}({}) |lr:{:7.6f}'
+                            ' |elapsed:{:4.2f}/{:4.2f}m'.format(
+                                epo, self.max_epochs, bidx, self.n_batches, e_bidx, b_counter/1000,
+                                (self.look_ok_ytoks / self.look_ytoks) * 100,
+                                self.look_nll / self.look_ytoks,
+                                math.exp(self.look_nll / self.look_ytoks),
+                                #math.exp(self.look_nll),
+                                self.look_batch_logZ / self.look_ytoks,
+                                self.look_batch_logZ / self.look_sents, self.look_xtoks,
+                                self.look_ytoks, self.look_sents,
+                                int(round(self.look_xtoks / self.look_sents)),
+                                int(round(self.look_ytoks / self.look_sents)),
+                                int(round(self.look_xtoks / ud)), int(round(self.look_ytoks / ud)),
+                                self.optim.learning_rate, ud, (time.time() - train_start) / 60.)
+                        )
+                        self.look_nll, self.look_xtoks, self.look_ytoks, self.look_ok_ytoks, \
+                                self.look_batch_logZ, self.look_sents = 0, 0, 0, 0, 0, 0
+                        self.look_spend, eval_spend = 0, 0
+                        show_start = time.time()
 
-                self.optim.step()
-                grad_checker(self.model, _checks)
+                self.look_samples(bidx, batch)
+                self.try_valid(epo, e_bidx, b_counter)
 
-                batch_src_words = srcs.data.ne(PAD).sum().item()
-                assert batch_src_words == slens.data.sum().item()
-                batch_trg_words = trgs[1:].data.ne(PAD).sum().item()
-
-                show_loss += batch_loss
-                show_correct_num += batch_correct_num
-                epoch_loss += batch_loss
-                epoch_num_correct += batch_correct_num
-                show_src_words += batch_src_words
-                show_trg_words += batch_trg_words
-                epoch_trg_words += batch_trg_words
-
-                show_batch_logZ += batch_Z
-                epoch_batch_logZ += batch_Z
-
-                if epoch_bidx % wargs.display_freq == 0:
-                    #print show_correct_num, show_loss, show_trg_words, show_loss/show_trg_words
-                    ud = time.time() - show_start - sample_spend - eval_spend
-                    wlog(
-                        'Epo:{:>2}/{:>2} |[{:^5} {:^5} {:^5}k] |acc:{:5.2f}% |ppl:{:4.2f} '
-                        '||w-logZ|:{:.2f} ||s-logZ|:{:.2f} '
-                        '|stok/s:{:>4}/{:>2}={:>2} |ttok/s:{:>2} '
-                        '|stok/sec:{:6.2f} |ttok/sec:{:6.2f} |lr:{:7.6f} |elapsed:{:4.2f}/{:4.2f}m'.format(
-                            epoch, wargs.max_epochs, epoch_bidx, batch_idx, bidx/1000,
-                            (show_correct_num / show_trg_words) * 100,
-                            math.exp(show_loss / show_trg_words), show_batch_logZ / show_trg_words,
-                            show_batch_logZ / show_n_sents,
-                            batch_src_words, this_bnum, int(batch_src_words / this_bnum),
-                            int(batch_trg_words / this_bnum),
-                            show_src_words / ud, show_trg_words / ud, self.optim.learning_rate, ud,
-                            (time.time() - train_start) / 60.)
-                    )
-                    show_loss, show_src_words, show_trg_words, show_correct_num, \
-                            show_batch_logZ, show_n_sents = 0, 0, 0, 0, 0, 0
-                    sample_spend, eval_spend = 0, 0
-                    show_start = time.time()
-
-                if epoch_bidx % wargs.sampling_freq == 0:
-
-                    sample_start = time.time()
-                    self.model.eval()
-                    # (max_len_batch, batch_size)
-                    sample_src_tensor = srcs.t()[:sample_size]
-                    sample_trg_tensor = trgs.t()[:sample_size]
-                    sample_src_tensor_pos = T_spos[:sample_size] if wargs.model == 8 else None
-                    tor_hook.trans_samples(sample_src_tensor, sample_trg_tensor, sample_src_tensor_pos)
-                    wlog('')
-                    sample_spend = time.time() - sample_start
-                    self.model.train()
-
-                # Just watch the translation of some source sentences in training data
-                if wargs.if_fixed_sampling and bidx == batch_start_sample:
-                    # randomly select sample_size sample from current batch
-                    rand_rows = np.random.choice(this_bnum, sample_size, replace=False)
-                    sample_src_tensor = tc.Tensor(sample_size, srcs.size(0)).long()
-                    sample_src_tensor.fill_(PAD)
-                    sample_trg_tensor = tc.Tensor(sample_size, trgs.size(0)).long()
-                    sample_trg_tensor.fill_(PAD)
-
-                    for id in xrange(sample_size):
-                        sample_src_tensor[id, :] = srcs.t()[rand_rows[id], :]
-                        sample_trg_tensor[id, :] = trgs.t()[rand_rows[id], :]
-
-                if wargs.epoch_eval is not True and bidx > wargs.eval_valid_from and \
-                   bidx % wargs.eval_valid_freq == 0:
-
-                    eval_start = time.time()
-                    eval_cnt[0] += 1
-                    wlog('\nAmong epoch, batch [{}], [{}] eval save model ...'.format(
-                        epoch_bidx, eval_cnt[0]))
-
-                    self.mt_eval(epoch, epoch_bidx)
-
-                    eval_spend = time.time() - eval_start
-
-            avg_epoch_loss = epoch_loss / epoch_trg_words
-            avg_epoch_acc = epoch_num_correct / epoch_trg_words
-            wlog('\nEnd epoch [{}]'.format(epoch))
-            wlog('Train accuracy {:4.2f}%'.format(avg_epoch_acc * 100))
-            wlog('Average loss {:4.2f}'.format(avg_epoch_loss))
-            wlog('Train perplexity: {0:4.2f}'.format(math.exp(avg_epoch_loss)))
-            wlog('Train average |w-logZ|: {}/{}={} |s-logZ|: {}/{}={}'.format(
-                epoch_batch_logZ, epoch_trg_words, epoch_batch_logZ / epoch_trg_words,
-                epoch_batch_logZ, epoch_n_sents, epoch_batch_logZ / epoch_n_sents))
-            wlog('End epoch, batch [{}], [{}] eval save model ...'.format(epoch_bidx, eval_cnt[0]))
-
-            mteval_bleu = self.mt_eval(epoch, epoch_bidx)
+            avg_epo_acc, avg_epo_nll = self.e_ok_ytoks/self.e_ytoks, self.e_nll/self.e_ytoks
+            wlog('\nEnd epoch [{}]'.format(epo))
+            wlog('avg. w-acc: {:4.2f}%, w-nll: {:4.2f}, w-ppl: {:4.2f}'.format(
+                avg_epo_acc * 100, avg_epo_nll, math.exp(avg_epo_nll)))
+            wlog('avg. |w-logZ|: {:.2f}/{}={:.2f} |s-logZ|: {:.2f}/{}={:.2f}'.format(
+                self.e_batch_logZ, self.e_ytoks, self.e_batch_logZ / self.e_ytoks,
+                self.e_batch_logZ, self.e_sents, self.e_batch_logZ / self.e_sents))
+            wlog('batch [{}], [{}] eval save model ...'.format(e_bidx, self.n_eval))
+            mteval_bleu = self.mt_eval(epo, e_bidx)
             # decay the probability value epslion of scheduled sampling per batch
-            if wargs.ss_type is not None: ss_eps_cur = schedule_sample_eps_decay(epoch, ss_eps_cur)   # start from 1
-            self.optim.update_learning_rate(mteval_bleu, epoch)
-            epoch_time_consume = time.time() - epoch_start
-            wlog('Consuming: {:4.2f}s'.format(epoch_time_consume))
+            if wargs.ss_type is not None: ss_eps_cur = schedule_sample_eps_decay(epo, ss_eps_cur)   # start from 1
+            self.optim.update_learning_rate(mteval_bleu, epo)
+            epo_time_consume = time.time() - epo_start
+            wlog('Consuming: {:4.2f}s'.format(epo_time_consume))
 
         wlog('Finish training, comsuming {:6.2f} hours'.format((time.time() - train_start) / 3600))
         wlog('Congratulations!')

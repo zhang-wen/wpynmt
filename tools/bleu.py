@@ -45,19 +45,31 @@ def zh_to_chars(s):
 
     return r.findall(s)
 
+def grab_all_trg_files(filename):
+
+    file_names = []
+    file_realpath = os.path.realpath(filename)
+    data_dir = os.path.dirname(file_realpath)  # ./data
+    file_prefix = os.path.basename(file_realpath)  # train.trg
+    for fname in os.listdir(data_dir):
+        if fname.startswith(file_prefix):
+            file_path = os.path.join(data_dir, fname)
+            #wlog('\t{}'.format(file_path))
+            file_names.append(file_path)
+    wlog('NOTE: Target side has {} references.'.format(len(file_names)))
+    return file_names
+
 def length_bleu(src_fpath, ref_fpaths, trans_fpath, ngram=4, cased=False, char=False,
                 min_len=0, max_len=80, len_interval=10):
 
-    if cased is False: wlog('Calculating case-insensitive {}-gram BLEU ...'.format(ngram))
-    else: wlog('Calculating case-sensitive {}-gram BLEU ...'.format(ngram))
-
+    wlog('############ Go into mteval-v11b calculation grouped by length ############')
+    wlog('Calculating case-{}sensitive {}-gram BLEU ...'.format('' if cased else 'in', ngram))
     wlog('\tSource file: {}'.format(src_fpath))
     wlog('\tCandidate file: {}'.format(trans_fpath))
     wlog('\tReferences file:')
     for ref_fpath in ref_fpaths: wlog('\t\t{}'.format(ref_fpath))
 
     # split by source length
-
     src_F = open(src_fpath, 'r')
     src_lines = src_F.readlines()
     src_F.close()
@@ -219,12 +231,11 @@ def bleu(hypo_c, refs_c, n=4, logfun=wlog, cased=False, char=False):
 
         if char is True: refs = [' '.join(zh_to_chars(refs_sen[i][num].decode('utf-8'))) for i in range(len(refs_c))]
         else: refs = [token(refs_sen[i][num], cased) for i in range(len(refs_c))]
-        ref_lengths = sorted([len(refs[i].split(' ')) for i in range(len(refs))])
 
-        # problem is not the brevity penalty, mteval-v11.perl of Moses also has brevity penalty,
-        # the problem is Moses use the minimal length among four references
+        # this is same with mteval-v11b.pl, using the length of the shortest reference
+        ref_lengths = sorted([len(refs[i].split(' ')) for i in range(len(refs))])
         ref_length += ref_lengths[0]
-        hypo_length += h_length    # this is same with mteval-v11b.pl
+        hypo_length += h_length
 
         # why this ? more strict
         #hypo_length += (h_length if h_length < ref_lengths[0] else ref_lengths[0])
@@ -268,24 +279,25 @@ def bleu(hypo_c, refs_c, n=4, logfun=wlog, cased=False, char=False):
     #if correctgram_count[0] == 0: return 0.
     logfun('Total words count, ref {}, hyp {}'.format(ref_length, hypo_length))
     for i in range(n):
-        logfun('{}-gram, ref {}, match {}'.format(i+1, ngram_count[i], correctgram_count[i]), 0)
+        logfun('{}-gram | ref {:8d} | match {:8d}'.format(i+1, ngram_count[i], correctgram_count[i]), 0)
         if correctgram_count[i] == 0:
             #correctgram_count[i] += 1
             #ngram_count[i] += 1
             logfun('')
             return 0.
         bleu_n[i] = correctgram_count[i] / ngram_count[i]
-        logfun('\tPrecision: {}'.format(bleu_n[i]))
+        logfun(' |\tPrecision: {}'.format(bleu_n[i]))
         result += math.log(bleu_n[i]) / n
 
     bp = 1.
     #bleu = geometric_mean(precisions) * bp     # same with mean function ?
 
     # there are no brevity penalty in mteval-v11b.pl, so with bp BLEU is a little lower
-    if hypo_length < ref_length: bp = math.exp(1 - ref_length / hypo_length)
+    if hypo_length < ref_length:
+        bp = math.exp(1 - ref_length / hypo_length) if hypo_length != 0 else 0
 
     BLEU = bp * math.exp(result)
-    logfun('bp {} | bp_exp {} | {}-gram BLEU {}'.format(1 - ref_length / hypo_length, bp, n, BLEU))
+    logfun('BP={}, ratio={}, BLEU={}'.format(bp, hypo_length / ref_length, BLEU))
 
     return BLEU
 
@@ -301,8 +313,8 @@ def bleu_file(hypo, refs, ngram=4, cased=False, char=False):
         :param refs: the list of path to reference files
     '''
 
-    if cased is False: wlog('Calculating case-insensitive {}-gram BLEU ...'.format(ngram))
-    else: wlog('Calculating case-sensitive {}-gram BLEU ...'.format(ngram))
+    wlog('\n' + '#' * 30 + ' mteval-v11b ' + '#' * 30)
+    wlog('Calculating case-{}sensitive {}-gram BLEU ...'.format('' if cased else 'in', ngram))
     wlog('\tcandidate file: {}'.format(hypo))
     wlog('\treferences file:')
     for ref in refs: wlog('\t\t{}'.format(ref))
@@ -349,10 +361,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='mt-eval BLEU score on multiple references.')
     parser.add_argument('-lc', help='Lowercase', action='store_true')
     parser.add_argument('-c', '--candidate', dest='c', required=True, help='translation file')
-    parser.add_argument('-r', '--references', dest='references', required=True, help='Reads the reference_[0, 1, ...]')
+    parser.add_argument('-r', '--references', dest='r', required=True, help='reference_[0, 1, ...]')
     args = parser.parse_args()
 
-    # reference: /home/wen/3.corpus/segment_allnist_stanseg/nist03.ref.plain_
+    '''
     ref_fpaths = []
     ref_cnt = 4
     if ref_cnt == 1:
@@ -363,21 +375,21 @@ if __name__ == "__main__":
             ref_fpath = '{}_{}'.format(args.references, idx)
             if not os.path.exists(ref_fpath): continue
             ref_fpaths.append(ref_fpath)
+    '''
 
-    #print(args.references)
     # TODO: Multiple references
-    #reference_files = [args.references]
-    #print(ref_fpaths)
+    #ref_fpaths = grab_all_trg_files('/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/mt06_u8.trg.tok.sb')
+    ref_fpaths = grab_all_trg_files(args.r)
 
     #open_files = map(open, ref_fpaths)
     cand_file = args.c
     cased = ( not args.lc )
-    #bleu_file(cand_file, ref_fpaths, ngram=4, cased=cased)
+    bleu_file(cand_file, ref_fpaths, ngram=4, cased=cased)
 
     src_fpath = './nist03.src.plain.u8.a2b.stanseg'
     #src_fpath = './src.3'
-    bleus = length_bleu(src_fpath, ref_fpaths, cand_file, ngram=4, cased=cased)
-    print bleus
+    #bleus = length_bleu(src_fpath, ref_fpaths, cand_file, ngram=4, cased=cased)
+    #print bleus
 
 
 

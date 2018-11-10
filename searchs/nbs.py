@@ -2,14 +2,12 @@ from __future__ import division
 
 import sys
 import copy
+import time
 import numpy as np
 import torch as tc
-from torch.autograd import Variable
 
 import wargs
 from tools.utils import *
-
-import time
 
 class Nbs(object):
 
@@ -41,8 +39,7 @@ class Nbs(object):
         if x_mask is None:
             x_mask = tc.ones((self.srcL, 1))
             # for pytorch v4.0
-            with tc.no_grad():
-                x_mask = Variable(x_mask, requires_grad=False).cuda()
+            x_mask = tc.tensor(x_mask, requires_grad=False).cuda()
             # for pytorch before v3.0
             #x_mask = Variable(x_mask, requires_grad=False, volatile=True).cuda()
         assert not ( self.batch_sample ^ (self.trgs_len is not None) ), 'sample ^ trgs_len'
@@ -53,18 +50,11 @@ class Nbs(object):
 
         self.maxL = y_mask.size(0) if self.batch_sample is True else 2 * self.srcL
         # get initial state of decoder rnn and encoder context
-        self.s0, self.enc_src0, self.uh0 = self.model.init(x_LB, xs_mask=x_mask, test=True)
-        if wargs.dynamic_cyk_decoding is True:
-            assert not self.batch_sample, 'unsupport batch sampling for cyk'
-            xs_mask = Variable(tc.ones(self.srcL), requires_grad=False, volatile=True)
-            if wargs.gpu_id: xs_mask = xs_mask.cuda()
-            # [adj_list, c_attend_sidx, [1, 1, 1, ...]] [list, int, tensor]
-            dyn_tup = [range(self.srcL), None, xs_mask]
-            init_beam(self.beam, cnt=self.maxL, s0=self.s0, dyn_dec_tup=dyn_tup)
-        else:
-            #if wargs.dec_layer_cnt > 1: self.s0 = [self.s0] * wargs.dec_layer_cnt
-            # (1, trg_nhids), (src_len, 1, src_nhids*2)
-            init_beam(self.beam, cnt=self.maxL, s0=self.s0)
+        self.enc_src0 = self.model.encoder(x_LB, xs_mask=x_mask)
+        self.s0, self.uh0 = self.model.decoder.init_state(self.enc_src0, xs_mask=x_mask)
+        #if wargs.dec_layer_cnt > 1: self.s0 = [self.s0] * wargs.dec_layer_cnt
+        # (1, trg_nhids), (src_len, 1, src_nhids*2)
+        init_beam(self.beam, cnt=self.maxL, s0=self.s0)
 
         if not wargs.with_batch:
             assert self.B == 1, 'Only support a sentences for batch'
@@ -162,8 +152,6 @@ class Nbs(object):
         # s0: (B, trg_nhids), enc_src0: (srcL, B, src_nhids*2), uh0: (srcL, B, align_size)
         hyp_scores = np.zeros(1).astype('float32')
         delete_idx, prevb_id = None, None
-        btg_xs_h, btg_uh, btg_xs_mask = None, None, None
-        if wargs.dynamic_cyk_decoding is True: btg_xs_h = self.enc_src0
         for i in range(1, self.maxL + 1):
 
             if all([len(a) > 0 for a in self.batch_tran_cands]) is True:
@@ -174,10 +162,7 @@ class Nbs(object):
             for bidx, sent_prevb in enumerate(B_prevbs):
                 debug('Sent {} '.format(bidx))
                 for b in sent_prevb:    # do not output state
-                    if wargs.dynamic_cyk_decoding is True:
-                        debug(b[0:1] + (b[1][0], b[1][1], b[1][2].data.int().tolist()) + b[-2:])
-                    else:
-                        debug(b[0:1] + (None if b[1] is None else b[1].size(), b[-4].size()) + b[-3:])
+                    debug(b[0:1] + (None if b[1] is None else b[1].size(), b[-4].size()) + b[-3:])
 
             debug('\n{} Step-{} {}'.format('#'*20, i, '#'*20))
             '''
@@ -191,73 +176,44 @@ class Nbs(object):
             '''
 
             n_remainings = len(B_prevbs)
-            if wargs.dynamic_cyk_decoding is True:
-            #if False:
-                btg_uh = self.decoder.ha_btg(btg_xs_h)
-                #self.enc_src = self.enc_src0.view(L, -1, enc_size).expand(L, preb_sz, enc_size)
-            else:
-                enc_src, uh, y_im1, prebs_sz, hyp_scores, s_im1, self.true_bidx = \
-                        [], [], [], [], [], [], []
-                for bidx in range(n_remainings):
-                    prevb = B_prevbs[bidx]
-                    preb_sz = len(prevb)
-                    prebs_sz.append(preb_sz)
-                    hyp_scores += list(zip(*prevb)[0])
-                    s_im1 += list(zip(*prevb)[-4])
-                    y_im1 += list(zip(*prevb)[-2])
-                    self.true_bidx.append(prevb[0][-3])
-                    if self.enc_src0.dim() == 4:
-                        # (L, L, 1, src_nhids) -> (L, L, preb_sz, src_nhids)
-                        enc_src, uh = self.enc_src0.expand(1, 1, preb_sz, 1), self.uh0.expand(1, 1, preb_sz, 1)
-                    elif self.enc_src0.dim() == 3:
-                        # (src_sent_len, B, src_nhids) -> (src_sent_len, B*preb_sz, src_nhids)
-                        enc_src.append(self.enc_src0[:,bidx,:].unsqueeze(1).repeat(1, preb_sz,1))
-                        uh.append(self.uh0[:,bidx,:].unsqueeze(1).repeat(1, preb_sz, 1))
-                enc_src, uh = tc.cat(enc_src, dim=1), tc.cat(uh, dim=1)
+            enc_src, uh, y_im1, prebs_sz, hyp_scores, s_im1, self.true_bidx = \
+                    [], [], [], [], [], [], []
+            for bidx in range(n_remainings):
+                prevb = B_prevbs[bidx]
+                preb_sz = len(prevb)
+                prebs_sz.append(preb_sz)
+                hyp_scores += list(zip(*prevb)[0])
+                s_im1 += list(zip(*prevb)[-4])
+                y_im1 += list(zip(*prevb)[-2])
+                self.true_bidx.append(prevb[0][-3])
+                if self.enc_src0.dim() == 4:
+                    # (L, L, 1, src_nhids) -> (L, L, preb_sz, src_nhids)
+                    enc_src, uh = self.enc_src0.expand(1, 1, preb_sz, 1), self.uh0.expand(1, 1, preb_sz, 1)
+                elif self.enc_src0.dim() == 3:
+                    # (src_sent_len, B, src_nhids) -> (src_sent_len, B*preb_sz, src_nhids)
+                    enc_src.append(self.enc_src0[:,bidx,:].unsqueeze(1).repeat(1, preb_sz,1))
+                    uh.append(self.uh0[:,bidx,:].unsqueeze(1).repeat(1, preb_sz, 1))
+            enc_src, uh = tc.cat(enc_src, dim=1), tc.cat(uh, dim=1)
+
             cnt_bp = (i >= 2)
             if cnt_bp is True: self.C[0] += sum(prebs_sz)
             hyp_scores = np.array(hyp_scores)
             s_im1 = tc.stack(s_im1)
 
-            if wargs.dynamic_cyk_decoding is True:
-                batch_adj_list = [item[1][0][:] for item in prevb]
-                p_attend_sidx = [item[1][1] for item in prevb]
-                btg_xs_mask = tc.stack([item[1][2] for item in prevb], dim=1)   # (L, n_remainings)
-
             debug(y_im1)
-            step_output = self.decoder.step(
-                s_im1, enc_src, uh, y_im1, btg_xs_h=btg_xs_h, btg_uh=btg_uh,
-                btg_xs_mask=btg_xs_mask)
+            step_output = self.decoder.step(s_im1, enc_src, uh, y_im1)
             a_i, s_i, y_im1, alpha_ij = step_output[:4]
             # (n_remainings*p, enc_hid_size), (n_remainings*p, dec_hid_size),
             # (n_remainings*p, trg_wemb_size), (x_maxL, n_remainings*p)
 
             self.C[2] += 1
             # (preb_sz, out_size), alpha_ij: (srcL, B*p)
-            # logit = self.decoder.logit(s_i)
             logit = self.decoder.step_out(s_i, y_im1, a_i)
             self.C[3] += 1
 
-            if wargs.dynamic_cyk_decoding is True:
-                c_attend_sidx = alpha_ij.data.max(0)[1].tolist()    # attention of previous beam
-                assert len(c_attend_sidx) == len(p_attend_sidx)
-                debug('Before BTG update, adjoin-list for pre-beam[{}]:'.format(len(batch_adj_list)))
-                for item in batch_adj_list: debug('{}'.format(item))
-                #batch_adj_list = [copy.deepcopy(b[1][0]) for b in prevb]
-                debug('Attention src ids -> beam[{}]: {} and beam[{}]: [{}]'.format(
-                    i-2, p_attend_sidx, i-1, c_attend_sidx))
-                btg_xs_h, btg_xs_mask = self.decoder.update_src_btg_tree(
-                    btg_xs_h, btg_xs_mask, batch_adj_list, p_attend_sidx, c_attend_sidx)
-                #p_attend_sidx = c_attend_sidx[:]
-                debug('After BTG update, adjoin-list for pre-beam[{}]:'.format(len(batch_adj_list)))
-                for item in batch_adj_list: debug('{}'.format(item))
-                if i == 1:
-                    remain_bs = self.k - len(self.hyps)
-                    btg_xs_h = btg_xs_h.view(L, -1, enc_size).expand(L, remain_bs, enc_size)
-
             # (B*prevb_sz, vocab_size)
             #wlog('bleu sampling, noise {}'.format(self.noise))
-            next_ces = self.decoder.classifier(logit, noise=self.noise)
+            next_ces = self.model.classifier(logit, noise=self.noise)
             next_ces = next_ces.cpu().data.numpy()
             voc_size = next_ces.shape[1]
             cand_scores = hyp_scores[:, None] + next_ces
@@ -334,19 +290,12 @@ class Nbs(object):
                                                         else None) for hyp in sorted_hyps]
                     # should calculate when generate item in current beam
                     else:
-                        if wargs.dynamic_cyk_decoding is True:
-                            dyn_tup = [batch_adj_list[bp], c_attend_sidx[bp], btg_xs_mask[:, bp]]
-                            next_beam_cur_sent.append((b[0], ) + (dyn_tup, ) + b[-3:])
-                        else:
-                            if wargs.len_norm == 2:
-                                next_beam_cur_sent.append((b[0], _alpha_ij[bidx][:, bp]) + b[1:])
-                            else: next_beam_cur_sent.append(b)
+                        if wargs.len_norm == 2:
+                            next_beam_cur_sent.append((b[0], _alpha_ij[bidx][:, bp]) + b[1:])
+                        else: next_beam_cur_sent.append(b)
                 if len(next_beam_cur_sent) > 0: next_step_beam.append(next_beam_cur_sent)
             self.beam[i] = next_step_beam
 
-            if wargs.dynamic_cyk_decoding is True:
-                B = btg_xs_h.size(1)
-                btg_xs_h = btg_xs_h[:, filter(lambda x: x not in delete_idx, range(B)), :]
             if len(del_batch_idx) < n_remainings:
                 self.enc_src0 = self.enc_src0[:, filter(
                     lambda x: x not in del_batch_idx, range(n_remainings)), :]

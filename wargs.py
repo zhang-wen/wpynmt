@@ -1,196 +1,116 @@
-dataset = 'S' # S for 40k, M for 1.2M, L for wmt en-de
-
 # Maximal sequence length in training data
 #max_seq_len = 10000000
-max_seq_len = 100
+max_seq_len = 128
 
-'''
-Embedding layer
-'''
-# Size of word embedding of source word and target word
-src_wemb_size = 512
-trg_wemb_size = 512
+# 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
+''' encoder '''
+encoder_type = 'att'
+d_src_emb = 512     # size of source word embedding
+n_enc_layers = 2    # layers number
+d_enc_hid = 512     # hidden size in rnn
 
-'''
-Encoder layer
-'''
-# Size of hidden units in encoder
-enc_hid_size = 512
+''' decoder '''
+decoder_type = 'att'
+d_trg_emb = 512     # size of target word embedding
+n_dec_layers = 2    # layers number
+d_dec_hid = 512     # hidden size in rnn
 
-'''
-Attention layer
-'''
-# Size of alignment vector
-align_size = 512
+''' transformer '''
+d_model = 512       # n_head * d_v, size of alignment
+d_ff_filter = 512  # hidden size of the second layer of PositionwiseFeedForward
+n_head = 8          # the number of head for MultiHeadedAttention
+att_dropout = 0.3
+residual_dropout = 0.3
+relu_dropout = 0.3
 
-'''
-Decoder layer
-'''
-# Size of hidden units in decoder
-dec_hid_size = 512
-# Size of the output vector
-out_size = 512
-drop_rate = 0.5
+# dropout for tgru
+input_dropout = 0.5
+rnn_dropout = 0.3
+output_dropout = 0.5
 
-# Directory to save model, test output and validation output
+proj_share_weight = True
+embs_share_weight = False
+position_encoding = True if (encoder_type in ('att','tgru') and decoder_type in ('att','tgru')) else False
+
+''' directory to save model, validation output and test output '''
 dir_model = 'wmodel'
 dir_valid = 'wvalid'
 dir_tests = 'wtests'
 
-# Validation data
-val_shuffle = True
-# Training data
-train_shuffle = True
-batch_size = 80
-sort_k_batches = 20
-
-# Data path
+''' training data '''
 dir_data = 'data/'
 train_prefix = 'train'
 train_src_suffix = 'src'
 train_trg_suffix = 'trg'
+
+''' validation data '''
+val_shuffle = True
 dev_max_seq_len = 10000000
 
-# Dictionary
+''' vocabulary '''
 word_piece = False
-src_dict_size = 30000
-trg_dict_size = 30000
-src_dict = dir_data + 'src.dict.tcf'
-trg_dict = dir_data + 'trg.dict.tcf'
+n_src_vcb_plan = 30000
+n_trg_vcb_plan = 30000
+src_vcb = dir_data + 'src.vcb'
+trg_vcb = dir_data + 'trg.vcb'
 
 inputs_data = dir_data + 'inputs.pt'
 
+cased = False
 with_bpe = False
 with_postproc = False
-luong_proc = False
-# Training
-max_epochs = 20
-epoch_shuffle = False
-epoch_shuffle_minibatch = 1
+use_multi_bleu = True
 
-small = False
-eval_small = False
-epoch_eval = False
-final_test = False
-char = True
-src_char = False
-
-if dataset == 'S':
-    src_wemb_size = 256
-    trg_wemb_size = 256
-    enc_hid_size = 256
-    align_size = 256
-    dec_hid_size = 256
-    out_size = 256
-    val_tst_dir = './data/'
-    val_prefix = 'valid'
-    #dev_prefix = 'devset1_2.lc'
-    val_src_suffix = 'src'
-    val_ref_suffix = 'ref'
-    tests_prefix = ['test']
-    #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
-    #val_tst_dir = '/home/wen/3.corpus/mt/iwslt14-de-en/'
-    #val_prefix = 'valid.de-en'
-    #val_src_suffix = 'de'
-    #val_ref_suffix = 'en'
-    #ref_cnt = 16
-    #tests_prefix = ['devset3.lc']
-    #tests_prefix = ['test.de-en']
-    ref_cnt = 1
-    batch_size = 80
-    max_epochs = 50
-    #src_dict_size = 32009
-    #trg_dict_size = 22822
-    epoch_eval = True
-    small = True
-    use_multi_bleu = False
-    #eval_small = True
-    with_bpe = False
-    cased = False
-elif dataset == 'M':
-    src_wemb_size = 512
-    trg_wemb_size = 512
-    enc_hid_size = 512
-    align_size = 512
-    dec_hid_size = 512
-    out_size = 512
-    val_tst_dir = '/home5/wen/2.data/mt/nist_data_stanseg/'
-    #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
-    #val_tst_dir = '/home5/wen/2.data/mt/uy_zh_300w/devtst/'
-    #val_tst_dir = '/home/wen/3.corpus/mt/uy_zh_300w/devtst/'
-    val_prefix = 'nist02'
-    dev_prefix = 'nist02'
-    #val_prefix = 'dev700'
-    #dev_prefix = 'dev700'
-    #val_src_suffix = '8kbpe.src'
-    #val_src_suffix = 'uy.src'
-    #val_src_suffix = 'uy.32kbpe.src'
-    val_src_suffix = 'src'
-    val_ref_suffix = 'ref.plain_'
-    src_dict_size = 50000
-    trg_dict_size = 50000
-    ref_cnt = 4
-    tests_prefix = ['nist03', 'nist04', 'nist05', 'nist06', 'nist08', '900']
-    #tests_prefix = ['tst861']
-    with_bpe = True
-    with_postproc = True
-    use_multi_bleu = False
-    cased = False
-    #char = True
-elif dataset == 'L':
-    #src_wemb_size = 500
-    #trg_wemb_size = 500
-    #enc_hid_size = 1024
-    #align_size = 1024
-    #dec_hid_size = 1024
-    #out_size = 512
-    #val_tst_dir = '/home/wen/3.corpus/wmt16/rsennrich/devtst/'
-    val_tst_dir = '/home/wen/3.corpus/wmt14/en-de-Luong/'
-    #val_tst_dir = '/home/wen/3.corpus/wmt2017/de-en/'
-    val_prefix = 'newstest2013'
-    #val_prefix = 'newstest2014.tc'
-    use_multi_bleu = True
-    val_src_suffix = 'en.32kbpe'
-    val_ref_suffix = 'tc.de' if use_multi_bleu is True else 'ori.de'
-    ref_cnt = 1
-    #tests_prefix = ['newstest2014.2737', 'newstest2015', 'newstest2016', 'newstest2017']
-    #tests_prefix = ['newstest2009', 'newstest2010', 'newstest2011', 'newstest2012', 'newstest2014', 'newstest2015', 'newstest2016', 'newstest2017']
-    tests_prefix = ['newstest2012', 'newstest2014', 'newstest2015']
-    #drop_rate = 0.2
-    src_dict_size = 50000
-    trg_dict_size = 50000
-    batch_size = 128
-    sort_k_batches = 32
-    with_bpe = True
-    #luong_proc = True
-    cased = True    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
-    #small = True
-    #eval_small = True
-
-display_freq = 10 if small else 1000
-sampling_freq = 100 if small else 5000
-sample_size = 5
-if_fixed_sampling = False
-eval_valid_from = 500 if eval_small else 100000
-eval_valid_freq = 100 if eval_small else 20000
-
+''' training '''
+epoch_shuffle_train = True
+epoch_shuffle_batch = True
+batch_type = 'sents'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
+sort_k_batches = 20
 save_one_model = True
 start_epoch = 1
-
 model_prefix = dir_model + '/model'
 best_model = dir_valid + '/best.model.pt' if dir_valid else 'best.model.pt'
-# pretrained model
+label_smoothing = 0.1
+trg_bow = True
+emb_loss = False
+bow_loss = False
+trunc_size = 0   # truncated bptt
+grad_accum_count = 1   # accumulate gradient for batch_size * accum_count batches (Transformer)
+snip_size = 20
+normalization = 'tokens'     # 'sents' or 'tokens', normalization method of the gradient
+max_grad_norm = 5 # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
+
+''' whether use pretrained model '''
 pre_train = None
 #pre_train = best_model
 fix_pre_params = False
+''' start decaying every epoch after and including this epoch '''
+start_decay_from = None
+learning_rate_decay = 0.5
+last_valid_bleu = 0.
 
-# decoder hype-parameters
+''' display settings '''
+small = True
+display_freq = 10 if small else 1000
+look_freq = 100 if small else 5000
+n_look = 5
+fix_looking = False
+
+''' evaluate settings '''
+eval_small = False
+epoch_eval = True
+src_char = False
+char_bleu = False
+eval_valid_from = 500 if eval_small else 100000
+eval_valid_freq = 100 if eval_small else 20000
+
+''' decoder settings '''
 search_mode = 1
 with_batch = 1
 ori_search = 0
-beam_size = 10
+beam_size = 4
 vocab_norm = 1  # softmax
-len_norm = 1    # 0: no noraml, 1: length normal, 2: alpha-beta
+len_norm = 2    # 0: no noraml, 1: length normal, 2: alpha-beta
 with_mv = 0
 merge_way = 'Y'
 avg_att = 0
@@ -199,56 +119,20 @@ ngram = 3
 alpha_len_norm = 0.6
 beta_cover_penalty = 0.
 
-'''
-Starting learning rate. If adagrad/adadelta/adam is used, then this is the global learning rate.
-Recommended settings: sgd = 1, adagrad = 0.1, adadelta = 1, adam = 0.001
-'''
-opt_mode = 'adadelta'
-learning_rate = 1.0
-rho = 0.95
-
-#opt_mode = 'adam'
-#learning_rate = 0.001
-#beta_1 = 0.9
-#beta_2 = 0.98
-
-#opt_mode = 'sgd'
-#learning_rate = 1.
-
-max_grad_norm = 1.0
-
-# Start decaying every epoch after and including this epoch
-start_decay_from = None
-learning_rate_decay = 0.5
-last_valid_bleu = 0.
-
-snip_size = 10
+copy_attn = False
 file_tran_dir = 'wexp-gpu-nist03'
 laynorm = False
 segments = False
 seg_val_tst_dir = 'orule_1.7'
 
-# model
-enc_rnn_type = 'sru'    # rnn, gru, lstm, sru
-enc_layer_cnt = 2
-dec_rnn_type = 'sru'    # rnn, gru, lstm, sru
-dec_layer_cnt = 2
-
-# 0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet
-model = 1
-
-# convolutional layer
-#fltr_windows = [1, 3, 5]   # windows size
-#d_fltr_feats = [32, 64, 96]
+''' relation network: convolutional layer '''
 fltr_windows = [1, 3]
 d_fltr_feats = [128, 256]
 d_mlp = 256
 
-# generate BTG tree when decoding
-dynamic_cyk_decoding = False
 print_att = True
 
-# Scheduled Sampling of Samy bengio's paper
+''' Scheduled Sampling of Samy bengio's paper '''
 greed_sampling = False
 greed_gumbel_noise = 0.5     # None: w/o noise
 bleu_sampling = False
@@ -256,34 +140,84 @@ bleu_gumbel_noise = 0.5     # None: w/o noise
 ss_type = None     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
 ss_eps_begin = 1.   # set None for no scheduled sampling
 ss_eps_end = 1.
-#ss_decay_rate = 0.005
 ss_decay_rate = (ss_eps_begin - ss_eps_end) / 10.
 ss_k = 12.     # k < 1 for exponential decay, k >= 1 for inverse sigmoid decay
 
-# free parameter for self-normalization
-# 0 is equivalent to the standard neural network objective function.
-#self_norm_alpha = 0.5
-self_norm_alpha = None
+''' self-normalization settings '''
+self_norm_alpha = None  # None or 0.5
 nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 # car nmt
 #sampling = 'truncation'     # truncation, length_limit, gumbeling
 sampling = 'length_limit'     # truncation, length_limit, gumbeling
-#tests_prefix = None
-#dec_gpu_id = [1]
-#dec_gpu_id = None
-gpu_id = [2]
+gpu_id = [0]
 #gpu_id = None
+n_co_models = len(gpu_id)
+s_step_decay = 500 * n_co_models
+e_step_decay = 32000 * n_co_models
 
-# Transfomer
-proj_share_weight=True
-embs_share_weight=False
-d_k=64  # d_v == d_model // n_head
-d_v=64
-d_model=512     # == n_head*d_v
-d_word_vec=512
-d_inner_hid=1024
-n_layers=1
-n_head=8
-warmup_steps=12000
+# 'toy', 'zh-en', 'en-de', 'de-en', 'uy-zh'
+dataset = 'toy'
+if dataset == 'toy':
+    val_tst_dir = './data/'
+    val_prefix = 'devset1_2.lc'
+    val_src_suffix = 'zh'
+    val_ref_suffix = 'en'
+    tests_prefix = ['devset3.lc']
+    batch_size = 40
+    max_epochs = 50
+    ''' optimizer settings '''
+    opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
+    lr_update_way = 't2t'  # 't2t' or 'chen'
+    param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
+    learning_rate = 1.    # 1.0, 0.001, 0.01
+    rho = 0.95
+    beta_1 = 0.9
+    beta_2 = 0.998
+    warmup_steps = 2000
+elif dataset == 'de-en':
+    #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
+    val_tst_dir = '/home/wen/3.corpus/mt/iwslt14-de-en/'
+    val_prefix = 'valid.de-en'
+    val_src_suffix = 'de'
+    val_ref_suffix = 'en'
+    tests_prefix = ['test.de-en']
+    #n_src_vcb_plan = 32009
+    #n_trg_vcb_plan = 22822
+elif dataset == 'zh-en':
+    #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
+    val_tst_dir = '/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/'
+    #val_tst_dir = '/home5/wen/2.data/mt/mfd_1.25M/nist_test_new/'
+    val_prefix = 'mt06_u8'
+    #dev_prefix = 'nist02'
+    val_src_suffix = 'src.BPE'
+    val_ref_suffix = 'trg.tok.sb'
+    n_src_vcb_plan = 50000
+    n_trg_vcb_plan = 50000
+    tests_prefix = ['mt02_u8', 'mt03_u8', 'mt04_u8', 'mt05_u8', 'mt08_u8']
+    batch_size = 128
+    max_epochs = 10
+    with_bpe = True
+elif dataset == 'uy-zh':
+    #val_tst_dir = '/home5/wen/2.data/mt/uy_zh_300w/devtst/'
+    val_tst_dir = '/home/wen/3.corpus/mt/uy_zh_300w/devtst/'
+    val_prefix = 'dev700'
+    #dev_prefix = 'dev700'
+    val_src_suffix = '8kbpe.src'
+    val_src_suffix = 'uy.src'
+    #val_src_suffix = 'uy.32kbpe.src'
+    tests_prefix = ['tst861']
+elif dataset == 'en-de':
+    val_tst_dir = '/home4/wen/3.corpus/wmt14-ende/devtst/'
+    val_prefix = 'newstest1213'
+    use_multi_bleu = True
+    val_src_suffix = 'en.tc.37kbpe'
+    val_ref_suffix = 'de.tc' if use_multi_bleu is True else 'ori.de'
+    tests_prefix = ['newstest2014']
+    n_src_vcb_plan = 50000
+    n_trg_vcb_plan = 50000
+    batch_size = 128
+    sort_k_batches = 32
+    with_bpe = True
+    cased = True    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
 
 

@@ -2,29 +2,25 @@ import torch as tc
 from torch import cuda
 
 import wargs
-from tools.inputs import Input
-from tools.utils import init_dir, wlog, _load_model
-from tools.optimizer import Optim
 from inputs_handler import *
+from tools.inputs import Input
+from tools.optimizer import Optim
+from models.losser import Classifier
+from models.embedding import WordEmbedding
+from models.model_builder import build_NMT
+from tools.utils import init_dir, wlog, _load_model
 
 # Check if CUDA is available
 if cuda.is_available():
-    wlog('CUDA is available, specify device by gpu_id argument (i.e. gpu_id=[3])')
+    wlog('CUDA is available, specify device by gpu_id argument (i.e. gpu_id=[0, 1, 2])')
 else:
     wlog('Warning: CUDA is not available, train on CPU')
 
-if wargs.gpu_id:
-    cuda.set_device(wargs.gpu_id[0])
-    wlog('Using GPU {}'.format(wargs.gpu_id[0]))
-
-if wargs.model == 0: from models.groundhog import *
-elif wargs.model == 1: from models.rnnsearch import *
-elif wargs.model == 2: from models.rnnsearch_ia import *
-elif wargs.model == 3: from models.ran_agru import *
-elif wargs.model == 4: from models.rnnsearch_rn import *
-elif wargs.model == 5: from models.nmt_sru import *
-elif wargs.model == 6: from models.nmt_cyk import *
-elif wargs.model == 7: from models.non_local import *
+if wargs.gpu_id is not None:
+    #cuda.set_device(wargs.gpu_id[0])
+    device = tc.device('cuda:{}'.format(wargs.gpu_id[0]) if cuda.is_available() else 'cpu')
+    wlog('Set device {}, will use {} GPUs {}'.format(
+        wargs.gpu_id[0], len(wargs.gpu_id), wargs.gpu_id))
 
 from trainer import *
 from translate import Translator
@@ -46,17 +42,17 @@ def main():
     vocabs = {}
     if wargs.word_piece is True:
         wlog('\n[w/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = get_or_generate_vocab(src, wargs.src_dict, max_seq_len=wargs.max_seq_len)
+        src_vocab = get_or_generate_vocab(src, wargs.src_vcb, max_seq_len=wargs.max_seq_len)
         wlog('\n[w/Subword] Preparing target vocabulary from {} ... '.format(trg))
-        trg_vocab = get_or_generate_vocab(trg, wargs.trg_dict, max_seq_len=wargs.max_seq_len)
+        trg_vocab = get_or_generate_vocab(trg, wargs.trg_vcb, max_seq_len=wargs.max_seq_len)
     else:
         wlog('\n[o/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size,
+        src_vocab = extract_vocab(src, wargs.src_vcb, wargs.n_src_vcb_plan,
                                   wargs.max_seq_len, char=wargs.src_char)
         wlog('\n[o/Subword] Preparing target vocabulary from {} ... '.format(trg))
-        trg_vocab = extract_vocab(trg, wargs.trg_dict, wargs.trg_dict_size, wargs.max_seq_len)
-    src_vocab_size, trg_vocab_size = src_vocab.size(), trg_vocab.size()
-    wlog('Vocabulary size: |source|={}, |target|={}'.format(src_vocab_size, trg_vocab_size))
+        trg_vocab = extract_vocab(trg, wargs.trg_vcb, wargs.n_trg_vcb_plan, wargs.max_seq_len)
+    n_src_vcb, n_trg_vcb = src_vocab.size(), trg_vocab.size()
+    wlog('Vocabulary size: |source|={}, |target|={}'.format(n_src_vcb, n_trg_vcb))
     vocabs['src'], vocabs['trg'] = src_vocab, trg_vocab
 
     wlog('\nPreparing training set from {} and {} ... '.format(src, trg))
@@ -69,7 +65,8 @@ def main():
     list [torch.LongTensor (sentence), torch.LongTensor, torch.LongTensor, ...]
     no padding
     '''
-    batch_train = Input(train_src_tlst, train_trg_tlst, wargs.batch_size, batch_sort=True)
+    batch_train = Input(train_src_tlst, train_trg_tlst, wargs.batch_size, bow=wargs.trg_bow,
+                        batch_sort=True)
     wlog('Sentence-pairs count in training data: {}'.format(len(train_src_tlst)))
 
     batch_valid = None
@@ -98,39 +95,34 @@ def main():
             batch_tests[prefix] = Input(test_src_tlst, None, 1, volatile=True, batch_sort=False)
     wlog('\n## Finish to Prepare Dataset ! ##\n')
 
-    if wargs.model == 8:
-        from models.transformer import Transformer
-        #from transformer.Models import Transformer
-        nmtModel = Transformer(
-            src_vocab_size,
-            trg_vocab_size,
-            wargs.max_seq_len,
-            proj_share_weight=wargs.proj_share_weight,
-            embs_share_weight=wargs.embs_share_weight,
-            d_model=wargs.d_model,
-            d_word_vec=wargs.d_word_vec,
-            d_inner_hid=wargs.d_inner_hid,
-            n_layers=wargs.n_layers,
-            n_head=wargs.n_head,
-            dropout=wargs.drop_rate)
+    src_emb = WordEmbedding(n_src_vcb, wargs.d_src_emb, wargs.input_dropout,
+                            wargs.position_encoding, prefix='Src')
+    trg_emb = WordEmbedding(n_trg_vcb, wargs.d_trg_emb, wargs.input_dropout,
+                            wargs.position_encoding, prefix='Trg')
+    # share the embedding matrix - preprocess with share_vocab required.
+    if wargs.embs_share_weight:
+        if n_src_vcb != n_trg_vcb:
+            raise AssertionError('The `-share_vocab` should be set during '
+                                 'preprocess if you use share_embeddings!')
+        src_emb.we.weight = trg_emb.we.weight
 
-        def get_criterion(vocab_size):
-            weight = tc.ones(vocab_size)
-            weight[PAD] = 0
-            return nn.CrossEntropyLoss(weight, size_average=False)
-        crit = get_criterion(trg_vocab_size)
-    else: nmtModel = NMT(src_vocab_size, trg_vocab_size)
+    nmtModel = build_NMT(src_emb, trg_emb)
+
+    if not wargs.copy_attn:
+        classifier = Classifier(wargs.d_dec_hid, n_trg_vcb, trg_emb,
+                                label_smoothing=wargs.label_smoothing,
+                                emb_loss=wargs.emb_loss, bow_loss=wargs.bow_loss)
+    nmtModel.classifier = classifier
 
     if wargs.pre_train is not None:
-
         assert os.path.exists(wargs.pre_train)
-
         _dict = _load_model(wargs.pre_train)
         # initializing parameters of interactive attention model
         class_dict = None
-        if len(_dict) == 4: model_dict, eid, bid, optim = _dict
-        elif len(_dict) == 5:
+        if len(_dict) == 5:
             model_dict, class_dict, eid, bid, optim = _dict
+        elif len(_dict) == 4:
+            model_dict, eid, bid, optim = _dict
         for name, param in nmtModel.named_parameters():
             if name in model_dict:
                 param.requires_grad = not wargs.fix_pre_params
@@ -146,28 +138,28 @@ def main():
                     param.requires_grad = not wargs.fix_pre_params
                     param.data.copy_(class_dict['map_vocab.bias'])
                     wlog('{:7} -> grad {}\t{}'.format('Model', param.requires_grad, name))
-            else: init_params(param, name, True)
+            else: init_params(param, name, init_D=wargs.param_init_D)
 
         wargs.start_epoch = eid + 1
 
     else:
-        if wargs.model != 8:
-            for n, p in nmtModel.named_parameters(): init_params(p, n, True)
         optim = Optim(
             wargs.opt_mode, wargs.learning_rate, wargs.max_grad_norm,
             learning_rate_decay=wargs.learning_rate_decay,
             start_decay_from=wargs.start_decay_from,
-            last_valid_bleu=wargs.last_valid_bleu, model=wargs.model
+            last_valid_bleu=wargs.last_valid_bleu
         )
+        for n, p in nmtModel.named_parameters():
+            # bias can not be initialized uniformly
+            init_params(p, n, init_D=wargs.param_init_D)
 
     if wargs.gpu_id is not None:
-        #nmtModel.cuda()
-        #nmtModel = tc.nn.DataParallel(nmtModel, device_ids=wargs.gpu_id, dim=1)
-        wlog('Push model onto GPU {} ... '.format(wargs.gpu_id), 0)
-        nmtModel.cuda()
+        wlog('push model onto GPU {} ... '.format(wargs.gpu_id), 0)
+        nmtModel = nn.DataParallel(nmtModel, device_ids=wargs.gpu_id)
+        nmtModel.to(tc.device('cuda'))
     else:
-        wlog('Push model onto CPU ... ', 0)
-        nmtModel.cpu()
+        wlog('push model onto CPU ... ', 0)
+        nmtModel.to(tc.device('cpu'))
 
     wlog('done.')
 
@@ -175,19 +167,20 @@ def main():
     wlog(optim)
     pcnt1 = len([p for p in nmtModel.parameters()])
     pcnt2 = sum([p.nelement() for p in nmtModel.parameters()])
-    wlog('Parameters number: {}/{}'.format(pcnt1, pcnt2))
+    wlog('parameters number: {}/{}'.format(pcnt1, pcnt2))
 
-    wlog('\n' + '*' * 30 + ' Trainable parameters ' + '*' * 30)
-    for n, p in nmtModel.get_trainable_parameters(): wlog(n)
-    if wargs.model == 8: optim.init_optimizer((p for n, p in nmtModel.get_trainable_parameters()))
-    else: optim.init_optimizer(nmtModel.parameters())
+    wlog('\n' + '*' * 30 + ' trainable parameters ' + '*' * 30)
+    for n, p in nmtModel.named_parameters():
+        if p.requires_grad: wlog('{:60} : {}'.format(n, p.size()))
+
+    optim.init_optimizer(nmtModel.parameters())
 
     trainer = Trainer(nmtModel, batch_train, vocabs, optim, batch_valid, batch_tests)
 
     trainer.train()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 
     main()
 

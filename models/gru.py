@@ -131,3 +131,133 @@ class GRU(nn.Module):
 
         return h_t
 
+'''
+Linear Linear Transformation enhanced GRU with initial state as parameter:
+
+    z_t = sigmoid( h_{t-1} dot U_hz + b_hz )
+    r_t = sigmoid( h_{t-1} dot U_hr + b_xr )
+
+    => zr_t = sigmoid( h_{t-1} dot U_hzr + b_hzr )
+    slice ...
+
+    l_t = sigmoid( ( x_t dot W_xl + b_xl ) + ( h_{t-1} dot U_hl + b_hl ) )
+
+    h_above = tanh( ( x_t dot W_xh + b_xh ) + r_t * ( h_{t-1} dot U_hh + b_hh ) ) + l_t * H(x_t)
+
+    h_t = (1 - z_t) * h_{t-1} + z_t * h_above
+
+all parameters are initialized in [-0.01, 0.01]
+'''
+class LGRU(nn.Module):
+
+    def __init__(self, input_size, hidden_size, dropout_prob=None, prefix='LGRU', **kwargs):
+
+        super(LGRU, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.prefix = prefix
+
+        self.xrz = nn.Linear(input_size, 2 * hidden_size, bias=False)
+        self.hrz = nn.Linear(hidden_size, 2 * hidden_size, bias=False)
+
+        self.xl = nn.Linear(input_size, hidden_size, bias=False)
+        self.hl = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.wx = nn.Linear(input_size, hidden_size, bias=False)
+
+        self.xh = nn.Linear(input_size, hidden_size, bias=False)
+        self.hh = nn.Linear(hidden_size, hidden_size, bias=True)
+
+        self.layer_norm_rz_gate = nn.LayerNorm(2 * hidden_size, elementwise_affine=True)
+        self.layer_norm_l_gate = nn.LayerNorm(hidden_size, elementwise_affine=True)
+        self.sigmoid = nn.Sigmoid()
+        self.tanh = nn.Tanh()
+        if dropout_prob is not None and 0. < dropout_prob <= 1.0:
+            self.dropout = nn.Dropout(p=dropout_prob)
+        self.dropout_prob = dropout_prob
+
+    '''
+        x_t: input at time t
+        x_m: mask of x_t
+        h_tm1: previous state
+    '''
+    def forward(self, x_t, h_tm1, x_m=None):
+
+        assert ( x_t.dim() == 2 and h_tm1.dim() == 2 ), 'dim of hidden state should be 2'
+        x_rz_t, h_rz_tm1 = self.xrz(x_t), self.hrz(h_tm1)
+        rz_t = self.sigmoid( self.layer_norm_rz_gate( x_rz_t + h_rz_tm1 ) )
+        r_t, z_t = rz_t[:, :self.hidden_size], rz_t[:, self.hidden_size:]
+
+        l_t = self.sigmoid( self.layer_norm_l_gate( self.xl(x_t) + self.hl(h_tm1) ) )
+        H_x_t = self.wx(x_t)
+
+        h_t_above = self.tanh( self.xh(x_t) + r_t * self.hh(h_tm1) ) + l_t * H_x_t
+        h_t = (1. - z_t) * h_tm1 + z_t * h_t_above
+
+        if self.dropout_prob is not None and 0. < self.dropout_prob <= 1.0:
+            h_t = self.dropout(h_t)
+
+        if x_m is not None:
+            h_t = x_m[:, None] * h_t + (1. - x_m[:, None]) * h_tm1
+
+        return h_t
+
+
+'''
+Transition GRU with initial state as parameter:
+
+    z_t = sigmoid( h_{t-1} dot U_hz + b_hz )
+    r_t = sigmoid( h_{t-1} dot U_hr + b_xr )
+
+    => zr_t = sigmoid( h_{t-1} dot U_hzr + b_hzr )
+    slice ...
+
+    h_above = tanh( r_t * ( h_{t-1} dot U_hh + b_hh ) )
+
+    h_t = (1 - z_t) * h_{t-1} + z_t * h_above
+
+all parameters are initialized in [-0.01, 0.01]
+'''
+class TGRU(nn.Module):
+
+    def __init__(self, hidden_size, dropout_prob=None, prefix='TGRU', **kwargs):
+
+        super(TGRU, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.prefix = prefix
+
+        self.hh = nn.Linear(hidden_size, hidden_size, bias=True)
+        self.hrz = nn.Linear(hidden_size, 2 * hidden_size, bias=False)
+
+        self.layer_norm_rz_gate = nn.LayerNorm(2 * hidden_size, elementwise_affine=True)
+        self.sigmoid = nn.Sigmoid()
+        self.tanh = nn.Tanh()
+        if dropout_prob is not None and 0. < dropout_prob <= 1.0:
+            self.dropout = nn.Dropout(p=dropout_prob)
+        self.dropout_prob = dropout_prob
+
+    '''
+        x_m: mask of x_t
+        h_tm1: previous state
+    '''
+    def forward(self, h_tm1, x_m=None):
+
+        assert h_tm1.dim() == 2, 'dim of hidden state should be 2'
+        rz_t = self.hrz(h_tm1)
+        rz_t = self.sigmoid( self.layer_norm_rz_gate( rz_t ) )
+        r_t, z_t = rz_t[:, :self.hidden_size], rz_t[:, self.hidden_size:]
+
+        h_t_above = self.tanh( r_t * self.hh(h_tm1) )
+
+        if self.dropout_prob is not None and 0. < self.dropout_prob <= 1.0:
+            h_t_above = self.dropout(h_t_above)
+
+        h_t = (1. - z_t) * h_tm1 + z_t * h_t_above
+        if x_m is not None:
+            h_t = x_m[:, None] * h_t + (1. - x_m[:, None]) * h_tm1
+
+        return h_t
+
+
+
+

@@ -107,6 +107,7 @@ class Dictionary(object):
 
         # we use int32 to represent the index of vocabulary
         # enough: [-2,147,483,648 to 2,147,483,647]
-        return tc.LongTensor(list_idx)
+        #return tc.LongTensor(list_idx)
+        return list_idx
 
 

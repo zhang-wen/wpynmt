@@ -4,7 +4,6 @@ import sys
 import copy
 import numpy as np
 import torch as tc
-from torch.autograd import Variable
 
 import wargs
 from tools.utils import *
@@ -15,8 +14,11 @@ class Nbs(object):
 
     def __init__(self, model, tvcb_i2w, k=10, ptv=None, noise=False, print_att=False):
 
-        self.model = model
-        self.decoder = model.decoder
+        if isinstance(model, tc.nn.DataParallel): self.model = model.module
+        else: self.model = model
+        self.encoder = self.model.encoder
+        self.decoder = self.model.decoder
+        self.classifier = self.model.classifier
 
         self.tvcb_i2w = tvcb_i2w
         self.k = k
@@ -38,29 +40,30 @@ class Nbs(object):
         #self.attent_probs = [] if self.print_att is True else None
         self.attent_probs = [[] for _ in range(self.B)] if self.print_att is True else None
         self.batch_tran_cands = [[] for _ in range(self.B)]
-        #print '-------------------- one sentence ............'
-        if isinstance(input_data, list):
-            self.srcL = len(s_list)
-            s_tensor = tc.Tensor(s_list).long().unsqueeze(-1)
+        if isinstance(input_data, tc.Tensor):
+            self.x_len = input_data.size(0)
+            self.x_BL = input_data.permute(1, 0)
         elif isinstance(input_data, tuple):
             # input_data: (idxs, tsrcs, tspos, lengths, src_mask)
-            if len(input_data) == 5:
-                _, s_tensor, src_pos, lens, src_mask = input_data
-                self.src_seq_BL, src_pos_BL = s_tensor.t(), src_pos.t()
+            if len(input_data) == 4:
+                _, x_BL, lens, src_mask = input_data
+                self.x_BL = x_BL.t()
             elif len(input_data) == 2:
-                self.src_seq_BL, src_pos_BL = input_data
+                self.x_BL, src_pos_BL = input_data
             elif len(input_data) == 8:
-                _, s_tensor, src_pos, _, _, _, _, _ = input_data
-                self.src_seq_BL, src_pos_BL = s_tensor.t(), src_pos.t()
-            assert self.src_seq_BL.size(0) == 1, 'Unsupported for batch decoding ... '
-            self.srcL = self.src_seq_BL.size(1)
-        self.maxL = wargs.max_seq_len
+                _, x_BL, src_pos, _, _, _, _, _ = input_data
+                self.x_BL, src_pos_BL = x_BL.t(), src_pos.t()
+            assert self.x_BL.size(0) == 1, 'Unsupported for batch decoding ... '
+            self.x_len = self.x_BL.size(1)
+        #self.maxL = wargs.max_seq_len
+        self.maxL = 2 * self.x_len
         if x_mask is None:
-            x_mask = tc.ones((self.srcL, 1))
-            x_mask = Variable(x_mask, requires_grad=False, volatile=True).cuda()
+            x_mask = tc.ones((1, self.x_len), requires_grad=False)
+            if wargs.gpu_id is not None: x_mask = x_mask.cuda()
 
-        self.enc_src0, _, _ = self.model.encoder(self.src_seq_BL, src_pos_BL)
-        #self.enc_src0 = self.model.encoder(self.src_seq_BL, src_pos_BL)[0]
+        debug('x_BL: {}\n{}'.format(self.x_BL.size(), self.x_BL))
+        self.enc_src0, _ = self.encoder(self.x_BL)
+        debug('enc_src0: {}\n{}'.format(self.enc_src0.size(), self.enc_src0))
         init_beam(self.beam, cnt=self.maxL, cp=True)
 
         if not wargs.with_batch: best_trans, best_loss = self.search()
@@ -73,7 +76,7 @@ class Nbs(object):
             debug([ (a[0], a[1]) for a in self.batch_tran_cands[bidx] ])
             best_trans, best_loss = self.batch_tran_cands[bidx][0][0], self.batch_tran_cands[bidx][0][1]
             debug('Src[{}], maskL[{}], hyp (w/o EOS)[{}], maxL[{}], loss[{}]'.format(
-                x_mask[:, bidx].sum().data[0], self.srcL, len(best_trans), self.maxL, best_loss))
+                x_mask[:, bidx].sum().item(), self.x_len, len(best_trans), self.maxL, best_loss))
         debug('Average Merging Rate [{}/{}={:6.4f}]'.format(self.C[1], self.C[0], self.C[1] / self.C[0]))
         debug('Average location of bp [{}/{}={:6.4f}]'.format(self.C[3], self.C[2], self.C[3] / self.C[2]))
         #debug('Step[{}] stepout[{}]'.format(*self.C[4:]))
@@ -103,7 +106,7 @@ class Nbs(object):
                 logit = self.decoder.step_out(s_i, y_im1, a_i)
                 self.C[3] += 1
 
-                next_ces = self.model.decoder.classifier(logit)
+                next_ces = self.classifier(logit)
                 next_ces = next_ces.cpu().data.numpy()
                 next_ces_flat = next_ces.flatten()    # (1,vocsize) -> (vocsize,)
                 ranks_idx_flat = part_sort(next_ces_flat, self.k - len(self.hyps))
@@ -143,21 +146,16 @@ class Nbs(object):
 
         #encoded_src0 = self.enc_src0
         encoded_src0 = self.enc_src0[-1]
-        # s0: (1, trg_nhids), encoded_src0: (srcL, 1, src_nhids*2), uh0: (srcL, 1, align_size)
+        # s0: (1, trg_nhids), encoded_src0: (x_len, 1, src_nhids*2)
         enc_size = encoded_src0.size(-1)
-        L, align_size = self.srcL, wargs.align_size
+        L = self.x_len
         hyp_scores = np.zeros(1).astype('float32')
         delete_idx, prevb_id = None, None
-        #batch_adj_list = [range(self.srcL) for _ in range(self.k)]
+        #batch_adj_list = [range(self.x_len) for _ in range(self.k)]
 
         debug('\nBeam-{} {}'.format(0, '-'*20))
         for b in self.beam[0][0]:    # do not output state
-            if wargs.dynamic_cyk_decoding is True:
-                debug(b[0:1] + (b[1][0], b[1][1], b[1][2].data.int().tolist()) + b[-2:])
-            else: debug(b[0:1] + b[-2:])
-
-        btg_xs_h, btg_uh, btg_xs_mask = None, None, None
-        if wargs.dynamic_cyk_decoding is True: btg_xs_h = encoded_src0
+            debug(b[0:1] + b[-2:])
 
         def track_ys(cur_bidx):
             y_part_seqs = []
@@ -179,55 +177,40 @@ class Nbs(object):
             cnt_bp = (i >= 2)
             if cnt_bp: self.C[0] += preb_sz
 
-            len_dec_seq = i
-            # -- Preparing decoded pos seq -- #
-            y_part_pos = tc.arange(1, len_dec_seq + 1).unsqueeze(0) # (1, seq)
-            y_part_pos = y_part_pos.repeat(preb_sz, 1)    # (beam, src_L)
-            y_part_pos = Variable(y_part_pos.type(tc.LongTensor), volatile=True)
             # -- Preparing decoded data seq -- #
             y_part_seqs = track_ys(i) # (preb_sz, trg_part_L)
-            y_part_seqs = tc.Tensor(y_part_seqs).view(-1, len_dec_seq)
-            y_part_seqs = Variable(y_part_seqs.type(tc.LongTensor), volatile=True)
-            if wargs.gpu_id is not None:
-                y_part_pos = y_part_pos.cuda()
-                y_part_seqs = y_part_seqs.cuda()
+            y_part_seqs = tc.tensor(y_part_seqs, requires_grad=False).view(-1, i)
+            if wargs.gpu_id: y_part_seqs = y_part_seqs.cuda()
             # encoded_src0: (mb_size, len_q, d_model)
-            #print self.src_seq_BL.size(), encoded_src0.size()
-            src_seq_BL = self.src_seq_BL.contiguous().view(-1, L).expand(preb_sz, L)
-            # (1, srcL, src_nhids) -> (preb_sz, srcL, src_nhids)
-            #enc_srcs = [self.enc_src0[l_idx].view(-1, L, enc_size).expand(preb_sz, L, enc_size) \
-            #            for l_idx in range(len(self.enc_src0))]
-            #print src_seq_BL.size(), enc_src.size()
+            #print self.x_BL.size(), encoded_src0.size()
+            x_BL = self.x_BL.contiguous().view(-1, L).expand(preb_sz, L)
+            # (1, x_len, src_nhids) -> (preb_sz, x_len, src_nhids)
+            #print x_BL.size(), enc_src.size()
             enc_srcs = encoded_src0.expand(preb_sz, L, enc_size)
+            debug('enc_srcs -> {}'.format(enc_srcs.size()))
 
-            #print y_part_seqs.size(), y_part_pos.size(), self.src_seq_BL.size(), enc_src.size()
             # -- Decoding -- #
-            debug('Whole x seq: {}'.format(src_seq_BL.size()))
+            debug('Whole x seq: {}'.format(x_BL.size()))
             debug('Part y seq: {}'.format(y_part_seqs.size()))
-            debug('Part y pos: {}'.format(y_part_pos.size()))
-            #print enc_srcs
-            dec_output, dec_slf_attn, dec_enc_attn, alpha_ij = self.model.decoder(
-                y_part_seqs, y_part_pos, src_seq_BL, enc_srcs)
-            #dec_output = self.model.decoder(
-            #    y_part_seqs, y_part_pos, src_seq_BL, enc_srcs)[0]
+            dec_output, _, nlayer_attns = self.decoder(y_part_seqs, x_BL, enc_srcs)
+            alpha_ij = nlayer_attns[-1][:, 0, :, :]
             debug('History decoder output: {}'.format(dec_output.size()))
             # (preb_sz, part_Len, d_model) -> (preb_sz, d_model)
             dec_output = dec_output[:, -1, :] # (preb_sz, d_model) previous decoder hidden state
             debug('Previous decoder output: {}'.format(dec_output.size()))
-            alpha_ij = alpha_ij[:, -1, :].permute(1, 0)    # (B, trgL, srcL) -> (srcL, B)
+            alpha_ij = alpha_ij[:, -1, :].permute(1, 0)    # (B, trgL, x_len) -> (x_len, B)
             if self.attent_probs is not None:
                 #print 'alpha_ij: ', alpha_ij.size()
                 self.attent_probs[0].append(alpha_ij)
             self.C[2] += 1
             self.C[3] += 1
             debug('For beam[{}], pre-beam ids: {}'.format(i - 1, prevb_id))
-            next_ces = self.model.decoder.classifier(dec_output)
+            next_ces = self.classifier(dec_output)
             '''
             dec_output = self.model.tgt_word_proj(dec_output)
             next_ces = -self.model.prob_projection(dec_output)
             '''
             next_ces = next_ces.cpu().data.numpy()
-            #next_ces = -next_scores if self.ifscore else self.fn_ce(next_scores)
             cand_scores = hyp_scores[:, None] + next_ces
             cand_scores_flat = cand_scores.flatten()
             ranks_flat = part_sort(cand_scores_flat, self.k - len(self.hyps))
@@ -274,9 +257,7 @@ class Nbs(object):
 
             debug('\n{} Beam-{} {}'.format('-'*20, i, '-'*20))
             for b in self.beam[i][0]:    # do not output state
-                if wargs.dynamic_cyk_decoding is True:
-                    debug(b[0:1] + (b[1][0], b[1][1], b[1][2].data.int().tolist()) + b[-2:])
-                else: debug(b[0:1] + b[-2:])
+                debug(b[0:1] + b[-2:])
             hyp_scores = np.array([b[0] for b in self.beam[i][0]])
 
         # no early stop, back tracking
@@ -318,8 +299,8 @@ class Nbs(object):
         hyp_scores = numpy.zeros(live_k).astype('float32')
         hyp_states = []
 
-        # s0: (1, trg_nhids), enc_src0: (srcL, 1, src_nhids*2), uh0: (srcL, 1, align_size)
-        L, enc_size, align_size = self.srcL, self.enc_src0.size(2), self.uh0.size(2)
+        # s0: (1, trg_nhids), enc_src0: (x_len, 1, src_nhids*2), uh0: (x_len, 1, align_size)
+        L, enc_size, align_size = self.x_len, self.enc_src0.size(2), self.uh0.size(2)
 
         s_im1, y_im1 = self.s0, [BOS]  # indicator for the first target word (bos target)
         preb_sz = 1
@@ -339,7 +320,7 @@ class Nbs(object):
             # logit = self.decoder.logit(s_i)
             logit = self.decoder.step_out(s_im1, y_im1, a_i)
             self.C[3] += 1
-            next_ces = self.model.decoder.classifier(logit)
+            next_ces = self.classifier(logit)
             next_ces = next_ces.cpu().data.numpy()
             #cand_scores = hyp_scores[:, None] - numpy.log(next_scores)
             cand_scores = hyp_scores[:, None] + next_ces
