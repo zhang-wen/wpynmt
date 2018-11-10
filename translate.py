@@ -358,12 +358,17 @@ class Translator(object):
 
         wlog('\nCurrent [{}] - Best History [{}]'.format(bleu_score, max(bleu_scores)))
         if bleu_score > max(bleu_scores):   # better than history
+            wargs.worse_counter = 0
             copyfile(model_file, wargs.best_model)
             wlog('Better, cp {} {}'.format(model_file, wargs.best_model))
             bleu_content = 'epoch [{}], batch[{}], BLEU score*: {}'.format(eid, bid, bleu_score)
             if tests_data is not None: self.trans_tests(tests_data, eid, bid)
         else:
             wlog('Worse')
+            wargs.worse_counter = wargs.worse_counter + 1
+            if wargs.worse_counter >= 5.:
+                wlog('{} consecutive worses, finish training.'.format(wargs.worse_counter))
+                sys.exit(0)
             bleu_content = 'epoch [{}], batch[{}], BLEU score : {}'.format(eid, bid, bleu_score)
 
         append_file(bleu_scores_fname, bleu_content)

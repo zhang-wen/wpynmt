@@ -1,30 +1,31 @@
 # Maximal sequence length in training data
 #max_seq_len = 10000000
-max_seq_len = 80
+max_seq_len = 100
+worse_counter = 0
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder '''
 encoder_type = 'att'
 d_src_emb = 512     # size of source word embedding
-n_enc_layers = 1    # layers number
+n_enc_layers = 2    # layers number
 d_enc_hid = 512     # hidden size in rnn
 
 ''' decoder '''
 decoder_type = 'att'
 d_trg_emb = 512     # size of target word embedding
-n_dec_layers = 1    # layers number
+n_dec_layers = 2    # layers number
 d_dec_hid = 512     # hidden size in rnn
 
 ''' transformer '''
 d_model = 512       # n_head * d_v, size of alignment
 d_ff_filter = 512  # hidden size of the second layer of PositionwiseFeedForward
 n_head = 8          # the number of head for MultiHeadedAttention
-att_dropout = 0.1
-residual_dropout = 0.1
-relu_dropout = 0.1
+att_dropout = 0.2
+residual_dropout = 0.2
+relu_dropout = 0.2
 
 # dropout for tgru
-input_dropout = 0.5
+input_dropout = 0.
 rnn_dropout = 0.3
 output_dropout = 0.5
 
@@ -78,7 +79,7 @@ trunc_size = 0   # truncated bptt
 grad_accum_count = 1   # accumulate gradient for batch_size * accum_count batches (Transformer)
 snip_size = 20
 normalization = 'tokens'     # 'sents' or 'tokens', normalization method of the gradient
-max_grad_norm = 5 # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
+max_grad_norm = 25 # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
 
 ''' whether use pretrained model '''
 pre_train = None
@@ -167,13 +168,13 @@ if dataset == 'toy':
     max_epochs = 50
     ''' optimizer settings '''
     opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
-    lr_update_way = 'chen'  # 't2t' or 'chen'
-    param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal
-    learning_rate = 0.01    # 1.0, 0.001, 0.01
+    lr_update_way = 't2t'  # 't2t' or 'chen'
+    param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
+    learning_rate = 1.    # 1.0, 0.001, 0.01
     rho = 0.95
     beta_1 = 0.9
     beta_2 = 0.998
-    warmup_steps = 2000
+    warmup_steps = 200
 elif dataset == 'de-en':
     #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
     val_tst_dir = '/home/wen/3.corpus/mt/iwslt14-de-en/'
