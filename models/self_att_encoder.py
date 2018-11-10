@@ -68,6 +68,17 @@ class SelfAttEncoder(nn.Module):
 
         super(SelfAttEncoder, self).__init__()
 
+        wlog('Transformer encoder ========================= ')
+        wlog('\tn_src_vocab:        {}'.format(src_emb.we.weight.size()))
+        wlog('\tn_layers:           {}'.format(n_layers))
+        wlog('\tn_head:             {}'.format(n_head))
+        wlog('\td_word_vec:         {}'.format(trg_emb.we.weight.size(-1)))
+        wlog('\td_model:            {}'.format(d_model))
+        wlog('\td_ffn_filter:       {}'.format(d_ff_filter))
+        wlog('\tatt_dropout:        {}'.format(att_dropout))
+        wlog('\tresidual_dropout:   {}'.format(residual_dropout))
+        wlog('\trelu_dropout:       {}'.format(relu_dropout))
+
         self.embed = src_emb
         wlog('src word emb: {}'.format(self.embed.we.weight.data.size()))
 

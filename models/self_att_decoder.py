@@ -131,6 +131,18 @@ class SelfAttDecoder(nn.Module):
                  self_attn_type='scaled-dot',
                  proj_share_weight=False):
 
+        wlog('Transformer decoder ========================= ')
+        wlog('\tn_trg_vocab:        {}'.format(trg_emb.we.weight.size()))
+        wlog('\tn_layers:           {}'.format(n_layers))
+        wlog('\tn_head:             {}'.format(n_head))
+        wlog('\td_word_vec:         {}'.format(trg_emb.we.weight.size(-1)))
+        wlog('\td_model:            {}'.format(d_model))
+        wlog('\td_ffn_filter:       {}'.format(d_ff_filter))
+        wlog('\tatt_dropout:        {}'.format(att_dropout))
+        wlog('\tresidual_dropout:   {}'.format(residual_dropout))
+        wlog('\trelu_dropout:       {}'.format(relu_dropout))
+        wlog('\tproj_share_weight:  {}'.format(proj_share_weight))
+
         super(SelfAttDecoder, self).__init__()
 
         self.embed = trg_emb

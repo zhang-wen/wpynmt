@@ -493,22 +493,21 @@ def ids2Tensor(list_wids, bos_id=None, eos_id=None):
     return tc.LongTensor(list_idx)
 
 def lp_cp(bp, beam_idx, bidx, beam):
-    ys_pi = []
     assert len(beam[0][0][0]) == 6, 'require attention prob for alpha'
-    '''
-    for i in reversed(xrange(1, beam_idx)):
-        _, p_im1, _, _, w, bp = beam[i][bidx][bp]
-        ys_pi.append(p_im1)
-    if len(ys_pi) == 0: return 1.0, 0.0
-    ys_pi = tc.stack(ys_pi, dim=0).sum(0)   # (part_trg_len, src_len) -> (src_len, )
-    #m = ( ys_pi > 1.0 ).float()
-    #ys_pi = ys_pi * ( 1. - m ) + m
-    penalty = tc.min(ys_pi, ys_pi.clone().fill_(1.0)).log().sum().item()
-    cp = wargs.beta_cover_penalty * penalty
-    '''
+    cp = 0.
+    if wargs.beta_cover_penalty > 0.:
+        ys_pi = []
+        for i in reversed(xrange(1, beam_idx)):
+            _, p_im1, _, _, w, bp = beam[i][bidx][bp]
+            ys_pi.append(p_im1)
+        if len(ys_pi) == 0: return 1.0, 0.0
+        ys_pi = tc.stack(ys_pi, dim=0).sum(0)   # (part_trg_len, src_len) -> (src_len, )
+        #m = ( ys_pi > 1.0 ).float()
+        #ys_pi = ys_pi * ( 1. - m ) + m
+        penalty = tc.min(ys_pi, ys_pi.clone().fill_(1.0)).log().sum().item()
+        cp = wargs.beta_cover_penalty * penalty
     #lp = ( ( 5 + beam_idx - 1 ) ** wargs.alpha_len_norm ) / ( (5 + 1) ** wargs.alpha_len_norm )
     lp = ( ( 5 + beam_idx ) ** wargs.alpha_len_norm ) / ( (5 + 1) ** wargs.alpha_len_norm )
-    cp = 0.
 
     return lp, cp
 

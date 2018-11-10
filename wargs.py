@@ -1,27 +1,27 @@
 # Maximal sequence length in training data
 #max_seq_len = 10000000
-max_seq_len = 128
+max_seq_len = 80
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder '''
 encoder_type = 'att'
 d_src_emb = 512     # size of source word embedding
-n_enc_layers = 2    # layers number
+n_enc_layers = 1    # layers number
 d_enc_hid = 512     # hidden size in rnn
 
 ''' decoder '''
 decoder_type = 'att'
 d_trg_emb = 512     # size of target word embedding
-n_dec_layers = 2    # layers number
+n_dec_layers = 1    # layers number
 d_dec_hid = 512     # hidden size in rnn
 
 ''' transformer '''
 d_model = 512       # n_head * d_v, size of alignment
 d_ff_filter = 512  # hidden size of the second layer of PositionwiseFeedForward
 n_head = 8          # the number of head for MultiHeadedAttention
-att_dropout = 0.3
-residual_dropout = 0.3
-relu_dropout = 0.3
+att_dropout = 0.1
+residual_dropout = 0.1
+relu_dropout = 0.1
 
 # dropout for tgru
 input_dropout = 0.5
