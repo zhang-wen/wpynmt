@@ -135,7 +135,6 @@ class SelfAttDecoder(nn.Module):
         wlog('\ttrg_word_emb:       {}'.format(trg_emb.we.weight.size()))
         wlog('\tn_layers:           {}'.format(n_layers))
         wlog('\tn_head:             {}'.format(n_head))
-        wlog('\td_word_vec:         {}'.format(trg_emb.we.weight.size(-1)))
         wlog('\td_model:            {}'.format(d_model))
         wlog('\td_ffn_filter:       {}'.format(d_ff_filter))
         wlog('\tatt_dropout:        {}'.format(att_dropout))

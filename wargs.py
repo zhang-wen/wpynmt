@@ -167,9 +167,9 @@ if dataset == 'toy':
     max_epochs = 50
     ''' optimizer settings '''
     opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
-    lr_update_way = 't2t'  # 't2t' or 'chen'
-    param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
-    learning_rate = 1.    # 1.0, 0.001, 0.01
+    lr_update_way = 'chen'  # 't2t' or 'chen'
+    param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal
+    learning_rate = 0.01    # 1.0, 0.001, 0.01
     rho = 0.95
     beta_1 = 0.9
     beta_2 = 0.998
