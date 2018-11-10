@@ -132,7 +132,7 @@ class SelfAttDecoder(nn.Module):
                  proj_share_weight=False):
 
         wlog('Transformer decoder ========================= ')
-        wlog('\tn_trg_vocab:        {}'.format(trg_emb.we.weight.size()))
+        wlog('\ttrg_word_emb:       {}'.format(trg_emb.we.weight.size()))
         wlog('\tn_layers:           {}'.format(n_layers))
         wlog('\tn_head:             {}'.format(n_head))
         wlog('\td_word_vec:         {}'.format(trg_emb.we.weight.size(-1)))
@@ -146,7 +146,6 @@ class SelfAttDecoder(nn.Module):
         super(SelfAttDecoder, self).__init__()
 
         self.embed = trg_emb
-        wlog('trg word emb: {}'.format(self.embed.we.weight.data.size()))
 
         self.layer_stack = nn.ModuleList([
             SelfAttDecoderLayer(d_model,
