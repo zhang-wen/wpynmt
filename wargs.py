@@ -1,7 +1,5 @@
 # Maximal sequence length in training data
-#max_seq_len = 10000000
-max_seq_len = 100
-worse_counter = 0
+max_seq_len = 128
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder '''
@@ -16,16 +14,17 @@ d_trg_emb = 512     # size of target word embedding
 n_dec_layers = 2    # layers number
 d_dec_hid = 512     # hidden size in rnn
 
+input_dropout = 0.5
+
 ''' transformer '''
 d_model = 512       # n_head * d_v, size of alignment
-d_ff_filter = 512  # hidden size of the second layer of PositionwiseFeedForward
+d_ff_filter = 512   # hidden size of the second layer of PositionwiseFeedForward
 n_head = 8          # the number of head for MultiHeadedAttention
-att_dropout = 0.2
-residual_dropout = 0.2
-relu_dropout = 0.2
+att_dropout = 0.1
+residual_dropout = 0.1
+relu_dropout = 0.1
 
-# dropout for tgru
-input_dropout = 0.
+''' dropout for tgru '''
 rnn_dropout = 0.3
 output_dropout = 0.5
 
@@ -173,8 +172,8 @@ if dataset == 'toy':
     learning_rate = 1.    # 1.0, 0.001, 0.01
     rho = 0.95
     beta_1 = 0.9
-    beta_2 = 0.998
-    warmup_steps = 200
+    beta_2 = 0.98
+    warmup_steps = 500
 elif dataset == 'de-en':
     #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
     val_tst_dir = '/home/wen/3.corpus/mt/iwslt14-de-en/'
