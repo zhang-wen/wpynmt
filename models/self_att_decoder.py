@@ -173,7 +173,7 @@ class SelfAttDecoder(nn.Module):
         trg_src_attn_mask = src_seq.data.eq(PAD).unsqueeze(1).expand(src_B, trg_L, src_L)
         trg_self_attn_mask = trg_seq.data.eq(PAD).unsqueeze(1).expand(trg_B, trg_L, trg_L)
 
-        dec_output = self.embed(trg_seq)
+        _, dec_output = self.embed(trg_seq)
 
         nlayer_outputs, nlayer_self_attns, nlayer_attns = [], [], []
         for dec_layer in self.layer_stack:

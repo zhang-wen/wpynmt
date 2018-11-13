@@ -32,6 +32,7 @@ class Label_Smooth_NLLLoss(nn.Module):
         model_prob.masked_fill_((target == self.padding_idx).unsqueeze(1), 0)
 
         return F.kl_div(output, model_prob, reduction='sum')
+        #return F.kl_div(output, model_prob, size_average=False)
 
 class Classifier(nn.Module):
 
@@ -65,6 +66,7 @@ class Classifier(nn.Module):
             weight = tc.ones(output_size)
             weight[PAD] = 0   # do not predict padding, same with ingore_index
             self.criterion = nn.NLLLoss(weight, ignore_index=PAD, reduction='sum')
+            #self.criterion = nn.NLLLoss(weight, ignore_index=PAD, size_average=False)
         elif label_smoothing > 0.:
             # All non-true labels are uniformly set to low-confidence.
             self.criterion = Label_Smooth_NLLLoss(label_smoothing, output_size)

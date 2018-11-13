@@ -29,31 +29,28 @@ class Nbs(object):
         self.batch_sample = batch_sample
         debug('Batch sampling by beam search ... {}'.format(batch_sample))
 
-    def beam_search_trans(self, x_LB, x_mask=None, y_mask=None):
+    def beam_search_trans(self, x_BL, x_mask=None, y_mask=None):
 
         #print '-------------------- one sentence ............'
         self.trgs_len = y_mask.sum(0).data.int().tolist() if y_mask is not None else None
-        if isinstance(x_LB, list): x_LB = tc.Tensor(x_LB).long().unsqueeze(-1)
-        elif isinstance(x_LB, tuple): x_LB = x_LB[1]
-        self.srcL, self.B = x_LB.size()
+        if isinstance(x_BL, list): x_BL = tc.LongTensor(x_BL).unsqueeze(0)
+        elif isinstance(x_BL, tuple): x_BL = x_BL[1].unsqueeze(0)
+        self.B, self.srcL = x_BL.size()
         if x_mask is None:
-            x_mask = tc.ones((self.srcL, 1))
-            # for pytorch v4.0
-            x_mask = tc.tensor(x_mask, requires_grad=False).cuda()
-            # for pytorch before v3.0
-            #x_mask = Variable(x_mask, requires_grad=False, volatile=True).cuda()
+            x_mask = tc.ones((1, self.srcL), requires_grad=False)
+            if wargs.gpu_id is not None: x_mask = x_mask.cuda()
         assert not ( self.batch_sample ^ (self.trgs_len is not None) ), 'sample ^ trgs_len'
 
         self.beam, self.hyps = [], [[] for _ in range(self.B)]
         self.batch_tran_cands = [[] for _ in range(self.B)]
         self.attent_probs = [[] for _ in range(self.B)] if self.print_att is True else None
 
-        self.maxL = y_mask.size(0) if self.batch_sample is True else 2 * self.srcL
+        self.maxL = y_mask.size(1) if self.batch_sample is True else 2 * self.srcL
         # get initial state of decoder rnn and encoder context
-        self.enc_src0 = self.model.encoder(x_LB, xs_mask=x_mask)
+        self.enc_src0 = self.model.encoder(x_BL, xs_mask=x_mask)
         self.s0, self.uh0 = self.model.decoder.init_state(self.enc_src0, xs_mask=x_mask)
         #if wargs.dec_layer_cnt > 1: self.s0 = [self.s0] * wargs.dec_layer_cnt
-        # (1, trg_nhids), (src_len, 1, src_nhids*2)
+        # (1, trg_nhids), (1, src_len, src_nhids*2)
         init_beam(self.beam, cnt=self.maxL, s0=self.s0)
 
         if not wargs.with_batch:
@@ -149,7 +146,7 @@ class Nbs(object):
     #@exeTime
     def batch_search(self):
 
-        # s0: (B, trg_nhids), enc_src0: (srcL, B, src_nhids*2), uh0: (srcL, B, align_size)
+        # s0: (B, trg_nhids), enc_src0: (B, srcL, src_nhids*2), uh0: (B, srcL, align_size)
         hyp_scores = np.zeros(1).astype('float32')
         delete_idx, prevb_id = None, None
         for i in range(1, self.maxL + 1):
@@ -191,8 +188,8 @@ class Nbs(object):
                     enc_src, uh = self.enc_src0.expand(1, 1, preb_sz, 1), self.uh0.expand(1, 1, preb_sz, 1)
                 elif self.enc_src0.dim() == 3:
                     # (src_sent_len, B, src_nhids) -> (src_sent_len, B*preb_sz, src_nhids)
-                    enc_src.append(self.enc_src0[:,bidx,:].unsqueeze(1).repeat(1, preb_sz,1))
-                    uh.append(self.uh0[:,bidx,:].unsqueeze(1).repeat(1, preb_sz, 1))
+                    enc_src.append(self.enc_src0[bidx].repeat(preb_sz, 1, 1))
+                    uh.append(self.uh0[bidx].repeat(preb_sz, 1, 1))
             enc_src, uh = tc.cat(enc_src, dim=1), tc.cat(uh, dim=1)
 
             cnt_bp = (i >= 2)
@@ -200,7 +197,24 @@ class Nbs(object):
             hyp_scores = np.array(hyp_scores)
             s_im1 = tc.stack(s_im1)
 
+            def track_ys(cur_bidx):
+                y_part_seqs = []
+                for b in self.beam[cur_bidx - 1][0]:
+                    seq, bp = [b[-2]], b[-1]
+                    for i in reversed(xrange(0, cur_bidx - 1)):
+                        _, _, _, _, w, backptr = self.beam[i][0][bp]
+                        seq.append(w)
+                        bp = backptr
+                    y_part_seqs.append(seq[::-1])
+                return y_part_seqs
+
+            y_part_seqs = track_ys(i) # (preb_sz, trg_part_L)
+            y_part_seqs = tc.tensor(y_part_seqs, requires_grad=False).view(-1, i)
+            if wargs.gpu_id is not None: y_part_seqs = y_part_seqs.cuda()
+
             debug(y_im1)
+            debug(y_part_seqs)
+            y_im1 = self.decoder.word_emb(y_part_seqs)[1][:, -1, :]
             step_output = self.decoder.step(s_im1, enc_src, uh, y_im1)
             a_i, s_i, y_im1, alpha_ij = step_output[:4]
             # (n_remainings*p, enc_hid_size), (n_remainings*p, dec_hid_size),
@@ -297,10 +311,8 @@ class Nbs(object):
             self.beam[i] = next_step_beam
 
             if len(del_batch_idx) < n_remainings:
-                self.enc_src0 = self.enc_src0[:, filter(
-                    lambda x: x not in del_batch_idx, range(n_remainings)), :]
-                self.uh0 = self.uh0[:, filter(
-                    lambda x: x not in del_batch_idx, range(n_remainings)), :]
+                self.enc_src0 = self.enc_src0[filter(lambda x: x not in del_batch_idx, range(n_remainings))]
+                self.uh0 = self.uh0[filter(lambda x: x not in del_batch_idx, range(n_remainings))]
         # no early stop, back tracking
         n_remainings = len(self.beam[self.maxL])   # loop ends, how many sentences left
         self.no_early_best(n_remainings)
@@ -348,7 +360,7 @@ class Nbs(object):
         hyp_scores = numpy.zeros(live_k).astype('float32')
         hyp_states = []
 
-        # s0: (B, trg_nhids), enc_src0: (srcL, B, src_nhids*2), uh0: (srcL, B, align_size)
+        # s0: (B, trg_nhids), enc_src0: (B, srcL, src_nhids*2), uh0: (B, srcL, align_size)
         s_im1, y_im1 = self.s0, [BOS]  # indicator for the first target word (bos target)
         preb_sz = 1
 
@@ -357,7 +369,7 @@ class Nbs(object):
             cnt_bp = (ii >= 1)
             if cnt_bp: self.C[0] += preb_sz
             # (src_sent_len, 1, 2*src_nhids) -> (src_sent_len, live_k, 2*src_nhids)
-            enc_src, uh = self.enc_src0.repeat(1, live_k, 1), self.uh0.repeat(1, live_k, 1)
+            enc_src, uh = self.enc_src0.repeat(live_k, 1, 1), self.uh0.repeat(live_k, 1, 1)
 
             #c_i, s_i = self.decoder.step(c_im1, enc_src, uh, y_im1)
             a_i, s_im1, y_im1, _ = self.decoder.step(s_im1, enc_src, uh, y_im1)

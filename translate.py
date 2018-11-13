@@ -69,7 +69,8 @@ class Translator(object):
         # xs_nL: (sample_size, max_sLen)
         for idx in range(len(xs_nL)):
 
-            x_filter = sent_filter(xs_nL[idx].tolist())
+            one_src = xs_nL[idx]
+            x_filter = sent_filter(one_src.tolist())
             wlog('\n[{:3}] {}'.format('Ids', x_filter))
             x_sent = idx2sent(x_filter, self.svcb_i2w)
             if len(x_sent) == 2: x_sent, ori_src_toks = x_sent
@@ -79,8 +80,7 @@ class Translator(object):
             if len(y_sent) == 2: y_sent, ori_ref_toks = y_sent
             wlog('[{:3}] {}'.format('Ref', y_sent))
 
-            one_sent = xs_nL[idx]
-            trans, ids, attent_matrix = self.trans_onesent(one_sent[one_sent.nonzero()])
+            trans, ids, attent_matrix = self.trans_onesent(one_src[one_src.nonzero()].transpose(0, 1))
 
             #if len(trans) == 2:
             #    trans, trg_toks = trans
@@ -176,7 +176,7 @@ class Translator(object):
                     if wargs.word_piece is True: trans_subwords = '###'.join(trans_subwords)
                 else:
                     if fd_attent_matrixs is None:   # need translate
-                        trans, ids, attent_matrix = self.trans_onesent(xs_nL[no].unsqueeze(-1))
+                        trans, ids, attent_matrix = self.trans_onesent(xs_nL[no].unsqueeze(0))
                         if len(trans) == 2:
                             trans, trg_toks = trans
                             trans_subwords = '###'.join(trg_toks)
@@ -366,7 +366,7 @@ class Translator(object):
         else:
             wlog('Worse')
             wargs.worse_counter = wargs.worse_counter + 1
-            if wargs.worse_counter >= 5.:
+            if wargs.worse_counter >= 8.:
                 wlog('{} consecutive worses, finish training.'.format(wargs.worse_counter))
                 sys.exit(0)
             bleu_content = 'epoch [{}], batch[{}], BLEU score : {}'.format(eid, bid, bleu_score)

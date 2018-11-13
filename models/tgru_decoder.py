@@ -24,7 +24,7 @@ class StackedTransDecoder(nn.Module):
 
         self.s_init = nn.Linear(2 * enc_hid_size, dec_hid_size, bias=True)
         self.tanh = nn.Tanh()
-        self.word_emb = trg_emb.we
+        self.word_emb = trg_emb
         n_embed = trg_emb.n_embed
         f = lambda name: str_cat(prefix, name)  # return 'Encoder_' + parameters name
 
@@ -58,18 +58,18 @@ class StackedTransDecoder(nn.Module):
 
     def init_state(self, annotations, xs_mask=None):
 
-        assert annotations.dim() == 3  # (max_L, batch_size, dec_hid_size)
+        assert annotations.dim() == 3  # (batch_size, max_L, dec_hid_size)
         uh = self.keys_transform(annotations)
         if xs_mask is not None:
-            annotations = (annotations * xs_mask[:, :, None]).sum(0) / xs_mask.sum(0)[:, None]
+            annotations = (annotations * xs_mask[:, :, None]).sum(1) / xs_mask.sum(1)[:, None]
         else:
-            annotations = annotations.mean(0)
+            annotations = annotations.mean(1)
 
         return self.tanh(self.s_init(annotations)), uh
 
     def sample_prev_y(self, k, ys_e, y_tm1_model=None, oracles=None):
 
-        batch_size = ys_e.size(1)
+        batch_size = ys_e.size(0)
         if wargs.ss_type is not None and ss_eps < 1. and (wargs.greed_sampling or wargs.bleu_sampling):
 
             if wargs.greed_sampling is True:
@@ -91,11 +91,11 @@ class StackedTransDecoder(nn.Module):
             _g = tc.bernoulli( ss_eps * tc.ones(batch_size, 1) )   # pick gold with the probability of ss_eps
             _g = tc.tensor(_g, requires_grad=False)
             if wargs.gpu_id is not None: _g = _g.cuda()
-            y_tm1 = ys_e[k] * _g + y_tm1_oracle * (1. - _g)
+            y_tm1 = ys_e[:, k, :] * _g + y_tm1_oracle * (1. - _g)
             #y_tm1 = schedule_sample_word(_h, _g, ss_eps, ys_e[k], y_tm1_oracle)
             #y_tm1 = ys_e[k].data.mul_(_g) + y_tm1_oracle.data.mul_(1. - _g)
         else:
-            y_tm1 = ys_e[k]
+            y_tm1 = ys_e[:, k, :]
             #g = self.sigmoid(self.w_gold(y_tm1) + self.w_hypo(y_tm1_oracle))
             #y_tm1 = g * y_tm1 + (1. - g) * y_tm1_oracle
 
@@ -107,7 +107,7 @@ class StackedTransDecoder(nn.Module):
             if isinstance(y_tm1, int): y_tm1 = tc.tensor([y_tm1], dtype=tc.long, requires_grad=False)
             elif isinstance(y_tm1, list): y_tm1 = tc.tensor(y_tm1, dtype=tc.long, requires_grad=False)
             if wargs.gpu_id is not None: y_tm1 = y_tm1.cuda()
-            y_tm1 = self.word_emb(y_tm1)
+            _, y_tm1 = self.word_emb(y_tm1)
 
         #if xs_mask is not None:
         #    xs_mask = tc.tensor(xs_mask, requires_grad=False)
@@ -133,30 +133,30 @@ class StackedTransDecoder(nn.Module):
 
         s_tm1, uh = self.init_state(xs_h, xs_mask)
         tlen_batch_s, tlen_batch_y, tlen_batch_c = [], [], []
-        y_Lm1, batch_size = ys.size(0), ys.size(1)
+        batch_size, y_Lm1 = ys.size(0), ys.size(1)
 
         if isAtt is True: attends = []
-        ys_e = ys if ys.dim() == 3 else self.word_emb(ys)   # (max_tlen_batch - 1, batch_size, d_trg_emb)
+        if ys.dim() == 3: ys_e = ys
+        else: _, ys_e = self.word_emb(ys)   # (batch_size, max_tlen_batch - 1, d_trg_emb)
 
-        sent_logit, y_tm1_model = [], ys_e[0]
+        sent_logit, y_tm1_model = [], ys_e[:, 0, :]
         for k in range(y_Lm1):
 
             y_tm1 = self.sample_prev_y(k, ys_e, y_tm1_model, oracles)
-            context, s_tm1, _, alpha_ij = self.step(s_tm1, xs_h, uh, y_tm1, xs_mask, ys_mask[k])
+            context, s_tm1, _, alpha_ij = self.step(s_tm1, xs_h, uh, y_tm1, xs_mask, ys_mask[:, k])
             logit = self.step_out(s_tm1, y_tm1, context)
             sent_logit.append(logit)
 
             if wargs.ss_type is not None and ss_eps < 1. and wargs.greed_sampling is True:
                 logit = self.classifier.get_a(logit, noise=wargs.greed_gumbel_noise)
                 y_tm1_model = logit.max(-1)[1]
-                y_tm1_model = self.word_emb(y_tm1_model)
+                _, y_tm1_model = self.word_emb(y_tm1_model)
                 #wlog('word-level greedy sampling, noise {}'.format(wargs.greed_gumbel_noise))
 
             if isAtt is True: attends.append(alpha_ij)
 
-        logit = tc.stack(sent_logit, dim=0)
+        logit = tc.stack(sent_logit, dim=1)     # (batch_size, max_tlen_batch-1, d_dec_hid)
         logit = logit * ys_mask[:, :, None]  # !!!!
-        logit = logit.transpose(0, 1)
 
         results = (logit, tc.stack(attends, 0)) if isAtt is True else logit
 

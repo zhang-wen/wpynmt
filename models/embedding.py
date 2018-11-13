@@ -1,7 +1,9 @@
 import math
 import torch as tc
 import torch.nn as nn
+import torch.nn.functional as F
 from tools.utils import PAD, MAX_SEQ_SIZE, wlog
+import wargs
 
 '''
 Implements the sinusoidal positional encoding for non-recurrent neural networks
@@ -58,15 +60,37 @@ class WordEmbedding(nn.Module):
         self.n_embed = n_embed
         if position_encoding is True:
             wlog('with position emb ...')
-            self.pe = PositionalEncoding(emb_dropout, n_embed)
+            #self.pe = PositionalEncoding(emb_dropout, n_embed)
+
+    def add_timing_signal(self, x_emb, min_timescale=1.0, max_timescale=1.0e4, name=None):
+
+        length, channels = x_emb.size(1), x_emb.size(2)
+        position = tc.arange(length).float()
+        num_timescales = channels // 2
+
+        log_timescale_increment = (
+            math.log(float(max_timescale) / float(min_timescale)) /
+            (float(num_timescales) - 1)
+        )
+        inv_timescales = min_timescale * tc.exp(
+            (tc.arange(num_timescales).float()) * -log_timescale_increment
+        )
+
+        scaled_time = position[:, None] * inv_timescales[None, :]
+        signal = tc.cat([tc.sin(scaled_time), tc.cos(scaled_time)], dim=1)
+        signal = F.pad(signal, (0, channels % 2, 0, 0))
+        signal = signal.reshape(1, length, channels)
+        if wargs.gpu_id is not None: signal = signal.cuda()
+
+        return x_emb + signal * (float(channels) ** -0.5)
 
     def forward(self, x):
 
-        x_emb = self.we(x)
+        x_w_emb = self.we(x)
         if self.position_encoding is True:
-            x_emb = self.pe(x_emb)
+            x_wp_emb = self.add_timing_signal(x_w_emb)
 
-        return x_emb
+        return x_w_emb, x_wp_emb
 
 
 

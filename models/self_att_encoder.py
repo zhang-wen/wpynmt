@@ -95,7 +95,7 @@ class SelfAttEncoder(nn.Module):
 
         batch_size, src_L = src_seq.size()
         # word embedding look up
-        enc_output = self.embed(src_seq)
+        _, enc_output = self.embed(src_seq)
         nlayer_outputs, nlayer_attns = [], []
         src_self_attn_mask = src_seq.data.eq(PAD).unsqueeze(1).expand(batch_size, src_L, src_L) # 0. is 1 !!!
         for enc_layer in self.layer_stack:

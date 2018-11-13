@@ -28,9 +28,9 @@ class NMTModel(nn.Module):
             logit, _, nlayer_attns = self.decoder(trg, src, enc_output)
             alphas = nlayer_attns[-1][:, 0, :, :]
         elif wargs.encoder_type == 'tgru':
-            src, trg = src.transpose(0, 1), trg.transpose(0, 1)
-            if src_mask is not None: src_mask = src_mask.transpose(0, 1)
-            if trg_mask is not None: trg_mask = trg_mask.transpose(0, 1)
+            #src, trg = src.transpose(0, 1), trg.transpose(0, 1)
+            #if src_mask is not None: src_mask = src_mask.transpose(0, 1)
+            #if trg_mask is not None: trg_mask = trg_mask.transpose(0, 1)
             enc_output = self.encoder(src, src_mask)    # max_L, batch_size, hidden_size
             results = self.decoder(enc_output, trg, src_mask, trg_mask, isAtt=True)
             if len(results) == 1: logit, alphas = results, None

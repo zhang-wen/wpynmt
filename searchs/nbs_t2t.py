@@ -41,13 +41,12 @@ class Nbs(object):
         self.attent_probs = [[] for _ in range(self.B)] if self.print_att is True else None
         self.batch_tran_cands = [[] for _ in range(self.B)]
         if isinstance(input_data, tc.Tensor):
-            self.x_len = input_data.size(0)
-            self.x_BL = input_data.permute(1, 0)
+            self.x_BL = input_data
+            self.B, self.x_len = self.x_BL.size(0), self.x_BL.size(1)
         elif isinstance(input_data, tuple):
             # input_data: (idxs, tsrcs, tspos, lengths, src_mask)
             if len(input_data) == 4:
-                _, x_BL, lens, src_mask = input_data
-                self.x_BL = x_BL.t()
+                _, self.x_BL, lens, src_mask = input_data
             elif len(input_data) == 2:
                 self.x_BL, src_pos_BL = input_data
             elif len(input_data) == 8:
@@ -147,8 +146,7 @@ class Nbs(object):
         #encoded_src0 = self.enc_src0
         encoded_src0 = self.enc_src0[-1]
         # s0: (1, trg_nhids), encoded_src0: (x_len, 1, src_nhids*2)
-        enc_size = encoded_src0.size(-1)
-        L = self.x_len
+        enc_size, L = encoded_src0.size(-1), self.x_len
         hyp_scores = np.zeros(1).astype('float32')
         delete_idx, prevb_id = None, None
         #batch_adj_list = [range(self.x_len) for _ in range(self.k)]
@@ -181,11 +179,9 @@ class Nbs(object):
             y_part_seqs = track_ys(i) # (preb_sz, trg_part_L)
             y_part_seqs = tc.tensor(y_part_seqs, requires_grad=False).view(-1, i)
             if wargs.gpu_id: y_part_seqs = y_part_seqs.cuda()
-            # encoded_src0: (mb_size, len_q, d_model)
-            #print self.x_BL.size(), encoded_src0.size()
+            # encoded_src0: (len_q, d_model)
             x_BL = self.x_BL.contiguous().view(-1, L).expand(preb_sz, L)
             # (1, x_len, src_nhids) -> (preb_sz, x_len, src_nhids)
-            #print x_BL.size(), enc_src.size()
             enc_srcs = encoded_src0.expand(preb_sz, L, enc_size)
             debug('enc_srcs -> {}'.format(enc_srcs.size()))
 
