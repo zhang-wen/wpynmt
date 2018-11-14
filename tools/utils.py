@@ -173,8 +173,9 @@ def init_params(p, name='what', init_D='U'):
 
     p_dim = p.dim()
     if init_D == 'U':           # uniform distribution for all parameters
-        p.data.uniform_(-0.1, 0.1)
-        wlog('{:7} -> grad {}\t{}'.format('Uniform', p.requires_grad, name))
+        U_parm = float(0.08)
+        p.data.uniform_(-U_parm, U_parm)
+        wlog('{:7}-{} -> grad {}\t{}'.format('Uniform', U_parm, p.requires_grad, name))
     elif init_D == 'X':         # xavier distribution for 2-d parameters
         if p_dim == 1 or (p_dim == 2 and (p.size(0) == 1 or p.size(1) == 1)):
             p.data.zero_()

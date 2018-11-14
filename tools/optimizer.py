@@ -54,7 +54,7 @@ class Optim(object):
         elif self.opt_mode == 'adam':
             wlog('Adam ... lr: {}, beta_1: {}, beta_2: {}'.format(self.learning_rate, wargs.beta_1, wargs.beta_2))
             self.optimizer = opt.Adam(self.params, lr=self.learning_rate,
-                                      betas=[wargs.beta_1, wargs.beta_2], eps=1e-6)
+                                      betas=[wargs.beta_1, wargs.beta_2], eps=wargs.adam_epsilon)
         else:
             wlog('Do not support this opt_mode {}'.format(self.opt_mode))
 

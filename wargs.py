@@ -4,20 +4,20 @@ worse_counter = 0
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder '''
-encoder_type = 'att'
-d_src_emb = 512     # size of source word embedding
+encoder_type = 'tgru'
+d_src_emb = 1024     # size of source word embedding
 n_enc_layers = 2    # layers number
-d_enc_hid = 512     # hidden size in rnn
+d_enc_hid = 1024     # hidden size in rnn
 
 ''' decoder '''
-decoder_type = 'att'
-d_trg_emb = 512     # size of target word embedding
+decoder_type = 'tgru'
+d_trg_emb = 1024     # size of target word embedding
 n_dec_layers = 2    # layers number
-d_dec_hid = 512     # hidden size in rnn
+d_dec_hid = 1024     # hidden size in rnn
 
 ''' transformer '''
-d_model = 512       # n_head * d_v, size of alignment
-d_ff_filter = 512  # hidden size of the second layer of PositionwiseFeedForward
+d_model = 1024       # n_head * d_v, size of alignment
+d_ff_filter = 1024  # hidden size of the second layer of PositionwiseFeedForward
 n_head = 8          # the number of head for MultiHeadedAttention
 att_dropout = 0.1
 residual_dropout = 0.1
@@ -78,7 +78,7 @@ trunc_size = 0   # truncated bptt
 grad_accum_count = 1   # accumulate gradient for batch_size * accum_count batches (Transformer)
 snip_size = 20
 normalization = 'tokens'     # 'sents' or 'tokens', normalization method of the gradient
-max_grad_norm = 25 # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
+max_grad_norm = 5 # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
 
 ''' whether use pretrained model '''
 pre_train = None
@@ -152,7 +152,7 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 gpu_id = [0]
 #gpu_id = None
 n_co_models = len(gpu_id)
-s_step_decay = 500 * n_co_models
+s_step_decay = 4000 * n_co_models
 e_step_decay = 32000 * n_co_models
 
 # 'toy', 'zh-en', 'en-de', 'de-en', 'uy-zh'
@@ -174,6 +174,7 @@ if dataset == 'toy':
     beta_1 = 0.9
     beta_2 = 0.98
     warmup_steps = 300
+    adam_epsilon = 1e-6
 elif dataset == 'de-en':
     #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
     val_tst_dir = '/home/wen/3.corpus/mt/iwslt14-de-en/'
@@ -197,6 +198,15 @@ elif dataset == 'zh-en':
     batch_size = 128
     max_epochs = 10
     with_bpe = True
+    opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
+    lr_update_way = 'chen'  # 't2t' or 'chen'
+    param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal
+    learning_rate = 0.002    # 1.0, 0.001, 0.01
+    rho = 0.95
+    beta_1 = 0.9
+    beta_2 = 0.999
+    warmup_steps = 500
+    adam_epsilon = 1e-6
 elif dataset == 'uy-zh':
     #val_tst_dir = '/home5/wen/2.data/mt/uy_zh_300w/devtst/'
     val_tst_dir = '/home/wen/3.corpus/mt/uy_zh_300w/devtst/'

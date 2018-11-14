@@ -131,6 +131,7 @@ class Trainer(object):
             self.accum_matrics(_batch_size, _xtoks, _ytoks, _nll, _ok_ytoks, _logZ)
         # 3. Update the parameters and statistics.
         self.optim.step()
+        tc.cuda.empty_cache()
 
     def look_samples(self, bidx, batch):
 
