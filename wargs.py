@@ -149,14 +149,14 @@ nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 # car nmt
 #sampling = 'truncation'     # truncation, length_limit, gumbeling
 sampling = 'length_limit'     # truncation, length_limit, gumbeling
-gpu_id = [0]
+gpu_id = [0, 1]
 #gpu_id = None
 n_co_models = len(gpu_id)
 s_step_decay = 4000 * n_co_models
 e_step_decay = 32000 * n_co_models
 
-# 'toy', 'zh-en', 'en-de', 'de-en', 'uy-zh'
-dataset = 'toy'
+# 'toy', 'zhen', 'ende', 'deen', 'uyzh'
+dataset = 'zhen'
 if dataset == 'toy':
     val_tst_dir = './data/'
     val_prefix = 'devset1_2.lc'
@@ -175,7 +175,7 @@ if dataset == 'toy':
     beta_2 = 0.98
     warmup_steps = 300
     adam_epsilon = 1e-6
-elif dataset == 'de-en':
+elif dataset == 'deen':
     #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
     val_tst_dir = '/home/wen/3.corpus/mt/iwslt14-de-en/'
     val_prefix = 'valid.de-en'
@@ -184,7 +184,7 @@ elif dataset == 'de-en':
     tests_prefix = ['test.de-en']
     #n_src_vcb_plan = 32009
     #n_trg_vcb_plan = 22822
-elif dataset == 'zh-en':
+elif dataset == 'zhen':
     #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     val_tst_dir = '/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/'
     #val_tst_dir = '/home5/wen/2.data/mt/mfd_1.25M/nist_test_new/'
@@ -207,7 +207,7 @@ elif dataset == 'zh-en':
     beta_2 = 0.999
     warmup_steps = 500
     adam_epsilon = 1e-6
-elif dataset == 'uy-zh':
+elif dataset == 'uyzh':
     #val_tst_dir = '/home5/wen/2.data/mt/uy_zh_300w/devtst/'
     val_tst_dir = '/home/wen/3.corpus/mt/uy_zh_300w/devtst/'
     val_prefix = 'dev700'
@@ -216,7 +216,7 @@ elif dataset == 'uy-zh':
     val_src_suffix = 'uy.src'
     #val_src_suffix = 'uy.32kbpe.src'
     tests_prefix = ['tst861']
-elif dataset == 'en-de':
+elif dataset == 'ende':
     val_tst_dir = '/home4/wen/3.corpus/wmt14-ende/devtst/'
     val_prefix = 'newstest1213'
     use_multi_bleu = True
