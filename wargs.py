@@ -4,27 +4,24 @@ worse_counter = 0
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder '''
-encoder_type = 'tgru'
-d_src_emb = 1024     # size of source word embedding
+encoder_type = 'att'
+d_src_emb = 512     # size of source word embedding
 n_enc_layers = 2    # layers number
-d_enc_hid = 1024     # hidden size in rnn
+d_enc_hid = 512     # hidden size in rnn
 
 ''' decoder '''
-decoder_type = 'tgru'
-d_trg_emb = 1024     # size of target word embedding
+decoder_type = 'att'
+d_trg_emb = 512     # size of target word embedding
 n_dec_layers = 2    # layers number
-d_dec_hid = 1024     # hidden size in rnn
+d_dec_hid = 512     # hidden size in rnn
 
 ''' transformer '''
-d_model = 1024       # n_head * d_v, size of alignment
-d_ff_filter = 1024  # hidden size of the second layer of PositionwiseFeedForward
+d_model = 512       # n_head * d_v, size of alignment
+d_ff_filter = 2048  # hidden size of the second layer of PositionwiseFeedForward
 n_head = 8          # the number of head for MultiHeadedAttention
-att_dropout = 0.1
-residual_dropout = 0.1
-relu_dropout = 0.1
 
 # dropout for tgru
-input_dropout = 0.5
+input_dropout = 0.3
 rnn_dropout = 0.3
 output_dropout = 0.5
 
@@ -62,10 +59,10 @@ with_postproc = False
 use_multi_bleu = True
 
 ''' training '''
-epoch_shuffle_train = True
+epoch_shuffle_train = False
 epoch_shuffle_batch = True
 batch_type = 'sents'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
-sort_k_batches = 20
+sort_k_batches = 0
 save_one_model = True
 start_epoch = 1
 model_prefix = dir_model + '/model'
@@ -76,9 +73,9 @@ emb_loss = False
 bow_loss = False
 trunc_size = 0   # truncated bptt
 grad_accum_count = 1   # accumulate gradient for batch_size * accum_count batches (Transformer)
-snip_size = 20
+snip_size = 10
 normalization = 'tokens'     # 'sents' or 'tokens', normalization method of the gradient
-max_grad_norm = 5 # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
+max_grad_norm = 0. # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
 
 ''' whether use pretrained model '''
 pre_train = None
@@ -155,79 +152,70 @@ n_co_models = len(gpu_id)
 s_step_decay = 4000 * n_co_models
 e_step_decay = 32000 * n_co_models
 
+opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
+beta_1, beta_2, adam_epsilon = 0.9, 0.98, 1e-9
+
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset = 'zhen'
-if dataset == 'toy':
-    val_tst_dir = './data/'
-    val_prefix = 'devset1_2.lc'
-    val_src_suffix = 'zh'
-    val_ref_suffix = 'en'
-    tests_prefix = ['devset3.lc']
-    batch_size = 40
-    max_epochs = 50
-    ''' optimizer settings '''
-    opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
+dataset = 'toy'
+model_config = 't2t_big'
+if model_config == 't2t_tiny':
     lr_update_way = 't2t'  # 't2t' or 'chen'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
-    learning_rate = 1.    # 1.0, 0.001, 0.01
-    rho = 0.95
-    beta_1 = 0.9
-    beta_2 = 0.98
-    warmup_steps = 300
-    adam_epsilon = 1e-6
+    learning_rate, warmup_steps, adam_epsilon = 1., 300, 1e-6
+    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.5, 0.1, 0.1, 0.1
+if model_config == 't2t_base':
+    lr_update_way = 't2t'  # 't2t' or 'chen'
+    param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
+    learning_rate, beta_2, warmup_steps = 0.2, 0.997, 8000
+    n_enc_layers, n_dec_layers = 6, 6
+    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.1, 0.1, 0.1, 0.1
+if model_config == 't2t_big':
+    lr_update_way = 't2t'  # 't2t' or 'chen'
+    param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
+    learning_rate, beta_2, warmup_steps = 0.2, 0.997, 8000
+    n_enc_layers, n_dec_layers = 6, 6
+    d_src_emb, d_trg_emb, d_dec_hid, d_model, d_ff_filter, n_head = 1024, 1024, 1024, 1024, 4096, 16
+    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0.1, 0.1, 0.3
+    snip_size, batch_size = 1, 40
+if model_config == 'dtmt_base':
+    lr_update_way = 'chen'  # 't2t' or 'chen'
+    param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal
+    learning_rate = 0.001    # 1.0, 0.001, 0.01
+    beta_2, warmup_steps, adam_epsilon = 0.999, 500, 1e-6
+
+if dataset == 'toy':
+    val_tst_dir = './data/'
+    val_src_suffix, val_ref_suffix = 'zh', 'en'
+    val_prefix, tests_prefix = 'devset1_2.lc', ['devset3.lc']
+    batch_size, max_epochs = 40, 50
 elif dataset == 'deen':
     #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
     val_tst_dir = '/home/wen/3.corpus/mt/iwslt14-de-en/'
-    val_prefix = 'valid.de-en'
-    val_src_suffix = 'de'
-    val_ref_suffix = 'en'
-    tests_prefix = ['test.de-en']
-    #n_src_vcb_plan = 32009
-    #n_trg_vcb_plan = 22822
+    val_src_suffix, val_ref_suffix = 'de', 'en'
+    val_prefix, tests_prefix = 'valid.de-en', ['test.de-en']
+    #n_src_vcb_plan, n_trg_vcb_plan = 32009, 22822
 elif dataset == 'zhen':
     #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
     val_tst_dir = '/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/'
     #val_tst_dir = '/home5/wen/2.data/mt/mfd_1.25M/nist_test_new/'
-    val_prefix = 'mt06_u8'
     #dev_prefix = 'nist02'
-    val_src_suffix = 'src.BPE'
-    val_ref_suffix = 'trg.tok.sb'
-    n_src_vcb_plan = 50000
-    n_trg_vcb_plan = 50000
-    tests_prefix = ['mt02_u8', 'mt03_u8', 'mt04_u8', 'mt05_u8', 'mt08_u8']
-    batch_size = 128
-    max_epochs = 10
+    val_src_suffix, val_ref_suffix = 'src.BPE', 'trg.tok.sb'
+    n_src_vcb_plan, n_trg_vcb_plan = 50000, 50000
+    val_prefix, tests_prefix = 'mt06_u8', ['mt02_u8', 'mt03_u8', 'mt04_u8', 'mt05_u8', 'mt08_u8']
+    batch_size, max_epochs = 100, 10
     with_bpe = True
-    opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
-    lr_update_way = 'chen'  # 't2t' or 'chen'
-    param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal
-    learning_rate = 0.002    # 1.0, 0.001, 0.01
-    rho = 0.95
-    beta_1 = 0.9
-    beta_2 = 0.999
-    warmup_steps = 500
-    adam_epsilon = 1e-6
 elif dataset == 'uyzh':
     #val_tst_dir = '/home5/wen/2.data/mt/uy_zh_300w/devtst/'
     val_tst_dir = '/home/wen/3.corpus/mt/uy_zh_300w/devtst/'
-    val_prefix = 'dev700'
-    #dev_prefix = 'dev700'
-    val_src_suffix = '8kbpe.src'
-    val_src_suffix = 'uy.src'
-    #val_src_suffix = 'uy.32kbpe.src'
-    tests_prefix = ['tst861']
+    val_src_suffix, val_src_suffix = '8kbpe.src', 'uy.src'
+    val_prefix, tests_prefix = 'dev700', ['tst861']
 elif dataset == 'ende':
     val_tst_dir = '/home4/wen/3.corpus/wmt14-ende/devtst/'
-    val_prefix = 'newstest1213'
     use_multi_bleu = True
-    val_src_suffix = 'en.tc.37kbpe'
-    val_ref_suffix = 'de.tc' if use_multi_bleu is True else 'ori.de'
-    tests_prefix = ['newstest2014']
-    n_src_vcb_plan = 50000
-    n_trg_vcb_plan = 50000
-    batch_size = 128
-    sort_k_batches = 32
+    val_src_suffix, val_ref_suffix = 'en.tc.37kbpe', 'de.tc'
+    val_prefix, tests_prefix = 'newstest1213', ['newstest2014']
+    n_src_vcb_plan, n_trg_vcb_plan = 50000, 50000
+    batch_size, sort_k_batches = 128, 32
     with_bpe = True
     cased = True    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
-
 

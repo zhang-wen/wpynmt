@@ -216,7 +216,7 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
             k_batch = wargs.batch_size * wargs.sort_k_batches
             number = int(math.ceil(train_size / k_batch))
 
-            for start in range(number):
+            for start in range(number + 1):
                 bsrcs = srcs[start * k_batch : (start + 1) * k_batch]
                 btrgs = trgs[start * k_batch : (start + 1) * k_batch]
                 bslens = slens[start * k_batch : (start + 1) * k_batch]
