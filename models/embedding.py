@@ -93,6 +93,8 @@ class WordEmbedding(nn.Module):
         x_w_emb = self.we(x)
         if self.position_encoding is True:
             x_wp_emb = self.add_timing_signal(x_w_emb)
+        else:
+            x_wp_emb = x_w_emb
 
         if self.emb_dropout is not None and 0. < self.emb_dropout <= 1.0:
             x_wp_emb = self.dropout(x_wp_emb)

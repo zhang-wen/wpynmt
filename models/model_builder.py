@@ -23,6 +23,11 @@ class NMTModel(nn.Module):
             * attention:        [batch_size, trg_len, src_len]
         '''
 
+        if wargs.encoder_type == 'gru':
+            enc_output = self.encoder(src, src_mask)    # batch_size, max_L, hidden_size
+            results = self.decoder(enc_output, trg, src_mask, trg_mask, isAtt=True)
+            if len(results) == 1: logit, alphas = results, None
+            elif len(results) == 2: logit, alphas = results
         if wargs.encoder_type == 'att':
             enc_output, _ = self.encoder(src)
             logit, _, nlayer_attns = self.decoder(trg, src, enc_output)
@@ -31,7 +36,7 @@ class NMTModel(nn.Module):
             #src, trg = src.transpose(0, 1), trg.transpose(0, 1)
             #if src_mask is not None: src_mask = src_mask.transpose(0, 1)
             #if trg_mask is not None: trg_mask = trg_mask.transpose(0, 1)
-            enc_output = self.encoder(src, src_mask)    # max_L, batch_size, hidden_size
+            enc_output = self.encoder(src, src_mask)    # batch_size, max_L, hidden_size
             results = self.decoder(enc_output, trg, src_mask, trg_mask, isAtt=True)
             if len(results) == 1: logit, alphas = results, None
             elif len(results) == 2: logit, alphas = results
@@ -46,6 +51,12 @@ class NMTModel(nn.Module):
 
 def build_encoder(src_emb):
 
+    if wargs.encoder_type == 'gru':
+        from models.gru_encoder import StackedGRUEncoder
+        return StackedGRUEncoder(src_emb=src_emb,
+                                 enc_hid_size=wargs.d_enc_hid,
+                                 dropout_prob=0.,
+                                 n_layers=1)
     if wargs.encoder_type == 'att':
         from models.self_att_encoder import SelfAttEncoder
         return SelfAttEncoder(src_emb=src_emb,
@@ -72,6 +83,14 @@ def build_encoder(src_emb):
 
 def build_decoder(trg_emb):
 
+    if wargs.encoder_type == 'gru':
+        from models.gru_decoder import StackedGRUDecoder
+        return StackedGRUDecoder(trg_emb=trg_emb,
+                                 enc_hid_size=wargs.d_enc_hid,
+                                 dec_hid_size=wargs.d_dec_hid,
+                                 n_layers=1,
+                                 rnn_dropout_prob=wargs.rnn_dropout,
+                                 out_dropout_prob=wargs.output_dropout)
     if wargs.decoder_type == 'att':
         from models.self_att_decoder import SelfAttDecoder
         return SelfAttDecoder(trg_emb=trg_emb,

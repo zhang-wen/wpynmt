@@ -11,7 +11,7 @@ from shutil import copyfile
 from torch.autograd import Variable
 
 import wargs
-if wargs.decoder_type in ('rnn', 'tgru'): from searchs.nbs import *
+if wargs.decoder_type in ('rnn', 'gru', 'tgru'): from searchs.nbs import *
 elif wargs.decoder_type == 'att': from searchs.nbs_t2t import *
 
 if wargs.search_mode == 2: from searchs.cp import *

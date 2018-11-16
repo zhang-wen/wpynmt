@@ -8,19 +8,18 @@ class Additive_Attention(nn.Module):
     def __init__(self, dec_hid_size, align_size):
 
         super(Additive_Attention, self).__init__()
-        self.align_size = align_size
-        self.sa = nn.Linear(dec_hid_size, self.align_size)
+        self.sa = nn.Linear(dec_hid_size, align_size)
         self.tanh = nn.Tanh()
         self.maskSoftmax = MaskSoftmax()
-        self.a1 = nn.Linear(self.align_size, 1)
+        self.a1 = nn.Linear(align_size, 1)
 
     def forward(self, s_tm1, xs_h, uh, xs_mask=None):
 
-        e_ij = self.a1( self.tanh(self.sa(s_tm1)[None, :, :] + uh) ).squeeze(2)
+        e_ij = self.a1( self.tanh(self.sa(s_tm1)[:, None, :] + uh) ).squeeze(-1)
 
-        e_ij = self.maskSoftmax(e_ij, mask=xs_mask, dim=0)
-        # weighted sum of the h_j: (b, enc_hid_size)
-        attend = (e_ij[:, :, None] * xs_h).sum(0)
+        e_ij = self.maskSoftmax(e_ij, mask=xs_mask, dim=1)
+        # weighted sum of the h_j: (batch_size, enc_hid_size)
+        attend = (e_ij[:, :, None] * xs_h).sum(1)
 
         return e_ij, attend
 

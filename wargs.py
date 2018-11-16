@@ -4,13 +4,13 @@ worse_counter = 0
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder '''
-encoder_type = 'att'
+encoder_type = 'gru'
 d_src_emb = 512     # size of source word embedding
 n_enc_layers = 2    # layers number
 d_enc_hid = 512     # hidden size in rnn
 
 ''' decoder '''
-decoder_type = 'att'
+decoder_type = 'gru'
 d_trg_emb = 512     # size of target word embedding
 n_dec_layers = 2    # layers number
 d_dec_hid = 512     # hidden size in rnn
@@ -146,7 +146,7 @@ nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 # car nmt
 #sampling = 'truncation'     # truncation, length_limit, gumbeling
 sampling = 'length_limit'     # truncation, length_limit, gumbeling
-gpu_id = [0, 1]
+gpu_id = [0]
 #gpu_id = None
 n_co_models = len(gpu_id)
 s_step_decay = 4000 * n_co_models
@@ -157,7 +157,7 @@ beta_1, beta_2, adam_epsilon = 0.9, 0.98, 1e-9
 
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
 dataset = 'toy'
-model_config = 't2t_big'
+model_config = 'gru_base'
 if model_config == 't2t_tiny':
     lr_update_way = 't2t'  # 't2t' or 'chen'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
@@ -178,6 +178,11 @@ if model_config == 't2t_big':
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0.1, 0.1, 0.3
     snip_size, batch_size = 1, 40
 if model_config == 'dtmt_base':
+    lr_update_way = 'chen'  # 't2t' or 'chen'
+    param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal
+    learning_rate = 0.001    # 1.0, 0.001, 0.01
+    beta_2, warmup_steps, adam_epsilon = 0.999, 500, 1e-6
+if model_config == 'gru_base':
     lr_update_way = 'chen'  # 't2t' or 'chen'
     param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal
     learning_rate = 0.001    # 1.0, 0.001, 0.01

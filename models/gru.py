@@ -3,8 +3,6 @@ import torch as tc
 import torch.nn as nn
 import torch.nn.functional as F
 
-from tools.utils import *
-
 # inheriting from nn.Module
 class GRU(nn.Module):
 
@@ -19,8 +17,8 @@ class GRU(nn.Module):
 
         h_above = tanh(x_t dot W_xh + b_xh + (h_{t-1} dot U_hh + b_hh) * r_t)
 
-        h_t = (1 - z_t) * h_above + z_t * h_{t-1}
-        #h_t = (1 - z_t) * h_{t-1} + z_t * h_above
+        #h_t = (1 - z_t) * h_above + z_t * h_{t-1}
+        h_t = (1 - z_t) * h_{t-1} + z_t * h_above
 
     all parameters are initialized in [-0.01, 0.01]
     '''
@@ -30,6 +28,7 @@ class GRU(nn.Module):
                  hidden_size,
                  enc_hid_size=None,
                  with_ln=False,
+                 dropout_prob=0.1,
                  prefix='GRU', **kwargs):
 
         # input vector size and hidden vector size
@@ -64,17 +63,20 @@ class GRU(nn.Module):
 
         if self.with_ln is True:
 
-            self.ln0 = Layer_Norm(2 * hidden_size)
-            self.ln1 = Layer_Norm(2 * hidden_size)
-            self.ln2 = Layer_Norm(hidden_size)
-            self.ln3 = Layer_Norm(hidden_size)
+            self.ln0 = nn.LayerNorm(2 * hidden_size)
+            self.ln1 = nn.LayerNorm(2 * hidden_size)
+            self.ln2 = nn.LayerNorm(hidden_size)
+            self.ln3 = nn.LayerNorm(hidden_size)
 
             if self.enc_hid_size is not None:
-                self.ln4 = Layer_Norm(2 * hidden_size)
-                self.ln5 = Layer_Norm(hidden_size)
+                self.ln4 = nn.LayerNorm(2 * hidden_size)
+                self.ln5 = nn.LayerNorm(hidden_size)
 
         self.sigmoid = nn.Sigmoid()
         self.tanh = nn.Tanh()
+        if dropout_prob is not None and 0. < dropout_prob <= 1.0:
+            self.dropout = nn.Dropout(p=dropout_prob)
+        self.dropout_prob = dropout_prob
 
     '''
         x_t: input at time t
@@ -123,6 +125,9 @@ class GRU(nn.Module):
         h_t_above = self.tanh(h_h_tm1)
 
         h_t = (1. - z_t) * h_tm1 + z_t * h_t_above
+
+        if self.dropout_prob is not None and 0. < self.dropout_prob <= 1.0:
+            h_t = self.dropout(h_t)
 
         if x_m is not None:
             #x_m = x_m.unsqueeze(-1).expand_as(h_t)
