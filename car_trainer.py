@@ -251,8 +251,8 @@ class Trainer:
                 bid, half_size = shuffled_batch_idx[k], wargs.batch_size
 
                 # srcs: (max_sLen_batch, batch_size, emb), trgs: (max_tLen_batch, batch_size, emb)
-                if merge is False: _, srcs, trgs, slens, srcs_m, trgs_m = dev_input[bid]
-                else: _, srcs, trgs, slens, srcs_m, trgs_m = dh.merge_batch(dev_input[bid])[0]
+                if merge is False: _, srcs, _, trgs, _, slens, srcs_m, trgs_m = dev_input[bid]
+                else: _, srcs, _, trgs, _, slens, srcs_m, trgs_m = dh.merge_batch(dev_input[bid])[0]
                 trgs, trgs_m = trgs[0], trgs_m[0]   # we only use the first dev reference
 
                 if wargs.sampling == 'gumbeling':
@@ -296,8 +296,8 @@ class Trainer:
                     s_mle_seen, ppl_seen = 0., 0., 0., 0., 0., 0., 0., 0., 0.
             for bid in range(batch_count):
 
-                if merge is False: _, srcs, trgs, slens, srcs_m, trgs_m = dev_input[bid]
-                else: _, srcs, trgs, slens, srcs_m, trgs_m = dh.merge_batch(dev_input[bid], True)[0]
+                if merge is False: _, srcs, _, trgs, _, slens, srcs_m, trgs_m = dev_input[bid]
+                else: _, srcs, _, trgs, _, slens, srcs_m, trgs_m = dh.merge_batch(dev_input[bid], True)[0]
                 trgs, trgs_m = trgs[0], trgs_m[0]
                 gold_feed, gold_feed_mask = trgs[:-1], trgs_m[:-1]
                 gold, gold_mask = trgs[1:], trgs_m[1:]
