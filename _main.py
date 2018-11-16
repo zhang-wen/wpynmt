@@ -155,7 +155,7 @@ def main():
 
     if wargs.gpu_id is not None:
         wlog('push model onto GPU {} ... '.format(wargs.gpu_id), 0)
-        nmtModel = nn.DataParallel(nmtModel, device_ids=wargs.gpu_id, output_device=wargs.gpu_id[-1])
+        nmtModel = nn.DataParallel(nmtModel, device_ids=wargs.gpu_id)
         nmtModel.to(tc.device('cuda'))
     else:
         wlog('push model onto CPU ... ', 0)
