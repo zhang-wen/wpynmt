@@ -40,17 +40,11 @@ def main():
     src = os.path.join(wargs.dir_data, '{}.{}'.format(wargs.train_prefix, wargs.train_src_suffix))
     trg = os.path.join(wargs.dir_data, '{}.{}'.format(wargs.train_prefix, wargs.train_trg_suffix))
     vocabs = {}
-    if wargs.word_piece is True:
-        wlog('\n[w/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = get_or_generate_vocab(src, wargs.src_vcb, max_seq_len=wargs.max_seq_len)
-        wlog('\n[w/Subword] Preparing target vocabulary from {} ... '.format(trg))
-        trg_vocab = get_or_generate_vocab(trg, wargs.trg_vcb, max_seq_len=wargs.max_seq_len)
-    else:
-        wlog('\n[o/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = extract_vocab(src, wargs.src_vcb, wargs.n_src_vcb_plan,
-                                  wargs.max_seq_len, char=wargs.src_char)
-        wlog('\n[o/Subword] Preparing target vocabulary from {} ... '.format(trg))
-        trg_vocab = extract_vocab(trg, wargs.trg_vcb, wargs.n_trg_vcb_plan, wargs.max_seq_len)
+    wlog('\nPreparing source vocabulary from {} ... '.format(src))
+    src_vocab = extract_vocab(src, wargs.src_vcb, wargs.n_src_vcb_plan,
+                              wargs.max_seq_len, char=wargs.src_char)
+    wlog('\nPreparing target vocabulary from {} ... '.format(trg))
+    trg_vocab = extract_vocab(trg, wargs.trg_vcb, wargs.n_trg_vcb_plan, wargs.max_seq_len)
     n_src_vcb, n_trg_vcb = src_vocab.size(), trg_vocab.size()
     wlog('Vocabulary size: |source|={}, |target|={}'.format(n_src_vcb, n_trg_vcb))
     vocabs['src'], vocabs['trg'] = src_vocab, trg_vocab

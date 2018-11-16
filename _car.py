@@ -110,16 +110,10 @@ def main():
     src = os.path.join(wargs.dir_data, '{}.{}'.format(wargs.train_prefix, wargs.train_src_suffix))
     trg = os.path.join(wargs.dir_data, '{}.{}'.format(wargs.train_prefix, wargs.train_trg_suffix))
     vocabs = {}
-    if wargs.word_piece is True:
-        wlog('\n[w/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = get_or_generate_vocab(src, wargs.src_dict)
-        wlog('\n[w/Subword] Preparing target vocabulary from {} ... '.format(trg))
-        trg_vocab = get_or_generate_vocab(trg, wargs.trg_dict)
-    else:
-        wlog('\n[o/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size)
-        wlog('\n[o/Subword] Preparing target vocabulary from {} ... '.format(trg))
-        trg_vocab = extract_vocab(trg, wargs.trg_dict, wargs.trg_dict_size)
+    wlog('\nPreparing source vocabulary from {} ... '.format(src))
+    src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size)
+    wlog('\nPreparing target vocabulary from {} ... '.format(trg))
+    trg_vocab = extract_vocab(trg, wargs.trg_dict, wargs.trg_dict_size)
     src_vocab_size, trg_vocab_size = src_vocab.size(), trg_vocab.size()
     wlog('Vocabulary size: |source|={}, |target|={}'.format(src_vocab_size, trg_vocab_size))
     vocabs['src'], vocabs['trg'] = src_vocab, trg_vocab

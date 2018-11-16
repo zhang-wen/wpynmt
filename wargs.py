@@ -3,17 +3,11 @@ max_seq_len = 128
 worse_counter = 0
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-''' encoder '''
-encoder_type = 'gru'
-d_src_emb = 512     # size of source word embedding
-n_enc_layers = 2    # layers number
-d_enc_hid = 512     # hidden size in rnn
-
-''' decoder '''
-decoder_type = 'gru'
-d_trg_emb = 512     # size of target word embedding
-n_dec_layers = 2    # layers number
-d_dec_hid = 512     # hidden size in rnn
+''' encoder and decoder '''
+encoder_type, decoder_type = 'gru', 'gru'
+d_src_emb, d_trg_emb = 512, 512     # size of source and target word embedding
+n_enc_layers, n_dec_layers = 2, 2    # layers number of encoder and decoder
+d_enc_hid, d_dec_hid = 512, 512     # hidden size of rnn in encoder and decoder
 
 ''' transformer '''
 d_model = 512       # n_head * d_v, size of alignment
@@ -21,61 +15,44 @@ d_ff_filter = 2048  # hidden size of the second layer of PositionwiseFeedForward
 n_head = 8          # the number of head for MultiHeadedAttention
 
 # dropout for tgru
-input_dropout = 0.3
-rnn_dropout = 0.3
-output_dropout = 0.5
+input_dropout, rnn_dropout, output_dropout = 0.5, 0.3, 0.5
 
-proj_share_weight = True
-embs_share_weight = False
+proj_share_weight, embs_share_weight = True, False
 position_encoding = True if (encoder_type in ('att','tgru') and decoder_type in ('att','tgru')) else False
 
 ''' directory to save model, validation output and test output '''
-dir_model = 'wmodel'
-dir_valid = 'wvalid'
-dir_tests = 'wtests'
+dir_model, dir_valid, dir_tests = 'wmodel', 'wvalid', 'wtests'
 
 ''' training data '''
 dir_data = 'data/'
-train_prefix = 'train'
-train_src_suffix = 'src'
-train_trg_suffix = 'trg'
+train_prefix, train_src_suffix, train_trg_suffix = 'train', 'src', 'trg'
 
 ''' validation data '''
-val_shuffle = True
 dev_max_seq_len = 10000000
 
 ''' vocabulary '''
-word_piece = False
-n_src_vcb_plan = 30000
-n_trg_vcb_plan = 30000
-src_vcb = dir_data + 'src.vcb'
-trg_vcb = dir_data + 'trg.vcb'
+n_src_vcb_plan, n_trg_vcb_plan = 30000, 30000
+src_vcb, trg_vcb = dir_data + 'src.vcb', dir_data + 'trg.vcb'
 
 inputs_data = dir_data + 'inputs.pt'
 
-cased = False
-with_bpe = False
-with_postproc = False
-use_multi_bleu = True
+cased, with_bpe, with_postproc, use_multi_bleu = False, False, False, True
 
 ''' training '''
-epoch_shuffle_train = False
-epoch_shuffle_batch = True
+epoch_shuffle_train, epoch_shuffle_batch = False, True
 batch_type = 'sents'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
 sort_k_batches = 0
 save_one_model = True
 start_epoch = 1
-model_prefix = dir_model + '/model'
-best_model = dir_valid + '/best.model.pt' if dir_valid else 'best.model.pt'
-label_smoothing = 0.1
-trg_bow = True
-emb_loss = False
-bow_loss = False
+trg_bow, emb_loss, bow_loss = True, False, False
 trunc_size = 0   # truncated bptt
 grad_accum_count = 1   # accumulate gradient for batch_size * accum_count batches (Transformer)
 snip_size = 10
 normalization = 'tokens'     # 'sents' or 'tokens', normalization method of the gradient
-max_grad_norm = 0. # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
+max_grad_norm = 25. # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
+label_smoothing = 0.1
+model_prefix = dir_model + '/model'
+best_model = dir_valid + '/best.model.pt' if dir_valid else 'best.model.pt'
 
 ''' whether use pretrained model '''
 pre_train = None
@@ -90,35 +67,24 @@ last_valid_bleu = 0.
 small = True
 display_freq = 10 if small else 1000
 look_freq = 100 if small else 5000
-n_look = 5
-fix_looking = False
+n_look, fix_looking = 5, False
 
 ''' evaluate settings '''
-eval_small = False
-epoch_eval = True
-src_char = False
-char_bleu = False
+eval_small, epoch_eval = False, True
+src_char, char_bleu = False, False
 eval_valid_from = 500 if eval_small else 100000
 eval_valid_freq = 100 if eval_small else 20000
 
 ''' decoder settings '''
 search_mode = 1
-with_batch = 1
-ori_search = 0
-beam_size = 4
-vocab_norm = 1  # softmax
+with_batch, ori_search, vocab_norm = 1, 0, 1
 len_norm = 2    # 0: no noraml, 1: length normal, 2: alpha-beta
-with_mv = 0
+with_mv, avg_att, m_threshold, ngram = 0, 0, 100., 3
 merge_way = 'Y'
-avg_att = 0
-m_threshold = 100.
-ngram = 3
-alpha_len_norm = 0.6
-beta_cover_penalty = 0.
+beam_size, alpha_len_norm, beta_cover_penalty = 4, 0.6, 0.
 
 copy_attn = False
 file_tran_dir = 'wexp-gpu-nist03'
-laynorm = False
 segments = False
 seg_val_tst_dir = 'orule_1.7'
 

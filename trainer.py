@@ -18,27 +18,19 @@ class Trainer(object):
 
     def __init__(self, model, train_data, vocab_data, optim, valid_data=None, tests_data=None):
 
-        self.model = model
+        self.model, self.optim = model, optim
         if isinstance(model, tc.nn.DataParallel): self.classifier = model.module.classifier
         else: self.classifier = model.classifier
 
-        self.optim = optim
-        self.sv = vocab_data['src'] if wargs.word_piece else vocab_data['src'].idx2key
-        self.tv = vocab_data['trg'] if wargs.word_piece else vocab_data['trg'].idx2key
-        self.train_data = train_data
-        self.valid_data = valid_data
-        self.tests_data = tests_data
-
-        self.model.train()
-        self.max_epochs = wargs.max_epochs
-        self.start_epoch = wargs.start_epoch
+        self.sv, self.tv = vocab_data['src'].idx2key, vocab_data['trg'].idx2key
+        self.train_data, self.valid_data, self.tests_data = train_data, valid_data, tests_data
+        self.max_epochs, self.start_epoch = wargs.max_epochs, wargs.start_epoch
 
         wlog('self-normalization alpha -> {}'.format(wargs.self_norm_alpha))
 
         self.n_look = wargs.n_look
         assert self.n_look <= wargs.batch_size, 'eyeball count > batch size'
-        # [low, high)
-        self.n_batches = len(train_data)
+        self.n_batches = len(train_data)    # [low, high)
         self.look_xs, self.look_ys = None, None
         if wargs.fix_looking:
             look_bidx = tc.randperm(self.n_batches)[-1]
@@ -57,8 +49,7 @@ class Trainer(object):
         self.look_tor = Translator(self.model, self.sv, self.tv)
         self.n_eval = 0
 
-        self.snip_size = wargs.snip_size
-        self.trunc_size = wargs.trunc_size
+        self.snip_size, self.trunc_size = wargs.snip_size, wargs.trunc_size
         self.grad_accum_count = wargs.grad_accum_count
         self.norm_type = wargs.normalization
 
@@ -152,10 +143,10 @@ class Trainer(object):
             self.look_spend = time.time() - look_start
             self.model.train()
 
-    def try_valid(self, epo, e_bidx, b_counter):
+    def try_valid(self, epo, e_bidx, n_steps):
 
-        if wargs.epoch_eval is not True and b_counter > wargs.eval_valid_from and \
-           b_counter % wargs.eval_valid_freq == 0:
+        if wargs.epoch_eval is not True and n_steps > wargs.eval_valid_from and \
+           n_steps % wargs.eval_valid_freq == 0:
             eval_start = time.time()
             self.n_eval += 1
             wlog('\nAmong epo, batch [{}], [{}] eval save model ...'.format(e_bidx, self.n_eval))
@@ -186,6 +177,7 @@ class Trainer(object):
         train_start = time.time()
         wlog('\n' + '#' * 120 + '\n' + '#' * 30 + ' Start Training ' + '#' * 30 + '\n' + '#' * 120)
         batch_oracles, _checks, accum_batches, real_batches = None, None, 0, []
+        self.model.train()
 
         for epo in range(self.start_epoch, self.max_epochs + 1):
 
@@ -220,17 +212,18 @@ class Trainer(object):
                 if accum_batches == self.grad_accum_count:
 
                     self.grad_accumulate(real_batches, epo)
+                    current_steps = self.optim.n_current_steps
                     accum_batches, real_batches = 0, []
                     grad_checker(self.model, _checks)
                     if bidx % wargs.display_freq == 0:
                         #print self.look_ok_ytoks, self.look_nll, self.look_ytoks, self.look_nll/self.look_ytoks
                         ud = time.time() - show_start - self.look_spend - eval_spend
                         wlog(
-                            'Epo:{:>2}/{:>2} |[{:^5}/{} {:^5} {:^5}k] |acc:{:5.2f}% |loss:{:4.2f}'
+                            'Epo:{:>2}/{:>2} |[{:^5}/{} {:^5}] |acc:{:5.2f}% |nll:{:4.2f}'
                             ' |w-ppl:{:4.2f} |w(s)-logZ|:{:.2f}({:.2f}) '
                             ' |x(y)/s:{:>4}({:>4})/{}={}({}) |x(y)/sec:{}({}) |lr:{:7.6f}'
-                            ' |elapsed:{:4.2f}/{:4.2f}m'.format(
-                                epo, self.max_epochs, bidx, self.n_batches, e_bidx, b_counter/1000,
+                            ' |{:4.2f}s/{:4.2f}m'.format(
+                                epo, self.max_epochs, b_counter, self.n_batches, current_steps,
                                 (self.look_ok_ytoks / self.look_ytoks) * 100,
                                 self.look_nll / self.look_ytoks,
                                 math.exp(self.look_nll / self.look_ytoks),
@@ -248,8 +241,8 @@ class Trainer(object):
                         self.look_spend, eval_spend = 0, 0
                         show_start = time.time()
 
-                self.look_samples(bidx, batch)
-                self.try_valid(epo, e_bidx, b_counter)
+                    self.look_samples(current_steps, batch)
+                    self.try_valid(epo, e_bidx, current_steps)
 
             avg_epo_acc, avg_epo_nll = self.e_ok_ytoks/self.e_ytoks, self.e_nll/self.e_ytoks
             wlog('\nEnd epoch [{}]'.format(epo))

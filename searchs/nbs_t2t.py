@@ -69,6 +69,7 @@ class Nbs(object):
         elif wargs.ori_search:   best_trans, best_loss = self.ori_batch_search()
         else:                    self.batch_search()
         # best_trans w/o <bos> and <eos> !!!
+        tc.cuda.empty_cache()
 
         #batch_tran_cands: [(trans, loss, attend)]
         for bidx in range(self.B):

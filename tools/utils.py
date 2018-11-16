@@ -27,28 +27,17 @@ def str1(content, encoding='utf-8'):
 
 #DEBUG = True
 DEBUG = False
-#PAD = 0
-#UNK = 1
-#BOS = 2
-#EOS = 3
-
 MAX_SEQ_SIZE = 5000
 PAD_WORD = '<pad>'
 UNK_WORD = 'unk'
 BOS_WORD = '<b>'
 EOS_WORD = '<e>'
-if wargs.word_piece is True:
-    # Reserved tokens for things like padding and EOS symbols.
-    RESERVED_TOKENS = [PAD_WORD, BOS_WORD, EOS_WORD]
-else:
-    RESERVED_TOKENS = [PAD_WORD, UNK_WORD, BOS_WORD, EOS_WORD]
-
+RESERVED_TOKENS = [PAD_WORD, UNK_WORD, BOS_WORD, EOS_WORD]
 NUM_RESERVED_TOKENS = len(RESERVED_TOKENS)
-PAD = RESERVED_TOKENS.index(PAD_WORD)  # Normally 0
-# Normally None of 1
-UNK = RESERVED_TOKENS.index(UNK_WORD) if UNK_WORD in RESERVED_TOKENS else None
-BOS = RESERVED_TOKENS.index(BOS_WORD)  # Normally 1 or 2
-EOS = RESERVED_TOKENS.index(EOS_WORD)  # Normally 2 or 3
+PAD = RESERVED_TOKENS.index(PAD_WORD)  # 0
+UNK = RESERVED_TOKENS.index(UNK_WORD)  # 1
+BOS = RESERVED_TOKENS.index(BOS_WORD)  # 2
+EOS = RESERVED_TOKENS.index(EOS_WORD)  # 3
 
 def _load_model(model_path):
     wlog('Loading pre-trained model ... from {} '.format(model_path), 0)

@@ -82,11 +82,6 @@ class Translator(object):
 
             trans, ids, attent_matrix = self.trans_onesent(one_src[one_src.nonzero()].transpose(0, 1))
 
-            #if len(trans) == 2:
-            #    trans, trg_toks = trans
-            #    trans_subwords = '###'.join(trg_toks)
-            #    wlog('[{:3}] {}'.format('Sub', trans_subwords))
-            #else: src_toks, trg_toks = x_sent.split(' '), trans.split(' ')
             src_toks = [] if x_sent == '' else x_sent.split(' ')
             trg_toks = [] if trans == '' else trans.split(' ')
 
@@ -142,7 +137,6 @@ class Translator(object):
         total_trans = []
         total_aligns = [] if self.print_att is True else None
         sent_no, words_cnt = 0, 0
-        if wargs.word_piece is True: total_trans_subwords = []
 
         fd_attent_matrixs, trgs = None, None
         if batch_tst_data is not None:
@@ -157,7 +151,6 @@ class Translator(object):
             # idxs, tsrcs, ttrgs_for_files, lengths, src_mask, trg_mask_for_files
             for no in range(xs_nL.size(0)): # batch size, 1 for valid
                 x_filter = sent_filter(xs_nL[no].tolist())
-                if wargs.word_piece is True: trans_subwords = []
                 if src_labels_fname is not None:
                     assert self.print_att is None, 'split sentence does not suport print attention'
                     # split by segment labels file
@@ -165,22 +158,14 @@ class Translator(object):
                     trans = []
                     for seg in segs:
                         seg_trans, ids, _ = self.trans_onesent(seg)
-                        if len(seg_trans) == 2:
-                            seg_trans, seg_subwords = seg_trans
-                            trans_subwords.append('###'.join(seg_subwords))
-                        else: _ = seg_trans.split(' ')
                         words_cnt += len(ids)
                         trans.append(seg_trans)
                     # merge by order
                     trans = ' '.join(trans)
-                    if wargs.word_piece is True: trans_subwords = '###'.join(trans_subwords)
                 else:
                     if fd_attent_matrixs is None:   # need translate
                         trans, ids, attent_matrix = self.trans_onesent(xs_nL[no].unsqueeze(0))
-                        if len(trans) == 2:
-                            trans, trg_toks = trans
-                            trans_subwords = '###'.join(trg_toks)
-                        else: trg_toks = [] if trans == '' else trans.split(' ')
+                        trg_toks = [] if trans == '' else trans.split(' ')
                         if trans == '': wlog('What ? null translation ... !')
                         words_cnt += len(ids)
                     else:
@@ -210,7 +195,6 @@ class Translator(object):
                         total_aligns.append(alnStr)
 
                 total_trans.append(trans)
-                if wargs.word_piece is True: total_trans_subwords.append(trans_subwords)
                 if numpy.mod(sent_no + 1, point_every) == 0: wlog('.', False)
                 if numpy.mod(sent_no + 1, number_every) == 0: wlog('{}'.format(sent_no + 1), False)
 
@@ -239,8 +223,7 @@ class Translator(object):
 
         wlog('Done ...')
         if total_aligns is not None: total_aligns = '\n'.join(total_aligns) + '\n'
-        total_trans_subwords = '\n'.join(total_trans_subwords) if wargs.word_piece else None
-        return '\n'.join(total_trans) + '\n', total_aligns, total_trans_subwords
+        return '\n'.join(total_trans) + '\n', total_aligns
 
     def segment_src(self, src_list, labels_list):
 
@@ -264,17 +247,12 @@ class Translator(object):
 
         return segments
 
-    def write_file_eval(self, out_fname, trans, data_prefix, alns=None, subw=None):
+    def write_file_eval(self, out_fname, trans, data_prefix, alns=None):
 
         if alns is not None:
             fout_aln = open('{}.aln'.format(out_fname), 'w')    # valids/trans
             fout_aln.writelines(alns)
             fout_aln.close()
-
-        if subw is not None:
-            fout_subw = open('{}.subword'.format(out_fname), 'w')    # valids/trans
-            fout_subw.writelines(subw)
-            fout_subw.close()
 
         fout = open(out_fname, 'w')    # valids/trans
         fout.writelines(trans)
@@ -327,26 +305,26 @@ class Translator(object):
             wlog('\nTranslating test dataset {}'.format(test_prefix))
             label_fname = '{}{}/{}.label'.format(wargs.val_tst_dir, wargs.seg_val_tst_dir,
                                                  test_prefix) if wargs.segments else None
-            trans, alns, subw = self.single_trans_file(tests_data[test_prefix], label_fname)
+            trans, alns = self.single_trans_file(tests_data[test_prefix], label_fname)
 
             outprefix = wargs.dir_tests + '/' + test_prefix + '/trans'
             test_out = "{}_e{}_upd{}_b{}m{}_bch{}".format(
                 outprefix, eid, bid, self.k, self.search_mode, wargs.with_batch)
 
-            _ = self.write_file_eval(test_out, trans, test_prefix, alns, subw)
+            _ = self.write_file_eval(test_out, trans, test_prefix, alns)
 
     def trans_eval(self, valid_data, eid, bid, model_file, tests_data):
 
         wlog('\nTranslating validation dataset {}{}.{}'.format(wargs.val_tst_dir, wargs.val_prefix, wargs.val_src_suffix))
         label_fname = '{}{}/{}.label'.format(wargs.val_tst_dir, wargs.seg_val_tst_dir,
                                              wargs.val_prefix) if wargs.segments else None
-        trans, alns, subw = self.single_trans_file(valid_data, label_fname)
+        trans, alns = self.single_trans_file(valid_data, label_fname)
 
         outprefix = wargs.dir_valid + '/trans'
         valid_out = "{}_e{}_upd{}_b{}m{}_bch{}".format(
             outprefix, eid, bid, self.k, self.search_mode, wargs.with_batch)
 
-        bleu_score = self.write_file_eval(valid_out, trans, wargs.val_prefix, alns, subw)
+        bleu_score = self.write_file_eval(valid_out, trans, wargs.val_prefix, alns)
 
         bleu_scores_fname = '{}/train_bleu.log'.format(wargs.dir_valid)
         bleu_scores = [0.]

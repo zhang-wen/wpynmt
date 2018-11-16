@@ -67,27 +67,25 @@ class Optim(object):
 
         self.optimizer.step()
 
-        # attention is all you need
-        if self.opt_mode == 'adam' and wargs.encoder_type in ('att','tgru') and \
-           wargs.decoder_type in ('att', 'tgru'):
-            self.n_current_steps += 1
-            if wargs.lr_update_way == 't2t':
-                factor = math.pow(self.d_model, -0.5) * min(
-                    math.pow(self.n_current_steps, -0.5),
-                    self.n_current_steps * math.pow(self.warmup_steps, -1.5)
-                )
-                #self.learning_rate = factor
-                #wlog('lrate = {}'.format(factor))
-            elif wargs.lr_update_way == 'chen':
-                n, s, e = wargs.n_co_models, wargs.s_step_decay, wargs.e_step_decay
-                factor = min( 1 + ( self.n_current_steps * (n - 1) ) / ( n * self.warmup_steps ),
-                             n,
-                             n * math.pow(2 * n, ( s - n * self.n_current_steps ) / ( e - s ) ) )
+        # update the learning rate
+        self.n_current_steps += 1
+        if wargs.lr_update_way == 't2t':
+            factor = math.pow(self.d_model, -0.5) * min(
+                math.pow(self.n_current_steps, -0.5),
+                self.n_current_steps * math.pow(self.warmup_steps, -1.5)
+            )
+            #self.learning_rate = factor
+            #wlog('lrate = {}'.format(factor))
+        elif wargs.lr_update_way == 'chen':
+            n, s, e = wargs.n_co_models, wargs.s_step_decay, wargs.e_step_decay
+            factor = min( 1 + ( self.n_current_steps * (n - 1) ) / ( n * self.warmup_steps ),
+                         n,
+                         n * math.pow(2 * n, ( s - n * self.n_current_steps ) / ( e - s ) ) )
 
-            self.learning_rate = wargs.learning_rate * factor
-            #wlog('lr0 * factor = {} * {} = {}'.format(wargs.learning_rate, factor, self.learning_rate))
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = self.learning_rate
+        self.learning_rate = wargs.learning_rate * factor
+        #wlog('lr0 * factor = {} * {} = {}'.format(wargs.learning_rate, factor, self.learning_rate))
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = self.learning_rate
 
     def update_learning_rate(self, bleu, epoch):
 

@@ -160,19 +160,10 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
         trg_refs_words = [trg_ref.split() for trg_ref in trg_refs]
         if src_len <= max_seq_len and all([len(tws) <= max_seq_len for tws in trg_refs_words]):
 
-            if wargs.word_piece is True:
-
-                src_wids = src_vocab.encode(src_sent)
-                trg_refs_wids = [trg_vocab.encode(trg_ref) for trg_ref in trg_refs]
-
-                src_tensor = ids2Tensor(src_wids)
-                trg_refs_tensor = [ids2Tensor(trg_ref_wids, bos_id=BOS, eos_id=EOS)
-                                   for trg_ref_wids in trg_refs_wids]
-            else:
-                src_tensor = [ src_vocab.keys2idx(src_words, UNK_WORD) ]
-                trg_refs_tensor = [trg_vocab.keys2idx(trg_ref_words, UNK_WORD,
-                                                  bos_word=BOS_WORD, eos_word=EOS_WORD)
-                                   for trg_ref_words in trg_refs_words]
+            src_tensor = [ src_vocab.keys2idx(src_words, UNK_WORD) ]
+            trg_refs_tensor = [trg_vocab.keys2idx(trg_ref_words, UNK_WORD,
+                                              bos_word=BOS_WORD, eos_word=EOS_WORD)
+                               for trg_ref_words in trg_refs_words]
 
             srcs.append(src_tensor)
             trgs.append(trg_refs_tensor)
@@ -251,11 +242,7 @@ def wrap_tst_data(src_data, src_vocab, char=False):
         src_words = src_sent.split()
         src_len = len(src_words)
 
-        if wargs.word_piece is True:
-            src_wids = src_vocab.encode(src_sent)
-            src_tensor = ids2Tensor(src_wids)
-        else:
-            src_tensor = [ src_vocab.keys2idx(src_words, UNK_WORD) ]
+        src_tensor = [ src_vocab.keys2idx(src_words, UNK_WORD) ]
 
         srcs.append(src_tensor)
         slens.append(src_len)
@@ -269,16 +256,10 @@ if __name__ == "__main__":
     src = os.path.join(wargs.dir_data, '{}.{}'.format(wargs.train_prefix, wargs.train_src_suffix))
     trg = os.path.join(wargs.dir_data, '{}.{}'.format(wargs.train_prefix, wargs.train_trg_suffix))
     vocabs = {}
-    if wargs.word_piece is True:
-        wlog('\n[w/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = get_or_generate_vocab(src, wargs.src_dict, max_seq_len=wargs.max_seq_len)
-        wlog('\n[w/Subword] Preparing target vocabulary from {} ... '.format(trg))
-        trg_vocab = get_or_generate_vocab(trg, wargs.trg_dict, max_seq_len=wargs.max_seq_len)
-    else:
-        wlog('\n[o/Subword] Preparing source vocabulary from {} ... '.format(src))
-        src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size, wargs.max_seq_len)
-        wlog('\n[o/Subword] Preparing target vocabulary from {} ... '.format(trg))
-        trg_vocab = extract_vocab(trg, wargs.trg_dict, wargs.trg_dict_size, wargs.max_seq_len)
+    wlog('\nPreparing source vocabulary from {} ... '.format(src))
+    src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size, wargs.max_seq_len)
+    wlog('\nPreparing target vocabulary from {} ... '.format(trg))
+    trg_vocab = extract_vocab(trg, wargs.trg_dict, wargs.trg_dict_size, wargs.max_seq_len)
     src_vocab_size, trg_vocab_size = src_vocab.size(), trg_vocab.size()
     wlog('Vocabulary size: |source|={}, |target|={}'.format(src_vocab_size, trg_vocab_size))
     vocabs['src'], vocabs['trg'] = src_vocab, trg_vocab
