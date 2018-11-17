@@ -64,16 +64,16 @@ learning_rate_decay = 0.5
 last_valid_bleu = 0.
 
 ''' display settings '''
-small = True
+small = False
 display_freq = 10 if small else 1000
 look_freq = 100 if small else 5000
 n_look, fix_looking = 5, False
 
 ''' evaluate settings '''
-eval_small, epoch_eval = False, True
+eval_small, epoch_eval = False, False
 src_char, char_bleu = False, False
-eval_valid_from = 500 if eval_small else 100000
-eval_valid_freq = 100 if eval_small else 20000
+eval_valid_from = 500 if eval_small else 30000
+eval_valid_freq = 100 if eval_small else 5000
 
 ''' decoder settings '''
 search_mode = 1
@@ -114,7 +114,7 @@ nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 sampling = 'length_limit'     # truncation, length_limit, gumbeling
 gpu_id = [0, 1]
 #gpu_id = None
-n_co_models = len(gpu_id)
+n_co_models = 1
 s_step_decay = 4000 * n_co_models
 e_step_decay = 32000 * n_co_models
 
