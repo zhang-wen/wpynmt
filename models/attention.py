@@ -27,7 +27,7 @@ class Multihead_Additive_Attention(nn.Module):
 
     #d_model(int):   the dimension of n_head keys/values/queries: d_model % n_head == 0
     #n_head(int):    number of parallel heads.
-    def __init__(self, enc_hid_size, d_model, n_head=16):
+    def __init__(self, enc_hid_size, d_model, n_head=8):
 
         super(Multihead_Additive_Attention, self).__init__()
 

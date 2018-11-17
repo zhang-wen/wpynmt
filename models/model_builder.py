@@ -33,9 +33,6 @@ class NMTModel(nn.Module):
             logit, _, nlayer_attns = self.decoder(trg, src, enc_output)
             alphas = nlayer_attns[-1][:, 0, :, :]
         elif wargs.encoder_type == 'tgru':
-            #src, trg = src.transpose(0, 1), trg.transpose(0, 1)
-            #if src_mask is not None: src_mask = src_mask.transpose(0, 1)
-            #if trg_mask is not None: trg_mask = trg_mask.transpose(0, 1)
             enc_output = self.encoder(src, src_mask)    # batch_size, max_L, hidden_size
             results = self.decoder(enc_output, trg, src_mask, trg_mask, isAtt=True)
             if len(results) == 1: logit, alphas = results, None
@@ -53,20 +50,20 @@ def build_encoder(src_emb):
 
     if wargs.encoder_type == 'gru':
         from models.gru_encoder import StackedGRUEncoder
-        return StackedGRUEncoder(src_emb=src_emb,
-                                 enc_hid_size=wargs.d_enc_hid,
-                                 dropout_prob=0.,
-                                 n_layers=1)
+        return StackedGRUEncoder(src_emb = src_emb,
+                                 enc_hid_size = wargs.d_enc_hid,
+                                 dropout_prob = 0.,
+                                 n_layers = wargs.n_enc_layers)
     if wargs.encoder_type == 'att':
         from models.self_att_encoder import SelfAttEncoder
-        return SelfAttEncoder(src_emb=src_emb,
-                              n_layers=wargs.n_enc_layers,
-                              d_model=wargs.d_model,
-                              n_head=wargs.n_head,
-                              d_ff_filter=wargs.d_ff_filter,
-                              att_dropout=wargs.att_dropout,
-                              residual_dropout=wargs.residual_dropout,
-                              relu_dropout=wargs.relu_dropout)
+        return SelfAttEncoder(src_emb = src_emb,
+                              n_layers = wargs.n_enc_layers,
+                              d_model = wargs.d_model,
+                              n_head = wargs.n_head,
+                              d_ff_filter = wargs.d_ff_filter,
+                              att_dropout = wargs.att_dropout,
+                              residual_dropout = wargs.residual_dropout,
+                              relu_dropout = wargs.relu_dropout)
     elif wargs.encoder_type == 'cnn':
         return CNNEncoder(opt.enc_layers, opt.rnn_size,
                           opt.cnn_kernel_width,
@@ -76,40 +73,41 @@ def build_encoder(src_emb):
     elif wargs.encoder_type == 'tgru':
         from models.tgru_encoder import StackedTransEncoder
         # 'Transition gru'
-        return StackedTransEncoder(src_emb=src_emb,
-                                   enc_hid_size=wargs.d_enc_hid,
-                                   rnn_dropout=wargs.rnn_dropout,
-                                   n_layers=wargs.n_enc_layers)
+        return StackedTransEncoder(src_emb = src_emb,
+                                   enc_hid_size = wargs.d_enc_hid,
+                                   rnn_dropout = wargs.rnn_dropout,
+                                   n_layers = wargs.n_enc_layers)
 
 def build_decoder(trg_emb):
 
     if wargs.encoder_type == 'gru':
         from models.gru_decoder import StackedGRUDecoder
-        return StackedGRUDecoder(trg_emb=trg_emb,
-                                 enc_hid_size=wargs.d_enc_hid,
-                                 dec_hid_size=wargs.d_dec_hid,
-                                 n_layers=1,
-                                 rnn_dropout_prob=wargs.rnn_dropout,
-                                 out_dropout_prob=wargs.output_dropout)
+        return StackedGRUDecoder(trg_emb = trg_emb,
+                                 enc_hid_size = wargs.d_enc_hid,
+                                 dec_hid_size = wargs.d_dec_hid,
+                                 n_layers = wargs.n_dec_layers,
+                                 rnn_dropout_prob = wargs.rnn_dropout,
+                                 out_dropout_prob = wargs.output_dropout)
     if wargs.decoder_type == 'att':
         from models.self_att_decoder import SelfAttDecoder
-        return SelfAttDecoder(trg_emb=trg_emb,
-                              n_layers=wargs.n_dec_layers,
-                              d_model=wargs.d_model,
-                              n_head=wargs.n_head,
-                              d_ff_filter=wargs.d_ff_filter,
-                              att_dropout=wargs.att_dropout,
-                              residual_dropout=wargs.residual_dropout,
-                              relu_dropout=wargs.relu_dropout,
-                              proj_share_weight=wargs.proj_share_weight)
+        return SelfAttDecoder(trg_emb = trg_emb,
+                              n_layers = wargs.n_dec_layers,
+                              d_model = wargs.d_model,
+                              n_head = wargs.n_head,
+                              d_ff_filter = wargs.d_ff_filter,
+                              att_dropout = wargs.att_dropout,
+                              residual_dropout = wargs.residual_dropout,
+                              relu_dropout = wargs.relu_dropout,
+                              proj_share_weight = wargs.proj_share_weight)
     elif wargs.encoder_type == 'tgru':
         from models.tgru_decoder import StackedTransDecoder
-        return StackedTransDecoder(trg_emb=trg_emb,
-                                   enc_hid_size=wargs.d_enc_hid,
-                                   dec_hid_size=wargs.d_dec_hid,
-                                   n_layers=wargs.n_dec_layers,
-                                   rnn_dropout=wargs.rnn_dropout,
-                                   out_dropout_prob=wargs.output_dropout)
+        return StackedTransDecoder(trg_emb = trg_emb,
+                                   enc_hid_size = wargs.d_enc_hid,
+                                   dec_hid_size = wargs.d_dec_hid,
+                                   n_head = wargs.n_head,
+                                   n_layers = wargs.n_dec_layers,
+                                   rnn_dropout = wargs.rnn_dropout,
+                                   out_dropout_prob = wargs.output_dropout)
 
 def build_NMT(src_emb, trg_emb):
 

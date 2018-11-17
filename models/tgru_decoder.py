@@ -15,7 +15,7 @@ from attention import Multihead_Additive_Attention
 '''
 class StackedTransDecoder(nn.Module):
 
-    def __init__(self, trg_emb, enc_hid_size=512, dec_hid_size=512, n_layers=3,
+    def __init__(self, trg_emb, enc_hid_size=512, dec_hid_size=512, n_head=8, n_layers=3,
                  attention_type='multihead_additive', max_out=False,
                  rnn_dropout=0.3, out_dropout_prob=0.5,
                  prefix='TGRU_Decoder', **kwargs):
@@ -45,7 +45,7 @@ class StackedTransDecoder(nn.Module):
             self.attention = Additive_Attention(dec_hid_size, wargs.align_size)
         if attention_type == 'multihead_additive':
             self.keys_transform = nn.Linear(2 * enc_hid_size, dec_hid_size, bias=False)
-            self.attention = Multihead_Additive_Attention(enc_hid_size, dec_hid_size)
+            self.attention = Multihead_Additive_Attention(enc_hid_size, dec_hid_size, n_head=n_head)
 
         self.sigmoid = nn.Sigmoid()
         self.s_transform = nn.Linear(dec_hid_size, dec_hid_size)
