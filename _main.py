@@ -53,7 +53,9 @@ def main():
     trains = {}
     train_src_tlst, train_trg_tlst = wrap_data(wargs.dir_data, wargs.train_prefix,
                                                wargs.train_src_suffix, wargs.train_trg_suffix,
-                                               src_vocab, trg_vocab, max_seq_len=wargs.max_seq_len,
+                                               src_vocab, trg_vocab, shuffle=True,
+                                               sort_k_batches=wargs.sort_k_batches,
+                                               max_seq_len=wargs.max_seq_len,
                                                char=wargs.src_char)
     '''
     list [torch.LongTensor (sentence), torch.LongTensor, torch.LongTensor, ...]
@@ -70,8 +72,7 @@ def main():
         wlog('\nPreparing validation set from {} and {} ... '.format(val_src_file, val_trg_file))
         valid_src_tlst, valid_trg_tlst = wrap_data(wargs.val_tst_dir, wargs.val_prefix,
                                                    wargs.val_src_suffix, wargs.val_ref_suffix,
-                                                   src_vocab, trg_vocab,
-                                                   shuffle=False, sort_data=False,
+                                                   src_vocab, trg_vocab, shuffle=False,
                                                    max_seq_len=wargs.dev_max_seq_len,
                                                    char=wargs.src_char)
         batch_valid = Input(valid_src_tlst, valid_trg_tlst, 1, batch_sort=False)

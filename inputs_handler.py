@@ -114,7 +114,7 @@ def count_vocab(data_file, max_vcb_size, max_seq_len=50, char=False):
     return new_vocab
 
 def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_vocab,
-              shuffle=True, sort_data=True, max_seq_len=50, char=False):
+              shuffle=True, sort_k_batches=1, max_seq_len=50, char=False):
 
     srcF = open(os.path.join(data_dir, '{}.{}'.format(file_prefix, src_suffix)), 'r')
     num = len(srcF.readlines())
@@ -190,30 +190,28 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
 
     final_srcs, final_trgs = srcs, trgs
 
-    if sort_data is True:
-
-        #assert len(trgFs) == 1, 'Unsupport to sort validation set in k batches.'
+    #assert len(trgFs) == 1, 'Unsupport to sort validation set in k batches.'
+    if sort_k_batches == 0:
         final_srcs, final_trgs = [], []
+        wlog('Sorting the whole dataset by ascending order of source length ... ', False)
+        # sort the whole training data by ascending order of source length
+        _, sorted_idx = tc.sort(tc.IntTensor(slens))
+        final_srcs = [srcs[k] for k in sorted_idx]
+        final_trgs = [trgs[k] for k in sorted_idx]
+    elif sort_k_batches > 1:
+        final_srcs, final_trgs = [], []
+        wlog('Sorting for each {} batches ... '.format(wargs.sort_k_batches), False)
 
-        if wargs.sort_k_batches == 0:
-            wlog('Sorting the whole dataset by ascending order of source length ... ', False)
-            # sort the whole training data by ascending order of source length
-            _, sorted_idx = tc.sort(tc.IntTensor(slens))
-            final_srcs = [srcs[k] for k in sorted_idx]
-            final_trgs = [trgs[k] for k in sorted_idx]
-        elif wargs.sort_k_batches > 1:
-            wlog('Sorting for each {} batches ... '.format(wargs.sort_k_batches), False)
+        k_batch = wargs.batch_size * wargs.sort_k_batches
+        number = int(math.ceil(train_size / k_batch))
 
-            k_batch = wargs.batch_size * wargs.sort_k_batches
-            number = int(math.ceil(train_size / k_batch))
-
-            for start in range(number + 1):
-                bsrcs = srcs[start * k_batch : (start + 1) * k_batch]
-                btrgs = trgs[start * k_batch : (start + 1) * k_batch]
-                bslens = slens[start * k_batch : (start + 1) * k_batch]
-                _, sorted_idx = tc.sort(tc.IntTensor(bslens))
-                final_srcs += [bsrcs[k] for k in sorted_idx]
-                final_trgs += [btrgs[k] for k in sorted_idx]
+        for start in range(number + 1):
+            bsrcs = srcs[start * k_batch : (start + 1) * k_batch]
+            btrgs = trgs[start * k_batch : (start + 1) * k_batch]
+            bslens = slens[start * k_batch : (start + 1) * k_batch]
+            _, sorted_idx = tc.sort(tc.IntTensor(bslens))
+            final_srcs += [bsrcs[k] for k in sorted_idx]
+            final_trgs += [btrgs[k] for k in sorted_idx]
 
     wlog('Done.')
 
@@ -285,8 +283,7 @@ if __name__ == "__main__":
         wlog('\nPreparing validation set from {} and {} ... '.format(val_src_file, val_trg_file))
         valid_src_tlst, valid_trg_tlst = wrap_data(wargs.val_tst_dir, wargs.val_prefix,
                                                    wargs.val_src_suffix, wargs.val_ref_suffix,
-                                                   src_vocab, trg_vocab,
-                                                   shuffle=False, sort_data=False,
+                                                   src_vocab, trg_vocab, shuffle=False,
                                                    max_seq_len=wargs.dev_max_seq_len)
         batch_valid = Input(valid_src_tlst, valid_trg_tlst, 1, volatile=True, batch_sort=False)
 
