@@ -201,7 +201,7 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
             _, sorted_idx = tc.sort(tc.IntTensor(slens))
             final_srcs = [srcs[k] for k in sorted_idx]
             final_trgs = [trgs[k] for k in sorted_idx]
-        else:
+        elif wargs.sort_k_batches > 1:
             wlog('Sorting for each {} batches ... '.format(wargs.sort_k_batches), False)
 
             k_batch = wargs.batch_size * wargs.sort_k_batches

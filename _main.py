@@ -60,7 +60,7 @@ def main():
     no padding
     '''
     batch_train = Input(train_src_tlst, train_trg_tlst, wargs.batch_size, bow=wargs.trg_bow,
-                        batch_sort=True)
+                        batch_sort=False)
     wlog('Sentence-pairs count in training data: {}'.format(len(train_src_tlst)))
 
     batch_valid = None
@@ -74,7 +74,7 @@ def main():
                                                    shuffle=False, sort_data=False,
                                                    max_seq_len=wargs.dev_max_seq_len,
                                                    char=wargs.src_char)
-        batch_valid = Input(valid_src_tlst, valid_trg_tlst, 1, volatile=True, batch_sort=False)
+        batch_valid = Input(valid_src_tlst, valid_trg_tlst, 1, batch_sort=False)
 
     batch_tests = None
     if wargs.tests_prefix is not None:
@@ -86,7 +86,7 @@ def main():
             test_file = '{}{}.{}'.format(wargs.val_tst_dir, prefix, wargs.val_src_suffix)
             wlog('\nPreparing test set from {} ... '.format(test_file))
             test_src_tlst, _ = wrap_tst_data(test_file, src_vocab, char=wargs.src_char)
-            batch_tests[prefix] = Input(test_src_tlst, None, 1, volatile=True, batch_sort=False)
+            batch_tests[prefix] = Input(test_src_tlst, None, 1, batch_sort=False)
     wlog('\n## Finish to Prepare Dataset ! ##\n')
 
     src_emb = WordEmbedding(n_src_vcb, wargs.d_src_emb, wargs.input_dropout,

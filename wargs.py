@@ -4,7 +4,7 @@ worse_counter = 0
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder and decoder '''
-encoder_type, decoder_type = 'tgru', 'tgru'
+encoder_type, decoder_type = 'att', 'att'
 d_src_emb, d_trg_emb = 512, 512     # size of source and target word embedding
 n_enc_layers, n_dec_layers = 2, 2    # layers number of encoder and decoder
 d_enc_hid, d_dec_hid = 512, 512     # hidden size of rnn in encoder and decoder
@@ -39,17 +39,17 @@ inputs_data = dir_data + 'inputs.pt'
 cased, with_bpe, with_postproc, use_multi_bleu = False, False, False, True
 
 ''' training '''
-epoch_shuffle_train, epoch_shuffle_batch = False, True
+epoch_shuffle_train, epoch_shuffle_batch = True, False
 batch_type = 'sents'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
-sort_k_batches = 0
+sort_k_batches = 1      # 1 for no sort
 save_one_model = True
 start_epoch = 1
 trg_bow, emb_loss, bow_loss = True, False, False
 trunc_size = 0   # truncated bptt
 grad_accum_count = 1   # accumulate gradient for batch_size * accum_count batches (Transformer)
-snip_size = 10
+snip_size = 20
 normalization = 'tokens'     # 'sents' or 'tokens', normalization method of the gradient
-max_grad_norm = 25. # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
+max_grad_norm = 0. # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
 label_smoothing = 0.1
 model_prefix = dir_model + '/model'
 best_model = dir_valid + '/best.model.pt' if dir_valid else 'best.model.pt'
@@ -64,14 +64,10 @@ learning_rate_decay = 0.5
 last_valid_bleu = 0.
 
 ''' display settings '''
-small = False
-display_freq = 10 if small else 1000
-look_freq = 100 if small else 5000
-n_look, fix_looking = 5, False
+n_look, fix_looking, small = 5, False, False
 
 ''' evaluate settings '''
-eval_small, epoch_eval = False, False
-src_char, char_bleu = False, False
+epoch_eval, src_char, char_bleu, eval_small = False, False, False, False
 eval_valid_from = 500 if eval_small else 30000
 eval_valid_freq = 100 if eval_small else 5000
 
@@ -112,7 +108,7 @@ nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 # car nmt
 #sampling = 'truncation'     # truncation, length_limit, gumbeling
 sampling = 'length_limit'     # truncation, length_limit, gumbeling
-gpu_id = [0, 1]
+gpu_id = [0]
 #gpu_id = None
 n_co_models = 1
 s_step_decay = 4000 * n_co_models
@@ -122,13 +118,17 @@ opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
 beta_1, beta_2, adam_epsilon = 0.9, 0.98, 1e-9
 
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset = 'zhen'
-model_config = 'tgru_big'
+dataset = 'toy'
+model_config = 't2t_tiny'
 if model_config == 't2t_tiny':
     lr_update_way = 't2t'  # 't2t' or 'chen'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
     learning_rate, warmup_steps, adam_epsilon = 1., 300, 1e-6
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.5, 0.1, 0.1, 0.1
+    d_ff_filter, n_head = 512, 8
+    s_step_decay, e_step_decay = 500, 32000
+    small, eval_valid_from, eval_valid_freq = True, 5000, 100
+    epoch_eval = True
 if model_config == 't2t_base':
     lr_update_way = 't2t'  # 't2t' or 'chen'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
@@ -195,4 +195,8 @@ elif dataset == 'ende':
     batch_size, sort_k_batches = 128, 32
     with_bpe = True
     cased = True    # False: Case-insensitive BLEU  True: Case-sensitive BLEU
+
+display_freq = 10 if small else 1000
+look_freq = 100 if small else 5000
+
 

@@ -8,13 +8,11 @@ from utils import *
 
 class Input(object):
 
-    def __init__(self, x_list, y_list, batch_size, volatile=False, bow=False,
-                 batch_sort=False, prefix=None, printlog=True):
+    def __init__(self, x_list, y_list, batch_size, bow=False, batch_sort=False, prefix=None, printlog=True):
 
         self.x_list = x_list
         n_sent = len(x_list)
         self.B = batch_size
-        self.volatile = volatile
         self.gpu_id = wargs.gpu_id
         self.batch_sort = batch_sort
         self.bow = bow
@@ -127,8 +125,6 @@ class Input(object):
                 trgs_for_files = [tc.LongTensor(ref) for ref in zip(*list(trgs))]
 
         lengths = tc.IntTensor(slens).view(1, -1)   # (1, batch_size)
-        #lengths = Variable(lengths, volatile=self.volatile)
-        # for pytorch v4.0
         lengths = tc.tensor(lengths)
 
         def tuple2Tenser(x):
