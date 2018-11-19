@@ -49,7 +49,7 @@ trunc_size = 0   # truncated bptt
 grad_accum_count = 1   # accumulate gradient for batch_size * accum_count batches (Transformer)
 snip_size = 20
 normalization = 'tokens'     # 'sents' or 'tokens', normalization method of the gradient
-max_grad_norm = 0. # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
+max_grad_norm = 5. # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
 label_smoothing = 0.1
 model_prefix = dir_model + '/model'
 best_model = dir_valid + '/best.model.pt' if dir_valid else 'best.model.pt'
@@ -128,13 +128,14 @@ if model_config == 't2t_tiny':
     d_ff_filter, n_head = 512, 8
     s_step_decay, e_step_decay = 500, 32000
     small, eval_valid_from, eval_valid_freq = True, 5000, 100
-    epoch_eval = True
+    epoch_eval, max_grad_norm = True, 0.
 if model_config == 't2t_base':
     lr_update_way = 't2t'  # 't2t' or 'chen'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
     learning_rate, beta_2, warmup_steps = 0.2, 0.997, 8000
     n_enc_layers, n_dec_layers = 6, 6
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.1, 0.1, 0.1, 0.1
+    max_grad_norm = 0.
 if model_config == 't2t_big':
     lr_update_way = 't2t'  # 't2t' or 'chen'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
@@ -143,6 +144,7 @@ if model_config == 't2t_big':
     d_src_emb, d_trg_emb, d_dec_hid, d_model, d_ff_filter, n_head = 1024, 1024, 1024, 1024, 4096, 16
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0.1, 0.1, 0.3
     snip_size, batch_size = 1, 40
+    max_grad_norm = 0.
 if model_config == 'tgru_base':
     lr_update_way = 'chen'  # 't2t' or 'chen'
     param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal

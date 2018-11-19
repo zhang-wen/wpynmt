@@ -150,7 +150,8 @@ class Trainer(object):
             eval_start = time.time()
             self.n_eval += 1
             wlog('\nAmong epo, batch [{}], [{}] eval save model ...'.format(e_bidx, self.n_eval))
-            self.mt_eval(epo, e_bidx)
+            bleu = self.mt_eval(epo, e_bidx)
+            self.optim.update_learning_rate(bleu, epo)
             self.eval_spend = time.time() - eval_start
 
     def mt_eval(self, eid, bid):
@@ -252,10 +253,11 @@ class Trainer(object):
                 self.e_batch_logZ, self.e_ytoks, self.e_batch_logZ / self.e_ytoks,
                 self.e_batch_logZ, self.e_sents, self.e_batch_logZ / self.e_sents))
             wlog('batch [{}], [{}] eval save model ...'.format(e_bidx, self.n_eval))
-            mteval_bleu = self.mt_eval(epo, e_bidx)
+            if wargs.epoch_eval is True:
+                bleu = self.mt_eval(epo, e_bidx)
+                self.optim.update_learning_rate(bleu, epo)
             # decay the probability value epslion of scheduled sampling per batch
             if wargs.ss_type is not None: ss_eps_cur = schedule_sample_eps_decay(epo, ss_eps_cur)   # start from 1
-            self.optim.update_learning_rate(mteval_bleu, epo)
             epo_time_consume = time.time() - epo_start
             wlog('Consuming: {:4.2f}s'.format(epo_time_consume))
 

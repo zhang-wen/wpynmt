@@ -497,7 +497,7 @@ def lp_cp(bp, beam_idx, bidx, beam):
         penalty = tc.min(ys_pi, ys_pi.clone().fill_(1.0)).log().sum().item()
         cp = wargs.beta_cover_penalty * penalty
     #lp = ( ( 5 + beam_idx - 1 ) ** wargs.alpha_len_norm ) / ( (5 + 1) ** wargs.alpha_len_norm )
-    lp = ( ( 5 + beam_idx ) ** wargs.alpha_len_norm ) / ( (5 + 1) ** wargs.alpha_len_norm )
+    lp = ( ( 5 + beam_idx + 1 ) ** wargs.alpha_len_norm ) / ( (5 + 1) ** wargs.alpha_len_norm )
 
     return lp, cp
 
