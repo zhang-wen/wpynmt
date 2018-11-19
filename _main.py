@@ -62,7 +62,7 @@ def main():
     no padding
     '''
     batch_train = Input(train_src_tlst, train_trg_tlst, wargs.batch_size, bow=wargs.trg_bow,
-                        batch_sort=False)
+                        batch_sort=True)
     wlog('Sentence-pairs count in training data: {}'.format(len(train_src_tlst)))
 
     batch_valid = None
@@ -109,6 +109,14 @@ def main():
                                 emb_loss=wargs.emb_loss, bow_loss=wargs.bow_loss)
     nmtModel.classifier = classifier
 
+    if wargs.gpu_id is not None:
+        wlog('push model onto GPU {} ... '.format(wargs.gpu_id), 0)
+        nmtModel = nn.DataParallel(nmtModel, device_ids=wargs.gpu_id)
+        nmtModel.to(tc.device('cuda'))
+    else:
+        wlog('push model onto CPU ... ', 0)
+        nmtModel.to(tc.device('cpu'))
+
     if wargs.pre_train is not None:
         assert os.path.exists(wargs.pre_train)
         _dict = _load_model(wargs.pre_train)
@@ -147,14 +155,6 @@ def main():
         for n, p in nmtModel.named_parameters():
             # bias can not be initialized uniformly
             init_params(p, n, init_D=wargs.param_init_D)
-
-    if wargs.gpu_id is not None:
-        wlog('push model onto GPU {} ... '.format(wargs.gpu_id), 0)
-        nmtModel = nn.DataParallel(nmtModel, device_ids=wargs.gpu_id)
-        nmtModel.to(tc.device('cuda'))
-    else:
-        wlog('push model onto CPU ... ', 0)
-        nmtModel.to(tc.device('cpu'))
 
     wlog('done.')
 

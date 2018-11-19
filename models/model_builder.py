@@ -52,7 +52,7 @@ def build_encoder(src_emb):
         from models.gru_encoder import StackedGRUEncoder
         return StackedGRUEncoder(src_emb = src_emb,
                                  enc_hid_size = wargs.d_enc_hid,
-                                 dropout_prob = 0.,
+                                 dropout_prob = wargs.rnn_dropout,
                                  n_layers = wargs.n_enc_layers)
     if wargs.encoder_type == 'att':
         from models.self_att_encoder import SelfAttEncoder

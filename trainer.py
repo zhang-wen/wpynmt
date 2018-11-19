@@ -216,7 +216,7 @@ class Trainer(object):
                     current_steps = self.optim.n_current_steps
                     accum_batches, real_batches = 0, []
                     grad_checker(self.model, _checks)
-                    if bidx % wargs.display_freq == 0:
+                    if current_steps % wargs.display_freq == 0:
                         #print self.look_ok_ytoks, self.look_nll, self.look_ytoks, self.look_nll/self.look_ytoks
                         ud = time.time() - show_start - self.look_spend - eval_spend
                         wlog(
