@@ -20,56 +20,6 @@ from tools.bleu import zh_to_chars
 import json
 import io
 
-# English tokens
-EN_SPACE_TOK = 3
-# Chinese tokens
-ZH_SPACE_TOK = 16
-
-# 32768
-def get_or_generate_vocab(data_file, vocab_file, vocab_size=2**15, max_seq_len=50):
-    """Inner implementation for vocab generators.
-    Args:
-    vocab_filename: relative filename where vocab file is stored
-    vocab_file: generated vocabulary file
-    vocab_size: target size of the vocabulary constructed by SubwordTextEncoder
-    Returns:
-    A SubwordTextEncoder vocabulary object.
-    """
-    if os.path.exists(vocab_file):
-      wlog('Load dictionary from file {}'.format(vocab_file))
-      vocab = text_encoder.SubwordTextEncoder(vocab_file)
-      return vocab
-
-    token_counts = defaultdict(int)
-    for item in genVcb(data_file, max_seq_len):
-      for tok in tokenizer.encode(text_encoder.native_to_unicode(item)):
-          token_counts[tok] += 1
-
-    vocab = text_encoder.SubwordTextEncoder.build_to_target_size(vocab_size, token_counts, 1, 1e3)
-    vocab.store_to_file(vocab_file)
-    wlog('Save vocabulary file into {}'.format(vocab_file))
-
-    return vocab
-
-"""Generate a vocabulary from the datasets in sources."""
-def genVcb(filepath, max_seq_len=50):
-    wlog("Generating vocab from: {}".format(filepath))
-    # Use Tokenizer to count the word occurrences.
-    with open(filepath, 'r') as train_file:
-        file_byte_budget = 1e6
-        counter = 0
-        countermax = int(os.path.getsize(filepath) / file_byte_budget / 2)
-        for line in train_file:
-            if counter < countermax:
-                counter += 1
-            else:
-                if file_byte_budget <= 0: break
-                line = line.strip()
-                if len(line.split()) > max_seq_len: continue
-                file_byte_budget -= len(line)
-                counter = 0
-                yield line
-
 def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50, char=False):
 
     wlog('\tmax length {}, char? {}'.format(max_seq_len, char))
@@ -187,33 +137,9 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
         srcs = [srcs[k] for k in rand_idxs]
         trgs = [trgs[k] for k in rand_idxs]
         slens = [slens[k] for k in rand_idxs]
+    wlog('done.')
 
-    final_srcs, final_trgs = srcs, trgs
-
-    #assert len(trgFs) == 1, 'Unsupport to sort validation set in k batches.'
-    if sort_k_batches == 0:
-        final_srcs, final_trgs = [], []
-        wlog('Sorting the whole dataset by ascending order of source length ... ', False)
-        # sort the whole training data by ascending order of source length
-        _, sorted_idx = tc.sort(tc.IntTensor(slens))
-        final_srcs = [srcs[k] for k in sorted_idx]
-        final_trgs = [trgs[k] for k in sorted_idx]
-    elif sort_k_batches > 1:
-        final_srcs, final_trgs = [], []
-        wlog('Sorting for each {} batches ... '.format(wargs.sort_k_batches), False)
-
-        k_batch = wargs.batch_size * wargs.sort_k_batches
-        number = int(math.ceil(train_size / k_batch))
-
-        for start in range(number + 1):
-            bsrcs = srcs[start * k_batch : (start + 1) * k_batch]
-            btrgs = trgs[start * k_batch : (start + 1) * k_batch]
-            bslens = slens[start * k_batch : (start + 1) * k_batch]
-            _, sorted_idx = tc.sort(tc.IntTensor(bslens))
-            final_srcs += [bsrcs[k] for k in sorted_idx]
-            final_trgs += [btrgs[k] for k in sorted_idx]
-
-    wlog('Done.')
+    final_srcs, final_trgs = sort_batches(srcs, trgs, slens, wargs.batch_size, sort_k_batches)
 
     return final_srcs, final_trgs
 

@@ -4,7 +4,7 @@ worse_counter = 0
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder and decoder '''
-encoder_type, decoder_type = 'gru', 'gru'
+encoder_type, decoder_type = 'att', 'att'
 d_src_emb, d_trg_emb = 512, 512     # size of source and target word embedding
 n_enc_layers, n_dec_layers = 2, 2    # layers number of encoder and decoder
 d_enc_hid, d_dec_hid = 512, 512     # hidden size of rnn in encoder and decoder
@@ -39,9 +39,9 @@ inputs_data = dir_data + 'inputs.pt'
 cased, with_bpe, with_postproc, use_multi_bleu = False, False, False, True
 
 ''' training '''
-epoch_shuffle_train, epoch_shuffle_batch = False, False
+epoch_shuffle_train, epoch_shuffle_batch = True, False
 batch_type = 'sents'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
-sort_k_batches = 100      # 1 for no sort
+sort_k_batches = 20      # 0 for all sort, 1 for no sort
 save_one_model = True
 start_epoch = 1
 trg_bow, emb_loss, bow_loss = True, False, False
@@ -68,7 +68,7 @@ n_look, fix_looking, small = 5, False, False
 
 ''' evaluate settings '''
 epoch_eval, src_char, char_bleu, eval_small = False, False, False, False
-eval_valid_from = 500 if eval_small else 40000
+eval_valid_from = 500 if eval_small else 30000
 eval_valid_freq = 100 if eval_small else 5000
 
 ''' decoder settings '''
@@ -118,15 +118,14 @@ opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
 beta_1, beta_2, adam_epsilon = 0.9, 0.98, 1e-9
 
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset = 'zhen'
-model_config = 'gru_base'
+dataset = 'toy'
+model_config = 't2t_tiny'
 if model_config == 't2t_tiny':
     lr_update_way = 't2t'  # 't2t' or 'chen'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
-    learning_rate, warmup_steps, adam_epsilon = 1., 300, 1e-6
+    learning_rate, warmup_steps = 1., 300
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.5, 0.1, 0.1, 0.1
     d_ff_filter, n_head = 512, 8
-    s_step_decay, e_step_decay = 500, 32000
     small, eval_valid_from, eval_valid_freq = True, 5000, 100
     epoch_eval, max_grad_norm = True, 0.
 if model_config == 't2t_base':

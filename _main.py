@@ -116,6 +116,7 @@ def main():
     else:
         wlog('push model onto CPU ... ', 0)
         nmtModel.to(tc.device('cpu'))
+    wlog('done.')
 
     if wargs.pre_train is not None:
         assert os.path.exists(wargs.pre_train)
@@ -155,8 +156,6 @@ def main():
         for n, p in nmtModel.named_parameters():
             # bias can not be initialized uniformly
             init_params(p, n, init_D=wargs.param_init_D)
-
-    wlog('done.')
 
     wlog(nmtModel)
     wlog(optim)

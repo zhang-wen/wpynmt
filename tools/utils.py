@@ -27,7 +27,7 @@ def str1(content, encoding='utf-8'):
 
 #DEBUG = True
 DEBUG = False
-MAX_SEQ_SIZE = 5000
+MAX_SEQ_SIZE = 200
 PAD_WORD = '<pad>'
 UNK_WORD = 'unk'
 BOS_WORD = '<b>'
@@ -670,5 +670,33 @@ def grab_all_trg_files(filename):
             file_names.append(file_path)
     wlog('NOTE: Target side has {} references.'.format(len(file_names)))
     return file_names
+
+def sort_batches(srcs, trgs, slens, batch_size, k=1):
+
+    #assert len(trgFs) == 1, 'Unsupport to sort validation set in k batches.'
+    final_srcs, final_trgs, train_size = [], [], len(srcs)
+    if k == 0:
+        wlog('Sorting the whole dataset by ascending order of source length ... ', False)
+        # sort the whole training data by ascending order of source length
+        #_, sorted_idx = tc.sort(tc.IntTensor(slens))
+        sorted_idx = sorted(range(train_size), key=lambda k: slens[k])
+        final_srcs = [srcs[k] for k in sorted_idx]
+        final_trgs = [trgs[k] for k in sorted_idx]
+    elif k > 1:
+        wlog('Sorting for each {} batches ... '.format(wargs.sort_k_batches), False)
+        k_batch = batch_size * k
+        number = int(math.ceil(train_size / k_batch))
+        for start in range(number + 1):
+            bsrcs = srcs[start * k_batch : (start + 1) * k_batch]
+            btrgs = trgs[start * k_batch : (start + 1) * k_batch]
+            bslens = slens[start * k_batch : (start + 1) * k_batch]
+            #_, sorted_idx = tc.sort(tc.IntTensor(bslens))
+            sorted_idx = sorted(range(len(bslens)), key=lambda k: bslens[k])
+            final_srcs += [bsrcs[k] for k in sorted_idx]
+            final_trgs += [btrgs[k] for k in sorted_idx]
+    wlog('done.')
+    if len(final_srcs) == 0 and len(final_trgs) == 0: return srcs, trgs
+    else: return final_srcs, final_trgs
+
 
 

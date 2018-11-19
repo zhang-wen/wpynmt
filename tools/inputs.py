@@ -4,14 +4,13 @@ import math
 import wargs
 import torch as tc
 from utils import *
-#from torch.autograd import Variable
 
 class Input(object):
 
     def __init__(self, x_list, y_list, batch_size, bow=False, batch_sort=False, prefix=None, printlog=True):
 
         self.x_list = x_list
-        n_sent = len(x_list)
+        self.n_sent = len(x_list)
         self.B = batch_size
         self.gpu_id = wargs.gpu_id
         self.batch_sort = batch_sort
@@ -20,7 +19,7 @@ class Input(object):
         if y_list is not None:
             self.y_list_files = y_list
             # [sent0:[ref0, ref1, ...], sent1:[ref0, ref1, ... ], ...]
-            assert n_sent == len(y_list)
+            assert self.n_sent == len(y_list)
             if printlog is True:
                 wlog('Bilingual: batch size {}, Sort in batch? {}'.format(self.B, batch_sort))
             else:
@@ -29,7 +28,7 @@ class Input(object):
             self.y_list_files = None
             wlog('Monolingual: batch size {}, Sort in batch? {}'.format(self.B, batch_sort))
 
-        self.n_batches = int(math.ceil(n_sent / self.B))
+        self.n_batches = int(math.ceil(self.n_sent / self.B))
         self.prefix = prefix    # the prefix of data file, such as 'nist02' or 'nist03'
 
     def __len__(self):
@@ -148,14 +147,14 @@ class Input(object):
 
             '''
                 [list] idxs: sorted idx by ascending order of source lengths in one batch
-                [Variable] tsrcs: padded source batch, Variable (batch_size, max_len_batch)
-                [list] ttrgs_for_files: list of Variables (padded target batch),
-                            [Variable (batch_size, max_len_batch), ..., ]
+                [tensor] tsrcs: padded source batch, tensor(batch_size, max_len_batch)
+                [list] ttrgs_for_files: list of tensors (padded target batch),
+                            [tensor(batch_size, max_len_batch), ..., ]
                             each item in this list for one target reference file one batch
                 [intTensor] lengths: sorted source lengths by ascending order, (1, batch_size)
-                [Variable] src_mask: 0/1 Variable (0 for padding) (batch_size, max_len_batch)
+                [tensor] src_mask: 0/1 tensor(0 for padding) (batch_size, max_len_batch)
                 [list] trg_mask_for_files: list of 0/1 Variables (0 for padding)
-                            [Variable (batch_size, max_len_batch), ..., ]
+                            [tensor(batch_size, max_len_batch), ..., ]
                             each item in this list for one target reference file one batch
             '''
             return idxs, tsrcs, ttrgs_for_files, ttrg_bows_for_files, lengths, \
@@ -171,6 +170,11 @@ class Input(object):
         data = list(zip(self.x_list, self.y_list_files))
         x_tuple, y_tuple = zip(*[data[i] for i in tc.randperm(len(data))])
         self.x_list, self.y_list_files = list(x_tuple), list(y_tuple)
+
+        slens = [len(self.x_list[k]) for k in range(self.n_sent)]
+        self.x_list, self.y_list_files = sort_batches(self.x_list, self.y_list_files,
+                                                      slens, wargs.batch_size,
+                                                      wargs.sort_k_batches)
 
 
 
