@@ -4,7 +4,7 @@ worse_counter = 0
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder and decoder '''
-encoder_type, decoder_type = 'att', 'att'
+encoder_type, decoder_type = 'gru', 'gru'
 d_src_emb, d_trg_emb = 512, 512     # size of source and target word embedding
 n_enc_layers, n_dec_layers = 2, 2    # layers number of encoder and decoder
 d_enc_hid, d_dec_hid = 512, 512     # hidden size of rnn in encoder and decoder
@@ -41,7 +41,7 @@ cased, with_bpe, with_postproc, use_multi_bleu = False, False, False, True
 ''' training '''
 epoch_shuffle_train, epoch_shuffle_batch = True, False
 batch_type = 'sents'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
-sort_k_batches = 20      # 0 for all sort, 1 for no sort
+sort_k_batches = 100      # 0 for all sort, 1 for no sort
 save_one_model = True
 start_epoch = 1
 trg_bow, emb_loss, bow_loss = True, False, False
@@ -68,7 +68,7 @@ n_look, fix_looking, small = 5, False, False
 
 ''' evaluate settings '''
 epoch_eval, src_char, char_bleu, eval_small = False, False, False, False
-eval_valid_from = 500 if eval_small else 30000
+eval_valid_from = 500 if eval_small else 50000
 eval_valid_freq = 100 if eval_small else 5000
 
 ''' decoder settings '''
@@ -108,7 +108,7 @@ nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 # car nmt
 #sampling = 'truncation'     # truncation, length_limit, gumbeling
 sampling = 'length_limit'     # truncation, length_limit, gumbeling
-gpu_id = [0]
+gpu_id = [0, 1]
 #gpu_id = None
 n_co_models = 1
 s_step_decay = 4000 * n_co_models
@@ -118,8 +118,8 @@ opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
 beta_1, beta_2, adam_epsilon = 0.9, 0.98, 1e-9
 
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset = 'toy'
-model_config = 't2t_tiny'
+dataset = 'zhen'
+model_config = 'gru_base'
 if model_config == 't2t_tiny':
     lr_update_way = 't2t'  # 't2t' or 'chen'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
@@ -158,11 +158,11 @@ if model_config == 'tgru_big':
 if model_config == 'gru_base':
     lr_update_way = 'chen'  # 't2t' or 'chen'
     param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal
-    learning_rate = 0.001    # 1.0, 0.001, 0.01
-    beta_2, warmup_steps, adam_epsilon = 0.999, 500, 1e-6
-    s_step_decay, e_step_decay = 8000, 1280000
-    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid = 1024, 1024, 1024, 1024
-    n_enc_layers = 2
+    learning_rate = 0.002    # 1.0, 0.001, 0.01
+    beta_2, warmup_steps, adam_epsilon = 0.999, 8000, 1e-6
+    s_step_decay, e_step_decay = 8000, 128000
+    #d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid = 1024, 1024, 1024, 1024
+    snip_size, n_enc_layers = 10, 6
 
 if dataset == 'toy':
     val_tst_dir = './data/'
@@ -177,13 +177,13 @@ elif dataset == 'deen':
     #n_src_vcb_plan, n_trg_vcb_plan = 32009, 22822
 elif dataset == 'zhen':
     #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
-    val_tst_dir = '/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/'
-    #val_tst_dir = '/home5/wen/2.data/mt/mfd_1.25M/nist_test_new/'
+    #val_tst_dir = '/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/'
+    val_tst_dir = '/home5/wen/2.data/mt/mfd_1.25M/nist_test_new/'
     #dev_prefix = 'nist02'
     val_src_suffix, val_ref_suffix = 'src.BPE', 'trg.tok.sb'
     n_src_vcb_plan, n_trg_vcb_plan = 50000, 50000
     val_prefix, tests_prefix = 'mt06_u8', ['mt02_u8', 'mt03_u8', 'mt04_u8', 'mt05_u8', 'mt08_u8']
-    batch_size, max_epochs = 60, 15
+    batch_size, max_epochs = 100, 15
     with_bpe = True
 elif dataset == 'uyzh':
     #val_tst_dir = '/home5/wen/2.data/mt/uy_zh_300w/devtst/'

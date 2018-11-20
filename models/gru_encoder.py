@@ -40,6 +40,8 @@ class StackedGRUEncoder(nn.Module):
         if xs.dim() == 3: xs_e = xs
         else: x_w_e, xs_e = self.word_emb(xs)
 
+        self.bigru.flatten_parameters()
+
         #if self.bidirectional is False:
         #    h0 = tc.zeros(batch_size, self.enc_hid_size, requires_grad=False)
         #else:
