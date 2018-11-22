@@ -2,7 +2,7 @@
 import torch as tc
 from utils import *
 
-class Dictionary(object):
+class Vocab(object):
 
     def __init__(self, filename=None, real=True):
 
@@ -63,13 +63,13 @@ class Dictionary(object):
             [self.freq[k] for k in idx_freq]),
             dim=0,
             descending=True)
-        keep_dict = Dictionary()
+        keep_vocab = Vocab()
         keep_word_cnt = 0
         for i in idx[:vocab_size]:
-            keep_dict.add(self.idx2key[idx_freq[i]])
+            keep_vocab.add(self.idx2key[idx_freq[i]])
             keep_word_cnt += self.freq[idx_freq[i]]
 
-        return keep_dict, keep_word_cnt
+        return keep_vocab, keep_word_cnt
 
     def load_from_file(self, filename):
 
@@ -87,8 +87,8 @@ class Dictionary(object):
         tc.save(self.idx2key, filename)
 
         if self.real:
-            txt_dict_file = filename + '.txt'
-            file = open(txt_dict_file, 'w')
+            txt_vocab_file = filename + '.txt'
+            file = open(txt_vocab_file, 'w')
             file.write(content)
 
         file.close()

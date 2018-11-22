@@ -33,9 +33,9 @@ class Nbs(object):
 
         #print '-------------------- one sentence ............'
         self.trgs_len = y_mask.sum(0).data.int().tolist() if y_mask is not None else None
-        if isinstance(x_BL, list): x_BL = tc.LongTensor(x_BL).unsqueeze(0)
+        if isinstance(x_BL, list): x_BL = tc.tensor(x_BL).long().unsqueeze(0)
         elif isinstance(x_BL, tuple): x_BL = x_BL[1].unsqueeze(0)
-        self.B, self.srcL = x_BL.size()
+        self.B, self.srcL = x_BL.size(0), x_BL.size(1)
         if x_mask is None:
             x_mask = tc.ones((1, self.srcL), requires_grad=False)
             if wargs.gpu_id is not None: x_mask = x_mask.cuda()
@@ -47,6 +47,7 @@ class Nbs(object):
 
         self.maxL = y_mask.size(1) if self.batch_sample is True else 2 * self.srcL
         # get initial state of decoder rnn and encoder context
+        if wargs.gpu_id is not None and not x_BL.is_cuda: x_BL = x_BL.cuda()
         self.enc_src0 = self.model.encoder(x_BL, xs_mask=x_mask)
         self.s0, self.uh0 = self.model.decoder.init_state(self.enc_src0, xs_mask=x_mask)
         #if wargs.dec_layer_cnt > 1: self.s0 = [self.s0] * wargs.dec_layer_cnt

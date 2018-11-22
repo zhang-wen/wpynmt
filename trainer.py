@@ -4,6 +4,7 @@ import os
 import sys
 import math
 import time
+import random
 import subprocess
 
 import numpy as np
@@ -30,22 +31,14 @@ class Trainer(object):
 
         self.n_look = wargs.n_look
         assert self.n_look <= wargs.batch_size, 'eyeball count > batch size'
-        self.n_batches = len(train_data)    # [low, high)
+        if wargs.batch_type == 'sents': self.n_batches = len(train_data)    # [low, high)
+
         self.look_xs, self.look_ys = None, None
-        if wargs.fix_looking:
-            look_bidx = tc.randperm(self.n_batches)[-1]
-            wlog('randomly look {} samples in the {}th/{} batch'.format(
-                self.n_look, look_bidx, self.n_batches))
-            _, xs, y_for_files, _, _, _, _, _ = train_data[look_bidx]
-            ys, _batch_size = y_for_files[0], xs.size(0)
-            rand_rows = np.random.choice(_batch_size, self.n_look, replace=False)
-            self.look_xs = tc.LongTensor(self.n_look, xs.size(1))
-            self.look_xs.fill_(PAD)
-            self.look_ys = tc.LongTensor(self.n_look, ys.size(1))
-            self.look_ys.fill_(PAD)
-            for _idx in xrange(self.n_look):
-                self.look_xs[_idx, :] = xs[rand_rows[_idx], :]
-                self.look_ys[_idx, :] = ys[rand_rows[_idx], :]
+        if wargs.fix_looking is True:
+            rand_idxs = random.sample(range(train_data.n_sent), self.n_look)
+            wlog('randomly look {} samples frow the whole training data'.format(self.n_look))
+            self.look_xs = [train_data.x_list[i] for i in rand_idxs]
+            self.look_ys = [train_data.y_list_files[0][i] for i in rand_idxs]
         self.look_tor = Translator(self.model, self.sv, self.tv)
         self.n_eval = 0
 
@@ -124,20 +117,19 @@ class Trainer(object):
         self.optim.step()
         tc.cuda.empty_cache()
 
-    def look_samples(self, bidx, batch):
+    def look_samples(self, bidx):
 
         if bidx % wargs.look_freq == 0:
 
             look_start = time.time()
             self.model.eval()   # affect the dropout !!!
-            if self.look_xs and self.look_ys:
+            if self.look_xs is not None and self.look_ys is not None:
                 _xs, _ys = self.look_xs, self.look_ys
             else:
-                _, xs, y_for_files, _, _, _, _, _ = batch
-                ys = y_for_files[0]
-                # (batch_size, max_len_batch)
-                rand_bids = np.random.choice(xs.size(0), self.n_look, replace=False)
-                _xs, _ys = xs[rand_bids], ys[rand_bids]
+                rand_idxs = random.sample(range(self.train_data.n_sent), self.n_look)
+                wlog('randomly look {} samples frow the whole training data'.format(self.n_look))
+                _xs = [self.train_data.x_list[i][0] for i in rand_idxs]
+                _ys = [self.train_data.y_list_files[i][0] for i in rand_idxs]
             self.look_tor.trans_samples(_xs, _ys)
             wlog('')
             self.look_spend = time.time() - look_start
@@ -185,7 +177,6 @@ class Trainer(object):
             wlog('\n{} Epoch [{}/{}] {}'.format('$'*30, epo, self.max_epochs, '$'*30))
             # shuffle the training data for each epoch
             if self.epoch_shuffle_train: self.train_data.shuffle()
-
             self.e_nll, self.e_ytoks, self.e_ok_ytoks, self.e_batch_logZ, self.e_sents \
                     = 0, 0, 0, 0, 0
             self.look_nll, self.look_ytoks, self.look_ok_ytoks, self.look_batch_logZ, \
@@ -194,8 +185,10 @@ class Trainer(object):
             epo_start = show_start = time.time()
             if self.epoch_shuffle_batch: shuffled_bidx = tc.randperm(self.n_batches)
 
-            for bidx in range(self.n_batches):
-
+            #for bidx in range(self.n_batches):
+            bidx = 0
+            while True:
+                if self.train_data.eos() is True: break
                 b_counter += 1
                 e_bidx = shuffled_bidx[bidx] if self.epoch_shuffle_batch else bidx
                 if wargs.ss_type is not None and self.ss_eps_cur < 1. and wargs.bleu_sampling:
@@ -242,8 +235,9 @@ class Trainer(object):
                         self.look_spend, eval_spend = 0, 0
                         show_start = time.time()
 
-                    self.look_samples(current_steps, batch)
+                    self.look_samples(current_steps)
                     self.try_valid(epo, e_bidx, current_steps)
+                bidx += 1
 
             avg_epo_acc, avg_epo_nll = self.e_ok_ytoks/self.e_ytoks, self.e_nll/self.e_ytoks
             wlog('\nEnd epoch [{}]'.format(epo))

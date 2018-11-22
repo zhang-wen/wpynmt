@@ -2,13 +2,12 @@ from __future__ import division
 
 import sys
 import copy
+import time
 import numpy as np
 import torch as tc
 
 import wargs
 from tools.utils import *
-
-import time
 
 class Nbs(object):
 
@@ -34,34 +33,32 @@ class Nbs(object):
         #self.print_att = False
         '''
 
-    def beam_search_trans(self, input_data, x_mask=None):
+    def beam_search_trans(self, x_BL, x_mask=None):
 
         self.beam, self.hyps, self.B = [], [], 1
-        #self.attent_probs = [] if self.print_att is True else None
-        self.attent_probs = [[] for _ in range(self.B)] if self.print_att is True else None
-        self.batch_tran_cands = [[] for _ in range(self.B)]
-        if isinstance(input_data, tc.Tensor):
-            self.x_BL = input_data
-            self.B, self.x_len = self.x_BL.size(0), self.x_BL.size(1)
-        elif isinstance(input_data, tuple):
-            # input_data: (idxs, tsrcs, tspos, lengths, src_mask)
-            if len(input_data) == 4:
-                _, self.x_BL, lens, src_mask = input_data
-            elif len(input_data) == 2:
-                self.x_BL, src_pos_BL = input_data
-            elif len(input_data) == 8:
-                _, x_BL, src_pos, _, _, _, _, _ = input_data
-                self.x_BL, src_pos_BL = x_BL.t(), src_pos.t()
-            assert self.x_BL.size(0) == 1, 'Unsupported for batch decoding ... '
-            self.x_len = self.x_BL.size(1)
+        if isinstance(x_BL, list): x_BL = tc.tensor(x_BL).long().unsqueeze(0)
+        elif isinstance(x_BL, tuple):
+            # x_BL: (idxs, tsrcs, tspos, lengths, src_mask)
+            if len(x_BL) == 4: _, x_BL, lens, src_mask = x_BL
+            elif len(x_BL) == 2: x_BL, src_pos_BL = x_BL
+            elif len(x_BL) == 8:
+                _, x_BL, src_pos, _, _, _, _, _ = x_BL
+                x_BL, src_pos_BL = x_BL.t(), src_pos.t()
+        assert x_BL.size(0) == 1, 'Unsupported for batch decoding ... '
+        if wargs.gpu_id is not None and not x_BL.is_cuda: x_BL = x_BL.cuda()
         #self.maxL = wargs.max_seq_len
-        self.maxL = 2 * self.x_len
+        self.B, self.x_len = x_BL.size(0), x_BL.size(1)
+        self.maxL, self.x_BL = 2 * self.x_len, x_BL
         if x_mask is None:
             x_mask = tc.ones((1, self.x_len), requires_grad=False)
             if wargs.gpu_id is not None: x_mask = x_mask.cuda()
 
-        debug('x_BL: {}\n{}'.format(self.x_BL.size(), self.x_BL))
-        self.enc_src0, _ = self.encoder(self.x_BL)
+        #self.attent_probs = [] if self.print_att is True else None
+        self.attent_probs = [[] for _ in range(self.B)] if self.print_att is True else None
+        self.batch_tran_cands = [[] for _ in range(self.B)]
+
+        debug('x_BL: {}\n{}'.format(x_BL.size(), x_BL))
+        self.enc_src0, _ = self.encoder(x_BL)
         debug('enc_src0: {}\n{}'.format(self.enc_src0.size(), self.enc_src0))
         init_beam(self.beam, cnt=self.maxL, cp=True)
 

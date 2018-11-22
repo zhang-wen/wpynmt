@@ -9,7 +9,7 @@ import torch as tc
 
 import wargs
 from tools.utils import *
-from tools.dictionary import Dictionary
+from tools.vocab import Vocab
 
 import sys
 import tools.text_encoder as text_encoder
@@ -25,16 +25,16 @@ def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50, cha
     wlog('\tmax length {}, char? {}'.format(max_seq_len, char))
     if os.path.exists(vocab_file) is True:
 
-        # If vocab file has been exist, we load word dictionary
-        wlog('Load dictionary from file {}'.format(vocab_file))
-        vocab = Dictionary()
+        # If vocab file has been exist, we load word vocabulary
+        wlog('Load vocabulary from file {}'.format(vocab_file))
+        vocab = Vocab()
         vocab.load_from_file(vocab_file)
 
     else:
 
         vocab = count_vocab(data_file, max_vcb_size, max_seq_len, char=char)
         vocab.write_into_file(vocab_file)
-        wlog('Save dictionary file into {}'.format(vocab_file))
+        wlog('Save vocabulary file into {}'.format(vocab_file))
 
     return vocab
 
@@ -42,7 +42,7 @@ def count_vocab(data_file, max_vcb_size, max_seq_len=50, char=False):
 
     assert data_file and os.path.exists(data_file), 'need file to extract vocabulary ...'
 
-    vocab = Dictionary()
+    vocab = Vocab()
     #with open(data_file, 'r') as f:
     with io.open(data_file, encoding='utf-8') as f:
         for sent in f.readlines():
@@ -181,11 +181,11 @@ if __name__ == "__main__":
     trg = os.path.join(wargs.dir_data, '{}.{}'.format(wargs.train_prefix, wargs.train_trg_suffix))
     vocabs = {}
     wlog('\nPreparing source vocabulary from {} ... '.format(src))
-    src_vocab = extract_vocab(src, wargs.src_dict, wargs.src_dict_size, wargs.max_seq_len)
+    src_vocab = extract_vocab(src, wargs.src_vcb, wargs.n_src_vcb_plan, wargs.max_seq_len)
     wlog('\nPreparing target vocabulary from {} ... '.format(trg))
-    trg_vocab = extract_vocab(trg, wargs.trg_dict, wargs.trg_dict_size, wargs.max_seq_len)
-    src_vocab_size, trg_vocab_size = src_vocab.size(), trg_vocab.size()
-    wlog('Vocabulary size: |source|={}, |target|={}'.format(src_vocab_size, trg_vocab_size))
+    trg_vocab = extract_vocab(trg, wargs.trg_vcb, wargs.n_trg_vcb_plan, wargs.max_seq_len)
+    n_src_vcb, n_trg_vcb = src_vocab.size(), trg_vocab.size()
+    wlog('Vocabulary size: |source|={}, |target|={}'.format(n_src_vcb, n_trg_vcb))
     vocabs['src'], vocabs['trg'] = src_vocab, trg_vocab
 
     wlog('\nPreparing training set from {} and {} ... '.format(src, trg))

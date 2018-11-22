@@ -1,4 +1,6 @@
 from __future__ import division
+
+import math
 import torch as tc
 import torch.nn as nn
 import torch.nn.functional as F
@@ -93,8 +95,8 @@ class Classifier(nn.Module):
         model_prob.masked_fill_((target == PAD).unsqueeze(1), 0)
         #print pred_ll.size(), model_prob.size()
         xentropy = -(pred_ll * model_prob).sum()
-        normalizing = -(self.confidence * tc.log(self.confidence) + \
-                        (self.output_size - 2) * self.smoothing_value * tc.log(self.smoothing_value + 1e-20))
+        normalizing = -(self.confidence * math.log(self.confidence) + \
+                        (self.output_size - 2) * self.smoothing_value * math.log(self.smoothing_value + 1e-20))
 
         return xentropy - normalizing
 

@@ -70,17 +70,17 @@ class Translator(object):
         for idx in range(len(xs_nL)):
 
             one_src = xs_nL[idx]
-            x_filter = sent_filter(one_src.tolist())
+            x_filter = sent_filter(one_src)
             wlog('\n[{:3}] {}'.format('Ids', x_filter))
             x_sent = idx2sent(x_filter, self.svcb_i2w)
             if len(x_sent) == 2: x_sent, ori_src_toks = x_sent
             wlog('[{:3}] {}'.format('Src', x_sent))
-            y_filter = sent_filter(ys_nL[idx].tolist())
+            y_filter = sent_filter(ys_nL[idx])
             y_sent = idx2sent(y_filter, self.tvcb_i2w)
             if len(y_sent) == 2: y_sent, ori_ref_toks = y_sent
             wlog('[{:3}] {}'.format('Ref', y_sent))
 
-            trans, ids, attent_matrix = self.trans_onesent(one_src[one_src.nonzero()].transpose(0, 1))
+            trans, ids, attent_matrix = self.trans_onesent(one_src)
 
             src_toks = [] if x_sent == '' else x_sent.split(' ')
             trg_toks = [] if trans == '' else trans.split(' ')
