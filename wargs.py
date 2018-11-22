@@ -4,7 +4,7 @@ worse_counter = 0
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder and decoder '''
-encoder_type, decoder_type = 'gru', 'gru'
+encoder_type, decoder_type = 'att', 'att'
 d_src_emb, d_trg_emb = 512, 512     # size of source and target word embedding
 n_enc_layers, n_dec_layers = 2, 2    # layers number of encoder and decoder
 d_enc_hid, d_dec_hid = 512, 512     # hidden size of rnn in encoder and decoder
@@ -108,18 +108,18 @@ nonlocal_mode = 'dot'  # gaussian, dot, embeddedGaussian
 # car nmt
 #sampling = 'truncation'     # truncation, length_limit, gumbeling
 sampling = 'length_limit'     # truncation, length_limit, gumbeling
-gpu_id = [0, 1]
+gpu_id = [0]
 #gpu_id = None
 n_co_models = 1
 s_step_decay = 4000 * n_co_models
 e_step_decay = 32000 * n_co_models
 
 opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
-beta_1, beta_2, adam_epsilon = 0.9, 0.98, 1e-9
+beta_1, beta_2, u_gain, adam_epsilon = 0.9, 0.98, 0.08, 1e-9
 
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset = 'zhen'
-model_config = 'gru_base'
+dataset = 'toy'
+model_config = 't2t_tiny'
 if model_config == 't2t_tiny':
     lr_update_way = 't2t'  # 't2t' or 'chen'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal

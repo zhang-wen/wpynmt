@@ -80,7 +80,7 @@ class Optim(object):
             n, s, e = wargs.n_co_models, wargs.s_step_decay, wargs.e_step_decay
             factor = min( 1 + ( self.n_current_steps * (n - 1) ) / ( n * self.warmup_steps ),
                          n,
-                         n * math.pow(2 * n, ( s - n * self.n_current_steps ) / ( e - s ) ) )
+                         n * ( (2 * n) ** ( ( s - n * self.n_current_steps ) / ( e - s ) ) ) )
 
         self.learning_rate = wargs.learning_rate * factor
         #wlog('lr0 * factor = {} * {} = {}'.format(wargs.learning_rate, factor, self.learning_rate))

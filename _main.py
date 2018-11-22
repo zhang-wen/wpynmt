@@ -142,7 +142,7 @@ def main():
                     param.requires_grad = not wargs.fix_pre_params
                     param.data.copy_(class_dict['map_vocab.bias'])
                     wlog('{:7} -> grad {}\t{}'.format('Model', param.requires_grad, name))
-            else: init_params(param, name, init_D=wargs.param_init_D)
+            else: init_params(param, name, init_D=wargs.param_init_D, a=float(wargs.u_gain))
 
         wargs.start_epoch = eid + 1
 

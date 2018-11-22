@@ -124,15 +124,14 @@ class GRU(nn.Module):
 
         h_t_above = self.tanh(h_h_tm1)
 
+        if self.dropout_prob is not None and 0. < self.dropout_prob <= 1.0:
+            h_t_above = self.dropout(h_t_above)
+
         h_t = (1. - z_t) * h_tm1 + z_t * h_t_above
 
-        if self.dropout_prob is not None and 0. < self.dropout_prob <= 1.0:
-            h_t = self.dropout(h_t)
-
         if x_m is not None:
-            #x_m = x_m.unsqueeze(-1).expand_as(h_t)
-            #h_t = x_m * h_t + (1. - x_m) * h_tm1
-            h_t = x_m[:, None] * h_t + (1. - x_m[:, None]) * h_tm1
+            #h_t = x_m[:, None] * h_t + (1. - x_m[:, None]) * h_tm1
+            h_t = x_m[:, None] * h_t
 
         return h_t
 
@@ -193,16 +192,17 @@ class LGRU(nn.Module):
         r_t, z_t = rz_t[:, :self.hidden_size], rz_t[:, self.hidden_size:]
 
         l_t = self.sigmoid( self.layer_norm_l_gate( self.xl(x_t) + self.hl(h_tm1) ) )
-        H_x_t = self.wx(x_t)
 
-        h_t_above = self.tanh( self.xh(x_t) + r_t * self.hh(h_tm1) ) + l_t * H_x_t
-        h_t = (1. - z_t) * h_tm1 + z_t * h_t_above
+        h_t_above = self.tanh( self.xh(x_t) + r_t * self.hh(h_tm1) ) + l_t * self.wx(x_t)
 
         if self.dropout_prob is not None and 0. < self.dropout_prob <= 1.0:
-            h_t = self.dropout(h_t)
+            h_t_above = self.dropout(h_t_above)
+
+        h_t = (1. - z_t) * h_tm1 + z_t * h_t_above
 
         if x_m is not None:
-            h_t = x_m[:, None] * h_t + (1. - x_m[:, None]) * h_tm1
+            #h_t = x_m[:, None] * h_t + (1. - x_m[:, None]) * h_tm1
+            h_t = x_m[:, None] * h_t
 
         return h_t
 
@@ -231,8 +231,8 @@ class TGRU(nn.Module):
         self.hidden_size = hidden_size
         self.prefix = prefix
 
-        self.hh = nn.Linear(hidden_size, hidden_size, bias=True)
         self.hrz = nn.Linear(hidden_size, 2 * hidden_size, bias=False)
+        self.hh = nn.Linear(hidden_size, hidden_size, bias=True)
 
         self.layer_norm_rz_gate = nn.LayerNorm(2 * hidden_size, elementwise_affine=True)
         self.sigmoid = nn.Sigmoid()
@@ -258,8 +258,10 @@ class TGRU(nn.Module):
             h_t_above = self.dropout(h_t_above)
 
         h_t = (1. - z_t) * h_tm1 + z_t * h_t_above
+
         if x_m is not None:
-            h_t = x_m[:, None] * h_t + (1. - x_m[:, None]) * h_tm1
+            #h_t = x_m[:, None] * h_t + (1. - x_m[:, None]) * h_tm1
+            h_t = x_m[:, None] * h_t
 
         return h_t
 

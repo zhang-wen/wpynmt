@@ -42,8 +42,8 @@ class Classifier(nn.Module):
         super(Classifier, self).__init__()
         if emb_loss is True:
             assert trg_word_emb is not None, 'embedding loss needs target embedding'
-            self.trg_word_emb = trg_word_emb.we.weight
-            #self.trg_word_emb = trg_word_emb.we
+            #self.trg_word_emb = trg_word_emb.we.weight
+            self.trg_word_emb = trg_word_emb.we
             self.euclidean_dist = nn.PairwiseDistance(p=2, eps=1e-06, keepdim=True)
         self.emb_loss = emb_loss
         if bow_loss is True:
@@ -62,17 +62,21 @@ class Classifier(nn.Module):
         assert 0. <= label_smoothing <= 1., 'label smoothing value should be in [0, 1]'
         wlog('NLL loss with label_smoothing: {}'.format(label_smoothing))
         if label_smoothing == 0.:
-            # If label smoothing value is set to zero, the loss is equivalent to NLLLoss
-            weight = tc.ones(output_size)
+            weight = tc.ones(self.output_size)
             weight[PAD] = 0   # do not predict padding, same with ingore_index
-            self.criterion = nn.NLLLoss(weight, ignore_index=PAD, reduction='sum')
+            criterion = nn.NLLLoss(weight, ignore_index=PAD, reduction='sum')
             #self.criterion = nn.NLLLoss(weight, ignore_index=PAD, size_average=False)
-        elif label_smoothing > 0.:
-            # All non-true labels are uniformly set to low-confidence.
-            self.criterion = Label_Smooth_NLLLoss(label_smoothing, output_size)
+        elif 0. < label_smoothing <= 1.:
+            # all non-true labels are uniformly set to low-confidence
+            smoothing_value = label_smoothing / (output_size - 2)
+            one_hot = tc.full((output_size, ), smoothing_value)
+            one_hot[PAD] = 0.
+            self.register_buffer('one_hot', one_hot.unsqueeze(0))
+            self.confidence = 1.0 - label_smoothing
 
         self.output_size = output_size
         self.softmax = MaskSoftmax()
+        self.label_smoothing = label_smoothing
 
     def pred_map(self, logit, noise=None):
 
@@ -104,6 +108,34 @@ class Classifier(nn.Module):
 
         return p
 
+    def smoothingXentLoss(self, pred_ll, target):
+
+        # pred_ll (FloatTensor): batch_size*max_seq_len, n_classes
+        # target  (LongTensor):  batch_size*max_seq_len
+        if self.label_smoothing == 0.:
+            # if label smoothing value is set to zero, the loss is equivalent to NLLLoss
+            return self.criterion(ll, gold)
+        model_prob = self.one_hot.repeat(target.size(0), 1)
+        model_prob.scatter_(1, target.unsqueeze(1), self.confidence)
+        model_prob.masked_fill_((target == PAD).unsqueeze(1), 0)
+        #print pred_ll.size(), model_prob.size()
+
+        return -(pred_ll * model_prob).sum()
+
+    def embeddingLoss(self, max_L, gold, gold_mask, bow=None, bow_mask=None):
+        E, bow_L = self.trg_word_emb.size(1), bow.size(1)
+        gold_emb = self.trg_word_emb(gold) * gold_mask[:, None]
+        bow_emb = self.trg_word_emb(bow) * bow_mask[:, :, None]
+        bow_emb = bow_emb[:,None,:,:].expand((-1, max_L, -1, -1)).contiguous().view(-1, E)
+        gold_emb = gold_emb.reshape(batch_size, max_L, gold_emb.size(-1))[:,:,None,:].expand(
+            (-1, -1, bow_L, -1)).contiguous().view(-1, E)
+        dist = F.pairwise_distance(bow_emb, gold_emb, p=2, keepdim=True)
+        dist = dist.reshape(batch_size, max_L, bow_L).sum(-1).view(-1)
+        if gold_mask is not None: dist = dist.view(-1) * gold_mask
+        pred_p_t = tc.gather(prob, dim=1, index=gold[:, None])
+        if gold_mask is not None: pred_p_t = pred_p_t * gold_mask[:, None]
+        return ( pred_p_t * dist[:, None] ).sum()
+
     def nll_loss(self, pred_2d, pred_3d, gold, gold_mask, bow=None, bow_mask=None, epo_idx=None):
 
         #print pred_2d.size(), pred_3d.size(), gold.size(), gold_mask.size(), bow.size(), bow_mask.size()
@@ -111,48 +143,12 @@ class Classifier(nn.Module):
         log_norm, prob, ll = self.log_prob(pred_2d)
         abs_logZ = (log_norm * gold_mask[:, None]).abs().sum()
         ll = ll * gold_mask[:, None]
-        ce_loss = self.criterion(ll, gold)
+        ce_loss = self.smoothingXentLoss(ll, gold)
 
         # embedding loss
         if self.emb_loss is True:
-            V, E = self.trg_word_emb.size(0), self.trg_word_emb.size(1)
-            #bow_emb = self.trg_word_emb
-            bow_emb = self.trg_word_emb[bow]
-            gold_emb = self.trg_word_emb[gold]
-            #print prob.size()
-            #print bow_emb.size()
-            #print gold_emb.size()
-            bow_emb = bow_emb * bow_mask[:, :, None]
-            gold_emb = gold_emb * gold_mask[:, None]
-            bow_emb = bow_emb[:,None,:,:].expand((-1, max_L, -1, -1)).contiguous().view(-1, E)
-            gold_emb = gold_emb.reshape(batch_size, max_L, gold_emb.size(-1))[:,:,None,:].expand(
-                (-1, -1, bow_L, -1)).contiguous().view(-1, E)
-            dist = F.pairwise_distance(bow_emb, gold_emb, p=2, keepdim=True)
-            dist = dist.reshape(batch_size, max_L, bow_L).sum(-1).view(-1)
-            '''
-            gold_emb = gold_emb.reshape(batch_size, max_L, gold_emb.size(-1))
-            dist = tc.zeros(batch_size, max_L, requires_grad=True)
-            if wargs.gpu_id: dist = dist.cuda()    # push into GPU
-            for batch_idx in range(batch_size):
-                for len_idx in range(max_L):
-                    one_gold_emb = gold_emb[batch_idx, len_idx][None, :].expand((V, -1))
-                    #one_dist = F.pairwise_distance(bow_emb, one_gold_emb, p=2, keepdim=True)
-                    one_dist = self.euclidean_dist(bow_emb, one_gold_emb)
-                    dist[batch_idx, len_idx] = one_dist.sum()
-            '''
-
-            if gold_mask is not None: dist = dist.view(-1) * gold_mask
-            #print 'dist ', dist[:, None].size()
-            #print dist
-            pred_p_t = tc.gather(prob, dim=1, index=gold[:, None])
-            #print 'pred_p_t ',  pred_p_t.size()
-            #print pred_p_t
-            if gold_mask is not None: pred_p_t = pred_p_t * gold_mask[:, None]
-            #print 'pred_p_t ',  pred_p_t.size()
-            #print pred_p_t
-            loss = ce_loss + ( pred_p_t * dist[:, None] ).sum()
-            #loss = ( loss_emb.view(-1) * gold_mask ).sum()
-            #print loss
+            emb_loss = self.embeddingLoss(max_L, gold, gold_mask, bow, bow_mask)
+            loss = ce_loss + emb_loss
         elif self.bow_loss is True:
             gold_mask_3d = gold_mask.reshape(batch_size, max_L)[:,:,None]
             bow_prob = self.sigmoid((pred_3d * gold_mask_3d).sum(1))
@@ -203,7 +199,7 @@ class Classifier(nn.Module):
         # (batch_size, max_tlen_batch - 1, out_size)
         batch_nll, batch_ok_ytoks, batch_abs_logZ = 0, 0, 0
         epo = tc.ones_like(gold, requires_grad=False) * epo
-        normalization = gold_mask.sum().item() if norm == 'tokens' else outputs.size(0)
+        normalization = gold_mask.sum().item() if norm == 'tokens' else outputs.size(1)
         shard_state = { 'feed': outputs, 'gold': gold, 'gold_mask': gold_mask, 'bow': bow,
                        'bow_mask':bow_mask, 'epo': epo }
 
@@ -213,7 +209,6 @@ class Classifier(nn.Module):
             batch_ok_ytoks += ok_ytoks.item()
             batch_abs_logZ += abs_logZ.item()
             loss.div(float(normalization)).backward(retain_graph=True)
-            #loss.backward(retain_graph=True)
 
         return batch_nll, batch_ok_ytoks, batch_abs_logZ
 
