@@ -39,7 +39,7 @@ class Input(object):
 
     def eos(self):
         end = ( self._read_pointer >= self.n_sent )
-        print self._read_pointer, self.n_sent, end
+        #print self._read_pointer, self.n_sent, end
         if end is True: self._read_pointer = 0
         return end
 
