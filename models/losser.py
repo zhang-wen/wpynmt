@@ -7,33 +7,6 @@ import wargs
 from tools.utils import *
 from models.nn_utils import MaskSoftmax, MyLogSoftmax
 
-class Label_Smooth_NLLLoss(nn.Module):
-    '''
-    With label smoothing, KL-divergence between q_{smoothed ground truth prob.}(w)
-    and p_{prob. computed by model}(w) is minimized.
-    '''
-    def __init__(self, label_smoothing, tgt_vocab_size, padding_idx=PAD):
-        assert 0.0 < label_smoothing <= 1.0
-        super(Label_Smooth_NLLLoss, self).__init__()
-        smoothing_value = label_smoothing / (tgt_vocab_size - 2)
-        one_hot = tc.full((tgt_vocab_size, ), smoothing_value)
-        one_hot[padding_idx] = 0.
-        self.register_buffer('one_hot', one_hot.unsqueeze(0))
-        self.confidence = 1.0 - label_smoothing
-        self.padding_idx = padding_idx
-
-    def forward(self, output, target):
-        '''
-        output (FloatTensor): batch_size*max_seq_len, n_classes
-        target (LongTensor): batch_size*max_seq_len
-        '''
-        model_prob = self.one_hot.repeat(target.size(0), 1)
-        model_prob.scatter_(1, target.unsqueeze(1), self.confidence)
-        model_prob.masked_fill_((target == self.padding_idx).unsqueeze(1), 0)
-
-        return F.kl_div(output, model_prob, reduction='sum')
-        #return F.kl_div(output, model_prob, size_average=False)
-
 class Classifier(nn.Module):
 
     def __init__(self, input_size, output_size, trg_word_emb=None, label_smoothing=0.,
@@ -68,8 +41,8 @@ class Classifier(nn.Module):
             #self.criterion = nn.NLLLoss(weight, ignore_index=PAD, size_average=False)
         elif 0. < label_smoothing <= 1.:
             # all non-true labels are uniformly set to low-confidence
-            smoothing_value = label_smoothing / (output_size - 2)
-            one_hot = tc.full((output_size, ), smoothing_value)
+            self.smoothing_value = label_smoothing / (output_size - 2)
+            one_hot = tc.full((output_size, ), self.smoothing_value)
             one_hot[PAD] = 0.
             self.register_buffer('one_hot', one_hot.unsqueeze(0))
             self.confidence = 1.0 - label_smoothing
@@ -119,8 +92,11 @@ class Classifier(nn.Module):
         model_prob.scatter_(1, target.unsqueeze(1), self.confidence)
         model_prob.masked_fill_((target == PAD).unsqueeze(1), 0)
         #print pred_ll.size(), model_prob.size()
+        xentropy = -(pred_ll * model_prob).sum()
+        normalizing = -(self.confidence * tc.log(self.confidence) + \
+                        (self.output_size - 2) * self.smoothing_value * tc.log(self.smoothing_value + 1e-20))
 
-        return -(pred_ll * model_prob).sum()
+        return xentropy - normalizing
 
     def embeddingLoss(self, max_L, gold, gold_mask, bow=None, bow_mask=None):
         E, bow_L = self.trg_word_emb.size(1), bow.size(1)
@@ -212,60 +188,63 @@ class Classifier(nn.Module):
 
         return batch_nll, batch_ok_ytoks, batch_abs_logZ
 
-def filter_shard_state(state):
+def filter_shard_state(state, shard_size=None):
     for k, v in state.items():
-        if v is not None:
-            if isinstance(v, tc.Tensor) and v.requires_grad:
-                with tc.enable_grad(): v = tc.tensor(v.data, requires_grad=True)
+        if shard_size is None:
             yield k, v
 
-def shards(state, shard_size, eval=False):
+        if v is not None:
+            v_split = []
+            if isinstance(v, tc.Tensor):
+                for v_chunk in tc.split(v, shard_size):
+                    v_chunk = v_chunk.data.clone()
+                    v_chunk.requires_grad = v.requires_grad
+                    v_split.append(v_chunk)
+            yield k, (v, v_split)
+
+
+def shards(state, shard_size, eval_only=False):
     '''
     Args:
-        state: A dictionary which corresponds to the output of
-               *LossCompute.make_shard_state(). The values for
-               those keys are Tensor-like or None.
+        state: A dictionary which corresponds to the output
+               values for those keys are Tensor-like or None.
         shard_size: The maximum size of the shards yielded by the model.
-        eval: If True, only yield the state, nothing else.
-              Otherwise, yield shards.
+        eval_only: if True, only yield the state, nothing else.
+              otherwise, yield shards.
     Yields:
-        Each yielded shard is a dict.
-    Side effect:
-        After the last shard, this function does back-propagation.
+        each yielded shard is a dict.
+    side effect:
+        after the last shard, this function does back-propagation.
     '''
-    if eval:
-        yield state
+    if eval_only:
+        yield filter_shard_state(state)
     else:
-        # non_none: the subdict of the state dictionary where the values are not None.
-        non_none = dict(filter_shard_state(state))
+        # non_none: the subdict of the state dictionary where the values are not None
+        non_none = dict(filter_shard_state(state, shard_size))
 
-        # Now, the iteration: state is a dictionary of sequences of tensor-like but we
-        # want a sequence of dictionaries of tensors. First, unzip the dictionary into
-        # a sequence of keys and a sequence of tensor-like sequences.
-        keys, values = zip(*((k, tc.split(v, shard_size)) for k, v in non_none.items()))
+        # Now, the iteration:
+        # state is a dictionary of sequences of tensor-like but we
+        # want a sequence of dictionaries of tensors.
+        # First, unzip the dictionary into a sequence of keys and a
+        # sequence of tensor-like sequences.
+        keys, values = zip(*((k, [v_chunk for v_chunk in v_split])
+                             for k, (_, v_split) in non_none.items()))
 
         # Now, yield a dictionary for each shard. The keys are always
         # the same. values is a sequence of length #keys where each
         # element is a sequence of length #shards. We want to iterate
         # over the shards, not over the keys: therefore, the values need
-        # to be re-zipped by shard and then each shard can be paired with the keys.
+        # to be re-zipped by shard and then each shard can be paired
+        # with the keys.
         for shard_tensors in zip(*values):
-            # each slice: return (('feed', 'gold', ...), (feed0, gold0, ...))
             yield dict(zip(keys, shard_tensors))
 
-        '''
-        for k, v in non_none.items():
-            print '-------------------------'
-            print type(k)
-            print k
-            print isinstance(v, tc.Tensor)
-            print v.size()
-            print v.grad
-        '''
         # Assumed backprop'd
-        variables = ((state[k], v.grad.data) for k, v in non_none.items()
-                     if isinstance(v, tc.Tensor) and v.grad is not None)
+        variables = []
+        for k, (v, v_split) in non_none.items():
+            if isinstance(v, tc.Tensor) and state[k].requires_grad:
+                variables.extend(zip(tc.split(state[k], shard_size),
+                                     [v_chunk.grad for v_chunk in v_split]))
         inputs, grads = zip(*variables)
         tc.autograd.backward(inputs, grads)
-
 
