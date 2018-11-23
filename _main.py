@@ -62,7 +62,7 @@ def main():
     no padding
     '''
     batch_train = Input(train_src_tlst, train_trg_tlst, wargs.batch_size,
-                        batch_type=wargs.batch_type, bow=wargs.trg_bow, batch_sort=True)
+                        batch_type=wargs.batch_type, bow=wargs.trg_bow, batch_sort=False)
     wlog('Sentence-pairs count in training data: {}'.format(len(train_src_tlst)))
 
     batch_valid = None
