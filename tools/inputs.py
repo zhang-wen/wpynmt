@@ -197,6 +197,7 @@ class Input(object):
 
     def shuffle(self):
 
+        wlog('shuffling the whole training data bilingually ... ', False)
         data = list(zip(self.x_list, self.y_list_files))
         x_tuple, y_tuple = zip(*[data[i] for i in tc.randperm(len(data))])
         self.x_list, self.y_list_files = list(x_tuple), list(y_tuple)
@@ -205,6 +206,7 @@ class Input(object):
         self.x_list, self.y_list_files = sort_batches(self.x_list, self.y_list_files,
                                                       slens, wargs.batch_size,
                                                       wargs.sort_k_batches)
+        wlog('done.')
 
 
 

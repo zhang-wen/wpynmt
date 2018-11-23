@@ -682,6 +682,7 @@ def sort_batches(srcs, trgs, slens, batch_size, k=1):
         sorted_idx = sorted(range(train_size), key=lambda k: slens[k])
         final_srcs = [srcs[k] for k in sorted_idx]
         final_trgs = [trgs[k] for k in sorted_idx]
+        wlog('done.')
     elif k > 1:
         wlog('Sorting for each {} batches ... '.format(k), False)
         k_batch = batch_size * k
@@ -694,7 +695,7 @@ def sort_batches(srcs, trgs, slens, batch_size, k=1):
             sorted_idx = sorted(range(len(bslens)), key=lambda k: bslens[k])
             final_srcs += [bsrcs[k] for k in sorted_idx]
             final_trgs += [btrgs[k] for k in sorted_idx]
-    wlog('done.')
+        wlog('done.')
     if len(final_srcs) == 0 and len(final_trgs) == 0: return srcs, trgs
     else: return final_srcs, final_trgs
 
