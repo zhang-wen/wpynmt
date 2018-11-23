@@ -31,14 +31,14 @@ class Trainer(object):
 
         self.n_look = wargs.n_look
         assert self.n_look <= wargs.batch_size, 'eyeball count > batch size'
-        if wargs.batch_type == 'sents': self.n_batches = len(train_data)    # [low, high)
+        self.n_batches = len(train_data)    # [low, high)
 
         self.look_xs, self.look_ys = None, None
         if wargs.fix_looking is True:
             rand_idxs = random.sample(range(train_data.n_sent), self.n_look)
             wlog('randomly look {} samples frow the whole training data'.format(self.n_look))
-            self.look_xs = [train_data.x_list[i] for i in rand_idxs]
-            self.look_ys = [train_data.y_list_files[0][i] for i in rand_idxs]
+            self.look_xs = [train_data.x_list[i][0] for i in rand_idxs]
+            self.look_ys = [train_data.y_list_files[i][0] for i in rand_idxs]
         self.look_tor = Translator(self.model, self.sv, self.tv)
         self.n_eval = 0
 
@@ -217,7 +217,7 @@ class Trainer(object):
                             ' |w-ppl:{:4.2f} |w(s)-logZ|:{:.2f}({:.2f}) '
                             ' |x(y)/s:{:>4}({:>4})/{}={}({}) |x(y)/sec:{}({}) |lr:{:7.6f}'
                             ' |{:4.2f}s/{:4.2f}m'.format(
-                                epo, self.max_epochs, b_counter, self.n_batches, current_steps,
+                                epo, self.max_epochs, b_counter, len(self.train_data), current_steps,
                                 (self.look_ok_ytoks / self.look_ytoks) * 100,
                                 self.look_nll / self.look_ytoks,
                                 math.exp(self.look_nll / self.look_ytoks),

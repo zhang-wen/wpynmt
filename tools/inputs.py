@@ -32,35 +32,54 @@ class Input(object):
             self.n_batches = int(math.ceil(self.n_sent / self.batch_size))
         elif batch_type == 'token':
             self.read_batch_fn = self.token_batch
-            self.n_batches = 0
+            self.n_batches, self._batch_pointer = 0, 0
+        self.batch_type = batch_type
 
     def __len__(self):
         return self.n_batches
 
     def eos(self):
         end = ( self._read_pointer >= self.n_sent )
-        #print self._read_pointer, self.n_sent, end
-        if end is True: self._read_pointer = 0
+        #print '-----------', self._read_pointer, self.n_sent, end
+        if end is True:
+            self._read_pointer = 0
+            if self.batch_type == 'token':
+                self.n_batches = self._batch_pointer
+                self._batch_pointer = 0
         return end
 
-    def sents_batch(self, sent_list, sent_idx, batch_size=80):
+    def sents_batch(self, sent_idx, batch_size=80):
 
-        batch_buffer = sent_list[sent_idx * batch_size : (sent_idx + 1) * batch_size]
+        x_batch_buffer = self.x_list[sent_idx * batch_size : (sent_idx + 1) * batch_size]
+        y_batch_buffer = None
+        if self.y_list_files is not None:
+            # y_list_files: [sent_0:[ref0, ref1, ...], sent_1:[ref0, ref1, ... ], ...]
+            y_batch_buffer = self.y_list_files[sent_idx * batch_size : (sent_idx + 1) * batch_size]
 
-        return batch_buffer
+        return x_batch_buffer, y_batch_buffer
 
-    def token_batch(self, sent_list, sent_idx, batch_size=4096):
+    def token_batch(self, sent_idx, batch_size=4096):
 
-        max_len, n_samples, batch_buffer = 0, 0, []
+        max_len, n_samples, x_batch_buffer = 0, 0, []
+        y_batch_buffer = None if self.y_list_files is None else []
         while max_len * n_samples < batch_size:     # may be greater than 4096
-            sent = sent_list[self._read_pointer]
-            batch_buffer.append(sent)
-            max_len = max(max_len, len(sent))
+            #print self.n_sent, self._read_pointer
+            if self._read_pointer == self.n_sent: break
+            x = self.x_list[self._read_pointer]     # [[1,2,3,4,...]]
+            x_batch_buffer.append(x)
+            if self.y_list_files is not None:
+                y = self.y_list_files[self._read_pointer]
+                y_batch_buffer.append(y)
+            #print max_len, n_samples, max_len * n_samples, batch_size, x
+            #print y
+            #print '=================='
+            max_len = max(max_len, len(x[0]))
             n_samples += 1
+            self._read_pointer += 1
         max_len, n_samples = 0, 0
-        self.n_batches += 1
+        self._batch_pointer += 1
 
-        return batch_buffer
+        return x_batch_buffer, y_batch_buffer
 
     def handle_batch(self, batch, bow=False):
 
@@ -102,18 +121,15 @@ class Input(object):
 
     def __getitem__(self, idx):
 
-        assert idx < self.n_batches, 'idx:{} >= number of batches:{}'.format(idx, self.n_batches)
-
-        src_batch = self.read_batch_fn(self.x_list, idx, self.batch_size)
+        #assert idx < self.n_batches, 'idx:{} >= number of batches:{}'.format(idx, self.n_batches)
+        src_batch, trg_batch = self.read_batch_fn(idx, self.batch_size)
 
         n_samples, srcs, slens, _ = self.handle_batch(src_batch)
-        self._read_pointer += n_samples
+        #wlog('this batch size {}'.format(n_samples))
         assert len(srcs) == 1, 'Requires only one in source side.'
         srcs, slens = srcs[0], slens[0]
 
         if self.y_list_files is not None:
-            # [sent_0:[ref0, ref1, ...], sent_1:[ref0, ref1, ... ], ...]
-            trg_batch = self.read_batch_fn(self.y_list_files, idx, self.batch_size)
             _, trgs_for_files, tlens_for_files, trg_bows_for_files = self.handle_batch(
                 trg_batch, bow=self.bow)
             # -> [ref_0:[sent_0, sent_1, ...], ref_1:[sent_0, sent_1, ... ], ...]

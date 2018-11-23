@@ -40,7 +40,6 @@ cased, with_bpe, with_postproc, use_multi_bleu = False, False, False, True
 
 ''' training '''
 epoch_shuffle_train, epoch_shuffle_batch = True, False
-batch_type = 'sents'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
 sort_k_batches = 100      # 0 for all sort, 1 for no sort
 save_one_model = True
 start_epoch = 1
@@ -120,6 +119,8 @@ beta_1, beta_2, u_gain, adam_epsilon = 0.9, 0.98, 0.08, 1e-9
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
 dataset = 'toy'
 model_config = 't2t_tiny'
+batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
+batch_size = 40 if batch_type == 'sents' else 2048
 if model_config == 't2t_tiny':
     lr_update_way = 't2t'  # 't2t' or 'chen'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
@@ -168,7 +169,7 @@ if dataset == 'toy':
     val_tst_dir = './data/'
     val_src_suffix, val_ref_suffix = 'zh', 'en'
     val_prefix, tests_prefix = 'devset1_2.lc', ['devset3.lc']
-    batch_size, max_epochs = 40, 50
+    max_epochs = 50
 elif dataset == 'deen':
     #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
     val_tst_dir = '/home/wen/3.corpus/mt/iwslt14-de-en/'
