@@ -40,7 +40,7 @@ cased, with_bpe, with_postproc, use_multi_bleu = False, False, False, True
 
 ''' training '''
 epoch_shuffle_train, epoch_shuffle_batch = True, False
-sort_k_batches = 100      # 0 for all sort, 1 for no sort
+sort_k_batches = 1      # 0 for all sort, 1 for no sort
 save_one_model = True
 start_epoch = 1
 trg_bow, emb_loss, bow_loss = True, False, False

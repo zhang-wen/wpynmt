@@ -683,7 +683,7 @@ def sort_batches(srcs, trgs, slens, batch_size, k=1):
         final_srcs = [srcs[k] for k in sorted_idx]
         final_trgs = [trgs[k] for k in sorted_idx]
     elif k > 1:
-        wlog('Sorting for each {} batches ... '.format(wargs.sort_k_batches), False)
+        wlog('Sorting for each {} batches ... '.format(k), False)
         k_batch = batch_size * k
         number = int(math.ceil(train_size / k_batch))
         for start in range(number + 1):
