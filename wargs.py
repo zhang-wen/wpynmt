@@ -114,17 +114,17 @@ s_step_decay = 4000 * n_co_models
 e_step_decay = 32000 * n_co_models
 
 opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
-beta_1, beta_2, u_gain, adam_epsilon = 0.9, 0.98, 0.08, 1e-9
+beta_1, beta_2, u_gain, adam_epsilon = 0.95, 0.98, 0.08, 1e-9
 
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
 dataset = 'toy'
 model_config = 't2t_tiny'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
-batch_size = 40 if batch_type == 'sents' else 2048
+batch_size = 40 if batch_type == 'sents' else 1024
 if model_config == 't2t_tiny':
-    lr_update_way = 't2t'  # 't2t' or 'chen'
-    param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
-    learning_rate, warmup_steps = 1., 300
+    lr_update_way = 'chen'  # 't2t' or 'chen'
+    param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal
+    learning_rate, warmup_steps, beta_2 = 0.001, 1000, 0.997
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.5, 0.1, 0.1, 0.1
     d_ff_filter, n_head = 512, 8
     small, eval_valid_from, eval_valid_freq = True, 5000, 100

@@ -160,6 +160,7 @@ def BLToStrList(x, xs_L, return_list=False):
 
 def init_params(p, name='what', init_D='U', a=0.01):
 
+    if 'layer_norm' in name: return     # parameters of layer norm have been initialized
     p_dim = p.dim()
     if init_D == 'U':           # uniform distribution for all parameters
         p.data.uniform_(-a, a)

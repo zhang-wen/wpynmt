@@ -155,7 +155,7 @@ def main():
         )
         for n, p in nmtModel.named_parameters():
             # bias can not be initialized uniformly
-            init_params(p, n, init_D=wargs.param_init_D)
+            init_params(p, n, init_D=wargs.param_init_D, a=float(wargs.u_gain))
 
     wlog(nmtModel)
     wlog(optim)

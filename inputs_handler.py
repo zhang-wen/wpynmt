@@ -137,7 +137,7 @@ def wrap_data(data_dir, file_prefix, src_suffix, trg_prefix, src_vocab, trg_voca
         srcs = [srcs[k] for k in rand_idxs]
         trgs = [trgs[k] for k in rand_idxs]
         slens = [slens[k] for k in rand_idxs]
-    wlog('done.')
+        wlog('done.')
 
     final_srcs, final_trgs = sort_batches(srcs, trgs, slens, wargs.batch_size, sort_k_batches)
 
