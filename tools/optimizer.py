@@ -3,7 +3,6 @@ import torch.optim as opt
 import torch.nn as nn
 from torch.nn.utils import clip_grad_norm_
 from utils import wlog
-import math
 import wargs
 
 class Optim(object):
@@ -70,9 +69,9 @@ class Optim(object):
         # update the learning rate
         self.n_current_steps += 1
         if wargs.lr_update_way == 't2t':
-            factor = math.pow(self.d_model, -0.5) * min(
-                math.pow(self.n_current_steps, -0.5),
-                self.n_current_steps * math.pow(self.warmup_steps, -1.5)
+            factor = ( self.d_model ** (-0.5) ) * min(
+                (self.n_current_steps + 1) ** (-0.5),
+                (self.n_current_steps + 1) * ( self.warmup_steps ** (-1.5) )
             )
             #self.learning_rate = factor
             #wlog('lrate = {}'.format(factor))
@@ -83,7 +82,7 @@ class Optim(object):
                          n * ( (2 * n) ** ( ( s - n * self.n_current_steps ) / ( e - s ) ) ) )
 
         self.learning_rate = wargs.learning_rate * factor
-        #wlog('lr0 * factor = {} * {} = {}'.format(wargs.learning_rate, factor, self.learning_rate))
+        wlog('lr0 * factor = {} * {} = {}'.format(wargs.learning_rate, factor, self.learning_rate))
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = self.learning_rate
 

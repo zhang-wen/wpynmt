@@ -4,7 +4,7 @@ worse_counter = 0
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder and decoder '''
-encoder_type, decoder_type = 'tgru', 'tgru'
+encoder_type, decoder_type = 'att', 'att'
 d_src_emb, d_trg_emb = 512, 512     # size of source and target word embedding
 n_enc_layers, n_dec_layers = 2, 2    # layers number of encoder and decoder
 d_enc_hid, d_dec_hid = 512, 512     # hidden size of rnn in encoder and decoder
@@ -110,22 +110,22 @@ sampling = 'length_limit'     # truncation, length_limit, gumbeling
 gpu_id = [0]
 #gpu_id = None
 n_co_models = 1
-s_step_decay = 4000 * n_co_models
-e_step_decay = 32000 * n_co_models
+s_step_decay = 300 * n_co_models
+e_step_decay = 3000 * n_co_models
 
 opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
 beta_1, beta_2, u_gain, adam_epsilon = 0.9, 0.98, 0.08, 1e-9
 
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset = 'zhen'
-model_config = 'tgru_base'
+dataset = 'toy'
+model_config = 't2t_tiny'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
-batch_size = 40 if batch_type == 'sents' else 4096
+batch_size = 40 if batch_type == 'sents' else 2048
 if model_config == 't2t_tiny':
     lr_update_way = 't2t'  # 't2t' or 'chen'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
-    learning_rate, warmup_steps = 1., 300
-    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.5, 0.1, 0.1, 0.1
+    learning_rate, warmup_steps, u_gain, beta_2 = 1., 300, 0.08, 0.98
+    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.2, 0.1, 0.1, 0.1
     d_ff_filter, n_head = 512, 8
     small, eval_valid_from, eval_valid_freq = True, 5000, 100
     epoch_eval, max_grad_norm = True, 0.
