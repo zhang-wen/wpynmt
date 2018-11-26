@@ -82,7 +82,7 @@ class Optim(object):
                          n * ( (2 * n) ** ( ( s - n * self.n_current_steps ) / ( e - s ) ) ) )
 
         self.learning_rate = wargs.learning_rate * factor
-        wlog('lr0 * factor = {} * {} = {}'.format(wargs.learning_rate, factor, self.learning_rate))
+        #wlog('lr0 * factor = {} * {} = {}'.format(wargs.learning_rate, factor, self.learning_rate))
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = self.learning_rate
 

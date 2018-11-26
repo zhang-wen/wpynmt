@@ -4,7 +4,7 @@ worse_counter = 0
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder and decoder '''
-encoder_type, decoder_type = 'att', 'att'
+encoder_type, decoder_type = 'tgru', 'tgru'
 d_src_emb, d_trg_emb = 512, 512     # size of source and target word embedding
 n_enc_layers, n_dec_layers = 2, 2    # layers number of encoder and decoder
 d_enc_hid, d_dec_hid = 512, 512     # hidden size of rnn in encoder and decoder
@@ -117,10 +117,10 @@ opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
 beta_1, beta_2, u_gain, adam_epsilon = 0.9, 0.98, 0.08, 1e-9
 
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset = 'toy'
-model_config = 't2t_tiny'
+dataset = 'zhen'
+model_config = 'tgru_base'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
-batch_size = 40 if batch_type == 'sents' else 2048
+batch_size = 40 if batch_type == 'sents' else 4096
 if model_config == 't2t_tiny':
     lr_update_way = 't2t'  # 't2t' or 'chen'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
@@ -148,10 +148,10 @@ if model_config == 't2t_big':
 if model_config == 'tgru_base':
     lr_update_way = 'chen'  # 't2t' or 'chen'
     param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal
-    learning_rate = 0.002    # 1.0, 0.001, 0.01
+    learning_rate = 0.001    # 1.0, 0.001, 0.01
     beta_2, warmup_steps, adam_epsilon = 0.999, 500, 1e-6
-    s_step_decay, e_step_decay = 8000, 64000
-    n_enc_layers, n_dec_layers = 6, 6
+    s_step_decay, e_step_decay = 4000, 32000
+    n_enc_layers, n_dec_layers, n_head = 5, 5, 16
     snip_size = 10
 if model_config == 'tgru_big':
     lr_update_way = 'chen'  # 't2t' or 'chen'
@@ -181,8 +181,8 @@ elif dataset == 'deen':
     #n_src_vcb_plan, n_trg_vcb_plan = 32009, 22822
 elif dataset == 'zhen':
     #val_tst_dir = '/home/wen/3.corpus/mt/nist_data_stanseg/'
-    val_tst_dir = '/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/'
-    #val_tst_dir = '/home5/wen/2.data/mt/mfd_1.25M/nist_test_new/'
+    #val_tst_dir = '/home/wen/3.corpus/mt/mfd_1.25M/nist_test_new/'
+    val_tst_dir = '/home5/wen/2.data/mt/mfd_1.25M/nist_test_new/'
     #dev_prefix = 'nist02'
     val_src_suffix, val_ref_suffix = 'src.BPE', 'trg.tok.sb'
     n_src_vcb_plan, n_trg_vcb_plan = 50000, 50000
