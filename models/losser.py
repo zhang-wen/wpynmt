@@ -36,12 +36,12 @@ class Classifier(nn.Module):
 
         assert 0. <= label_smoothing <= 1., 'label smoothing value should be in [0, 1]'
         wlog('NLL loss with label_smoothing: {}'.format(label_smoothing))
-        if label_smoothing == 0.:
-            weight = tc.ones(self.output_size)
+        if label_smoothing == 0. or self.bow_loss is True:
+            weight = tc.ones(output_size, requires_grad=False)
             weight[PAD] = 0   # do not predict padding, same with ingore_index
             self.criterion = nn.NLLLoss(weight, ignore_index=PAD, reduction='sum')
             #self.criterion = nn.NLLLoss(weight, ignore_index=PAD, size_average=False)
-        elif 0. < label_smoothing <= 1.:
+        if 0. < label_smoothing <= 1.:
             # all non-true labels are uniformly set to low-confidence
             self.smoothing_value = label_smoothing / (output_size - 2)
             one_hot = tc.full((output_size, ), self.smoothing_value)
@@ -103,7 +103,7 @@ class Classifier(nn.Module):
 
     def embeddingLoss(self, prob_BLV, gold_BL, gold_mask_BL, bow_BN=None, bow_mask_BN=None):
         batch_size, max_L = gold_BL.size()
-        E, bow_N = self.trg_word_emb.size(1), bow_BN.size(1)
+        E, bow_N = self.trg_word_emb.weight.size(1), bow_BN.size(1)
         gold_BLE = self.trg_word_emb(gold_BL) * gold_mask_BL[:, :, None]
         bow_BNE = self.trg_word_emb(bow_BN) * bow_mask_BN[:, :, None]
         bow_nE = bow_BNE[:, None, :, :].expand((-1, max_L, -1, -1)).contiguous().view(-1, E)
@@ -118,7 +118,7 @@ class Classifier(nn.Module):
         # p_b = sigmoid(sum_{t=1}^{M} s_t)
         bow_prob = self.sigmoid((pred_BLV * gold_mask_BL[:, :, None]).sum(1))   # [B, V]
         #bow_prob = self.softmax((pred_BLV * gold_mask_BL).sum(1), gold_mask_BL)
-        bow_N = bow_BN.size(0)
+        bow_N = bow_BN.size(1)
         bow_ll_BNV = tc.log(bow_prob + 1e-20)[:, None, :].expand(-1, bow_N, -1)
         bow_ll_BNV = bow_ll_BNV * bow_mask_BN[:, :, None]
         bow_ll_flat_nV = bow_ll_BNV.view(-1, bow_ll_BNV.size(-1))
