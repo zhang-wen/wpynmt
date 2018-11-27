@@ -43,7 +43,7 @@ epoch_shuffle_train, epoch_shuffle_batch = True, False
 sort_k_batches = 1      # 0 for all sort, 1 for no sort
 save_one_model = True
 start_epoch = 1
-trg_bow, emb_loss, bow_loss = True, False, True
+trg_bow, emb_loss, bow_loss = True, False, False
 trunc_size = 0   # truncated bptt
 grad_accum_count = 1   # accumulate gradient for batch_size * accum_count batches (Transformer)
 snip_size = 20
@@ -161,6 +161,7 @@ if model_config == 'tgru_big':
     beta_2, warmup_steps, adam_epsilon = 0.999, 500, 1e-6
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_head = 1024, 1024, 1024, 1024, 16
 if model_config == 'gru_tiny':
+    s_step_decay, e_step_decay = 400, 5000
     batch_size = 40 if batch_type == 'sents' else 2048
     small, epoch_eval = True, True
 if model_config == 'gru_base':

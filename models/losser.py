@@ -33,6 +33,7 @@ class Classifier(nn.Module):
             wlog('copying weights of target word embedding into classifier')
             self.map_vocab.weight = trg_word_emb.we.weight
         self.log_prob = MyLogSoftmax(wargs.self_norm_alpha)
+        self.ctx_map_vocab = nn.Linear(2*input_size, output_size, bias=True)
 
         assert 0. <= label_smoothing <= 1., 'label smoothing value should be in [0, 1]'
         wlog('NLL loss with label_smoothing: {}'.format(label_smoothing))
@@ -148,7 +149,9 @@ class Classifier(nn.Module):
         if self.emb_loss is True:
             emb_loss = self.embeddingLoss(prob_BLV, gold_BL, gold_mask_BL, bow_BN, bow_mask_BN)
         if self.bow_loss is True:
-            bow_loss = self.bowLoss_based_pred(pred_BLV, gold_mask_BL, bow_BN, bow_mask_BN)
+            #bow_loss = self.bowLoss_based_pred(pred_BLV, gold_mask_BL, bow_BN, bow_mask_BN)
+            pred_bow = self.ctx_map_vocab(context_BLH)  # (batch_size, y_Lm1, V)
+            bow_loss = self.bowLoss_based_pred(pred_bow, gold_mask_BL, bow_BN, bow_mask_BN)
 
         pred_flat_nV = pred_BLV.view(-1, pred_BLV.size(-1))
         # ok prediction count in one minibatch
@@ -170,6 +173,7 @@ class Classifier(nn.Module):
         bow_norm = bow_mask.sum().item() if self.loss_norm == 'tokens' else bow.size(0)
         ce_norm, bow_norm = float(ce_norm), float(bow_norm)
         lambd = schedule_bow_lambda(epo_idx)
+        if contexts is not None and self.bow_loss is False: contexts = contexts.detach()
         shard_state = { 'feed_BLO': outputs, 'gold_BL': gold, 'gold_mask_BL': gold_mask,
                        'bow_BN': bow, 'bow_mask_BN':bow_mask, 'context_BLH': contexts }
 
