@@ -104,7 +104,7 @@ def main():
     nmtModel = build_NMT(src_emb, trg_emb)
 
     if not wargs.copy_attn:
-        classifier = Classifier(wargs.d_dec_hid, n_trg_vcb, trg_emb,
+        classifier = Classifier(wargs.d_dec_hid, n_trg_vcb, trg_emb, norm_type=wargs.normalization,
                                 label_smoothing=wargs.label_smoothing,
                                 emb_loss=wargs.emb_loss, bow_loss=wargs.bow_loss)
     nmtModel.classifier = classifier

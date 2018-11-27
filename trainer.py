@@ -44,7 +44,6 @@ class Trainer(object):
 
         self.snip_size, self.trunc_size = wargs.snip_size, wargs.trunc_size
         self.grad_accum_count = wargs.grad_accum_count
-        self.norm_type = wargs.normalization
 
         self.epoch_shuffle_train = wargs.epoch_shuffle_train
         self.epoch_shuffle_batch = wargs.epoch_shuffle_batch
@@ -73,7 +72,7 @@ class Trainer(object):
         self.look_batch_logZ += logZ
         self.e_batch_logZ += logZ
 
-    def grad_accumulate(self, real_batches, epo, norm_type='sents'):
+    def grad_accumulate(self, real_batches, epo):
 
         if self.grad_accum_count > 1:
             self.model.zero_grad()
@@ -104,13 +103,14 @@ class Trainer(object):
                 # 2. F-prop all but generator.
                 if self.grad_accum_count == 1: self.model.zero_grad()
                 # exclude last target word from inputs
-                logits, alphas = self.model(xs, part_ys[:, :-1], xs_mask, part_ys_mask[:, :-1])
-                # (batch_size, max_tlen_batch - 1, out_size)
+                results = self.model(xs, part_ys[:, :-1], xs_mask, part_ys_mask[:, :-1])
+                logits, alphas, contexts = results['logit'], results['attend'], results['context']
+                # (batch_size, y_Lm1, out_size)
 
                 gold, gold_mask = part_ys[:, 1:].contiguous(), part_ys_mask[:, 1:].contiguous()
                 # 3. Compute loss in shards for memory efficiency.
                 _nll, _ok_ytoks, _logZ = self.classifier.snip_back_prop(
-                    logits, gold, gold_mask, bows, bows_mask, epo, self.snip_size, self.norm_type)
+                    logits, gold, gold_mask, bows, bows_mask, epo, self.snip_size, contexts)
 
             self.accum_matrics(_batch_size, _xtoks, _ytoks, _nll, _ok_ytoks, _logZ)
         # 3. Update the parameters and statistics.

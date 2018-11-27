@@ -28,12 +28,12 @@ class MyLogSoftmax(nn.Module):
         super(MyLogSoftmax, self).__init__()
         self.sna = self_norm_alpha
 
-    def forward(self, x):
+    def forward(self, x, dim=-1):
 
-        # input torch tensor or variable
-        x_max = tc.max(x, dim=-1, keepdim=True)[0]  # take max for numerical stability
+        # input torch tensor
+        x_max = tc.max(x, dim=dim, keepdim=True)[0]  # take max for numerical stability
         x_exp = tc.exp( x - x_max )
-        x_exp_sum = tc.sum( x_exp, dim=-1, keepdim=True ) + epsilon
+        x_exp_sum = tc.sum( x_exp, dim=dim, keepdim=True ) + epsilon
         log_norm = tc.log( x_exp_sum ) + x_max
         x = x - log_norm    # get log softmax
         prob = x_exp / x_exp_sum

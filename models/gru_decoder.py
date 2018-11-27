@@ -106,8 +106,8 @@ class StackedGRUDecoder(nn.Module):
         # state: (batch_size, d_dec_hid)
 
         alpha, context = self.attention(state, xs_h, uh, xs_mask)
-        # alpha:   [batch_size, n_head, key_len]
-        # context: [batch_size, 2 * d_dec_hid]
+        # alpha:   [batch_size, n_head, key_len] or [batch_size, key_len]
+        # context: [batch_size, 2 * enc_hid_size]
 
         s_t = self.cgru_cell(context, state)
         if y_mask is not None: s_t = s_t * y_mask[:, None]
@@ -115,23 +115,23 @@ class StackedGRUDecoder(nn.Module):
         alpha = alpha.transpose(0, 1)  # get the attention of the first head, [key_len, batch_size]
         return context, s_t, y_tm1, alpha
 
-    def forward(self, xs_h, ys, xs_mask, ys_mask, isAtt=False, ss_eps=1., oracles=None):
+    def forward(self, xs_h, ys, xs_mask, ys_mask, ss_eps=1., oracles=None):
 
         s_tm1, uh = self.init_state(xs_h, xs_mask)
-        tlen_batch_s, tlen_batch_y, tlen_batch_c = [], [], []
         batch_size, y_Lm1 = ys.size(0), ys.size(1)
 
-        if isAtt is True: attends = []
         if ys.dim() == 3: ys_e = ys
-        else: _, ys_e = self.word_emb(ys)   # (batch_size, max_tlen_batch - 1, d_trg_emb)
+        else: _, ys_e = self.word_emb(ys)   # (batch_size, y_Lm1, d_trg_emb)
 
-        sent_logit, y_tm1_model = [], ys_e[:, 0, :]
+        logits, attends, contexts, y_tm1_model = [], [], [], ys_e[:, 0, :]
         for k in range(y_Lm1):
 
             y_tm1 = self.sample_prev_y(k, ys_e, y_tm1_model, oracles)
             context, s_tm1, _, alpha_ij = self.step(s_tm1, xs_h, uh, y_tm1, xs_mask, ys_mask[:, k])
             logit = self.step_out(s_tm1, y_tm1, context)
-            sent_logit.append(logit)
+            logits.append(logit)
+            attends.append(alpha_ij)
+            contexts.append(context)
 
             if wargs.ss_type is not None and ss_eps < 1. and wargs.greed_sampling is True:
                 logit = self.classifier.get_a(logit, noise=wargs.greed_gumbel_noise)
@@ -139,18 +139,19 @@ class StackedGRUDecoder(nn.Module):
                 _, y_tm1_model = self.word_emb(y_tm1_model)
                 #wlog('word-level greedy sampling, noise {}'.format(wargs.greed_gumbel_noise))
 
-            if isAtt is True: attends.append(alpha_ij)
+        logits = tc.stack(logits, dim=1) * ys_mask[:, :, None]    # (batch_size, y_Lm1, d_dec_hid)
+        attends = tc.stack(attends, dim=1) * ys_mask[:, :, None]  # (batch_size, y_Lm1, key_len)
+        contexts = tc.stack(contexts, dim=1) * ys_mask[:, :, None]# (batch_size, y_Lm1, 2 * enc_hid_size)
 
-        logit = tc.stack(sent_logit, dim=1)     # (batch_size, max_tlen_batch-1, d_dec_hid)
-        logit = logit * ys_mask[:, :, None]  # !!!!
-
-        results = (logit, tc.stack(attends, 0)) if isAtt is True else logit
-
-        return results
+        return {
+            'logit': logits,
+            'attend': attends,
+            'context': contexts
+        }
 
     def step_out(self, s, y, c):
 
-        # (max_tlen_batch - 1, batch_size, dec_hid_size)
+        # (batch_size, y_Lm1, dec_hid_size)
         logit = self.s_transform(s) + self.y_transform(y) + self.c_transform(c)
 
         if self.max_out is True:
