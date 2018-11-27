@@ -25,9 +25,8 @@ class NMTModel(nn.Module):
 
         if wargs.encoder_type == 'gru':
             enc_output = self.encoder(src, src_mask)    # batch_size, max_L, hidden_size
-            results = self.decoder(enc_output, trg, src_mask, trg_mask, isAtt=True)
-            if len(results) == 1: logit, alphas = results, None
-            elif len(results) == 2: logit, alphas = results
+            results = self.decoder(enc_output, trg, src_mask, trg_mask)
+            logits, attends, contexts = results['logit'], results['attend'], results['context']
         if wargs.encoder_type == 'att':
             enc_output, _ = self.encoder(src)
             logit, _, nlayer_attns = self.decoder(trg, src, enc_output)
@@ -35,15 +34,19 @@ class NMTModel(nn.Module):
         elif wargs.encoder_type == 'tgru':
             enc_output = self.encoder(src, src_mask)    # batch_size, max_L, hidden_size
             results = self.decoder(enc_output, trg, src_mask, trg_mask, isAtt=True)
-            if len(results) == 1: logit, alphas = results, None
-            elif len(results) == 2: logit, alphas = results
+            if len(results) == 1: logits, alphas = results, None
+            elif len(results) == 2: logits, alphas = results
 
         if self.multigpu:
             # Not yet supported on multi-gpu
             dec_state = None
             attns = None
 
-        return logit, alphas
+        return {
+            'logit': logits,
+            'attend': attends,
+            'context': contexts
+        }
 
 
 def build_encoder(src_emb):

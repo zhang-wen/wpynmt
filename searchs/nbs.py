@@ -218,15 +218,15 @@ class Nbs(object):
             y_im1 = self.decoder.word_emb(y_part_seqs)[1][:, -1, :]
             step_output = self.decoder.step(s_im1, enc_src, uh, y_im1)
             a_i, s_i, y_im1, alpha_ij = step_output[:4]
-            # (n_remainings*p, enc_hid_size), (n_remainings*p, dec_hid_size),
-            # (n_remainings*p, trg_wemb_size), (x_maxL, n_remainings*p)
+            # a_i: (n_remainings*p, enc_hid_size), s_i: (n_remainings*p, dec_hid_size),
+            # y_im1: (n_remainings*p, trg_wemb_size), alpha_ij: (n_remainings*p, srcL)
 
             self.C[2] += 1
-            # (preb_sz, out_size), alpha_ij: (srcL, B*p)
+            # (preb_sz, out_size)
             logit = self.decoder.step_out(s_i, y_im1, a_i)
             self.C[3] += 1
 
-            # (B*prevb_sz, vocab_size)
+            # (n_remainings*prevb_sz, vocab_size)
             #wlog('bleu sampling, noise {}'.format(self.noise))
             next_ces = self.model.classifier(logit, noise=self.noise)
             next_ces = next_ces.cpu().data.numpy()
@@ -239,13 +239,13 @@ class Nbs(object):
                 split_idx.append(a)
             next_ces_B_prevb = np.split(cand_scores, split_idx, axis=0) # [B: (prevb, vocab)]
             debug(len(next_ces_B_prevb))
-            _s_i, _alpha_ij, alpha_ij = [], [], alpha_ij.t()    # (p*B, srcL)
+            _s_i, _alpha_ij = [], []
             for _idx in prebs_sz[:-1]:
                 _s_i.append(s_i[:_idx])
                 _alpha_ij.append(alpha_ij[:_idx].t())
                 s_i, alpha_ij = s_i[_idx:], alpha_ij[_idx:]
             _s_i.append(s_i)    # [B: (prevb, dec_hid_size)]
-            _alpha_ij.append(alpha_ij.t())  # # [B: (srcL, p)]
+            _alpha_ij.append(alpha_ij.t())  # # [B: (srcL, preb_sz)]
             next_step_beam, del_batch_idx = [], []
             import copy
             if self.batch_sample is True: _next_ces_B_prevb = copy.deepcopy(next_ces_B_prevb)  # bak

@@ -221,7 +221,6 @@ class Trainer(object):
                                 (self.look_ok_ytoks / self.look_ytoks) * 100,
                                 self.look_nll / self.look_ytoks,
                                 math.exp(self.look_nll / self.look_ytoks),
-                                #math.exp(self.look_nll),
                                 self.look_batch_logZ / self.look_ytoks,
                                 self.look_batch_logZ / self.look_sents, self.look_xtoks,
                                 self.look_ytoks, self.look_sents,

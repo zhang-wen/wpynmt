@@ -4,7 +4,7 @@ worse_counter = 0
 
 # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
 ''' encoder and decoder '''
-encoder_type, decoder_type = 'tgru', 'tgru'
+encoder_type, decoder_type = 'gru', 'gru'
 d_src_emb, d_trg_emb = 512, 512     # size of source and target word embedding
 n_enc_layers, n_dec_layers = 2, 2    # layers number of encoder and decoder
 d_enc_hid, d_dec_hid = 512, 512     # hidden size of rnn in encoder and decoder
@@ -47,7 +47,7 @@ trg_bow, emb_loss, bow_loss = True, False, False
 trunc_size = 0   # truncated bptt
 grad_accum_count = 1   # accumulate gradient for batch_size * accum_count batches (Transformer)
 snip_size = 20
-normalization = 'tokens'     # 'sents' or 'tokens', normalization method of the gradient
+loss_norm = 'tokens'     # 'sents' or 'tokens', normalization method of the gradient
 max_grad_norm = 5. # the norm of the gradient vector exceeds this, renormalize it to max_grad_norm
 label_smoothing = 0.1
 model_prefix = dir_model + '/model'
@@ -114,11 +114,12 @@ s_step_decay = 300 * n_co_models
 e_step_decay = 3000 * n_co_models
 
 opt_mode = 'adam'       # 'adadelta', 'adam' or 'sgd'
-beta_1, beta_2, u_gain, adam_epsilon = 0.9, 0.98, 0.08, 1e-9
+lr_update_way, param_init_D, learning_rate = 'chen', 'U', 0.002  # 't2t' or 'chen'
+beta_1, beta_2, u_gain, adam_epsilon, warmup_steps = 0.9, 0.98, 0.08, 1e-9, 500
 
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset = 'zhen'
-model_config = 'tgru_base'
+dataset = 'toy'
+model_config = 'gru_tiny'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
 batch_size = 40 if batch_type == 'sents' else 4096
 if model_config == 't2t_tiny':
@@ -159,6 +160,9 @@ if model_config == 'tgru_big':
     learning_rate = 0.001    # 1.0, 0.001, 0.01
     beta_2, warmup_steps, adam_epsilon = 0.999, 500, 1e-6
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_head = 1024, 1024, 1024, 1024, 16
+if model_config == 'gru_tiny':
+    batch_size = 40 if batch_type == 'sents' else 2048
+    small, epoch_eval = True, True
 if model_config == 'gru_base':
     lr_update_way = 'chen'  # 't2t' or 'chen'
     param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal

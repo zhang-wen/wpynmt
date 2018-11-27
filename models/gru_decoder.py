@@ -112,7 +112,6 @@ class StackedGRUDecoder(nn.Module):
         s_t = self.cgru_cell(context, state)
         if y_mask is not None: s_t = s_t * y_mask[:, None]
 
-        alpha = alpha.transpose(0, 1)  # get the attention of the first head, [key_len, batch_size]
         return context, s_t, y_tm1, alpha
 
     def forward(self, xs_h, ys, xs_mask, ys_mask, ss_eps=1., oracles=None):

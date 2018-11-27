@@ -11,7 +11,7 @@ from models.nn_utils import MaskSoftmax, MyLogSoftmax
 
 class Classifier(nn.Module):
 
-    def __init__(self, input_size, output_size, trg_word_emb=None, norm_type='tokens',
+    def __init__(self, input_size, output_size, trg_word_emb=None, loss_norm='tokens',
                  label_smoothing=0., emb_loss=False, bow_loss=False):
 
         super(Classifier, self).__init__()
@@ -51,7 +51,7 @@ class Classifier(nn.Module):
 
         self.output_size = output_size
         self.softmax = MaskSoftmax()
-        self.norm_type = norm_type
+        self.loss_norm = loss_norm
         self.label_smoothing = label_smoothing
 
     def pred_map(self, logit, noise=None):
@@ -114,7 +114,7 @@ class Classifier(nn.Module):
         pred_p_t = pred_p_t * gold_mask_BL  # [B, L]
         return ( pred_p_t * dist ).sum()
 
-    def bowLoss_based_pred(self, pred_BLV, gold_mask_BL, bow_BN, bow_mask_BN)
+    def bowLoss_based_pred(self, pred_BLV, gold_mask_BL, bow_BN, bow_mask_BN):
         # p_b = sigmoid(sum_{t=1}^{M} s_t)
         bow_prob = self.sigmoid((pred_BLV * gold_mask_BL[:, :, None]).sum(1))   # [B, V]
         #bow_prob = self.softmax((pred_BLV * gold_mask_BL).sum(1), gold_mask_BL)
@@ -123,10 +123,10 @@ class Classifier(nn.Module):
         bow_ll_BNV = bow_ll_BNV * bow_mask_BN[:, :, None]
         bow_ll_flat_nV = bow_ll_BNV.view(-1, bow_ll_BNV.size(-1))
         bow_ce_loss = self.criterion(bow_ll_flat_nV, bow_BN.view(-1))
-        return bow_ce_loss / bow_mask_BN.sum().item()
+        return bow_ce_loss
 
     def forward(self, feed_BLO, gold_BL=None, gold_mask_BL=None, noise=None, bow_BN=None,
-                bow_mask_BN=None, epo=None, context_BLH=None):
+                bow_mask_BN=None, context_BLH=None):
 
         pred_BLV = self.pred_map(feed_BLO, noise)   # (batch_size, y_Lm1, out_size)
         # decoding, if gold is None and gold_mask is None:
@@ -143,45 +143,47 @@ class Classifier(nn.Module):
 
         # negative log likelihood, may be with label smoothing
         ce_loss = self.smoothingXentLoss(ll_flat_nV, gold_flat_n)
-        norm = gold_mask_BL.sum().item() if self.norm_type == 'tokens' else pred_BLV.size(0)
-        norm = float(norm)
+        emb_loss, bow_loss = None, None
 
-        loss = ce_loss = ce_loss.div(norm)   # normlized xentropy loss
         if self.emb_loss is True:
             emb_loss = self.embeddingLoss(prob_BLV, gold_BL, gold_mask_BL, bow_BN, bow_mask_BN)
-            loss = ce_loss + emb_loss.div(norm)
         if self.bow_loss is True:
-            assert epo_idx is not None
-            epo_idx = int(epo_idx[0, 0])
-            lambd = schedule_bow_lambda(epo_idx)
             bow_loss = self.bowLoss_based_pred(pred_BLV, gold_mask_BL, bow_BN, bow_mask_BN)
-            loss = ce_loss + lambd * bow_loss
 
         pred_flat_nV = pred_BLV.view(-1, pred_BLV.size(-1))
         # ok prediction count in one minibatch
         ok_ytoks = (pred_flat_nV.max(dim=-1)[1]).eq(gold_flat_n).masked_select(gold_flat_n.ne(PAD)).sum()
         # final loss, xentropy
-        return loss, ce_loss, ok_ytoks, abs_logZ
+        return ce_loss, emb_loss, bow_loss, ok_ytoks, abs_logZ
 
     '''
     Compute the loss in shards for efficiency
         outputs: the predict outputs from the model
         gold: correct target sentences in current batch
     '''
-    def snip_back_prop(self, outputs, gold, gold_mask, bow, bow_mask, epo, shard_size=100,
+    def snip_back_prop(self, outputs, gold, gold_mask, bow, bow_mask, epo_idx, shard_size=100,
                        norm='sents', contexts=None):
 
         # (batch_size, y_Lm1, out_size)
         batch_nll, batch_ok_ytoks, batch_abs_logZ = 0, 0, 0
-        epo = tc.ones_like(gold, requires_grad=False) * epo
+        ce_norm = gold_mask.sum().item() if self.loss_norm == 'tokens' else gold.size(0)
+        bow_norm = bow_mask.sum().item() if self.loss_norm == 'tokens' else bow.size(0)
+        ce_norm, bow_norm = float(ce_norm), float(bow_norm)
+        lambd = schedule_bow_lambda(epo_idx)
         shard_state = { 'feed_BLO': outputs, 'gold_BL': gold, 'gold_mask_BL': gold_mask,
-                       'bow_BN': bow, 'bow_mask_BN':bow_mask, 'epo': epo, 'context_BLH': contexts }
+                       'bow_BN': bow, 'bow_mask_BN':bow_mask, 'context_BLH': contexts }
 
         for shard in shards(shard_state, shard_size):
-            loss, nll, ok_ytoks, abs_logZ = self(**shard)
-            batch_nll += nll.item()
+            ce_loss, emb_loss, bow_loss, ok_ytoks, abs_logZ = self(**shard)
+            batch_nll += ce_loss.item()
             batch_ok_ytoks += ok_ytoks.item()
             batch_abs_logZ += abs_logZ.item()
+
+            loss = ce_loss.div(ce_norm)
+            if self.emb_loss is True:
+                loss = loss + emb_loss.div(ce_norm)
+            elif self.bow_loss is True:
+                loss = loss + lambd * bow_loss.div(bow_norm)
             loss.backward(retain_graph=True)
 
         return batch_nll, batch_ok_ytoks, batch_abs_logZ

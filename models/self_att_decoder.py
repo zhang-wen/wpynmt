@@ -99,7 +99,7 @@ class SelfAttDecoderLayer(nn.Module):
         # encoder-decoder attention
         norm_query = self.layer_norm_1(query)   # 'n' for preprocess
 
-        # trg_src_attn_mask: (batch_size, trg_en, src_len)
+        # trg_src_attn_mask: (batch_size, trg_len, src_len)
         dec_output, dec_enc_attns = self.trg_src_attn(
             enc_output, enc_output, norm_query, attn_mask=trg_src_attn_mask)
         # dec_output:           [batch_size, trg_len, d_model]
