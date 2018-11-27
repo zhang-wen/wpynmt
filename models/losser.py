@@ -162,7 +162,7 @@ class Classifier(nn.Module):
         gold: correct target sentences in current batch
     '''
     def snip_back_prop(self, outputs, gold, gold_mask, bow, bow_mask, epo_idx, shard_size=100,
-                       norm='sents', contexts=None):
+                       contexts=None):
 
         # (batch_size, y_Lm1, out_size)
         batch_nll, batch_ok_ytoks, batch_abs_logZ = 0, 0, 0
