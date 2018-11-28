@@ -27,13 +27,14 @@ max_grad_norm = 5.      # the norm of the gradient exceeds this, renormalize it 
 d_dec_hid, d_model = 512, 512
 if model_config == 't2t_tiny':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    lr_update_way = 'noam'  # 'noam' or 'chen'
-    param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
+    lr_update_way = 'chen'  # 'noam' or 'chen'
+    param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal
     d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 8, 2, 2
-    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.2, 0.1, 0.1, 0.1
-    learning_rate, warmup_steps, u_gain, beta_2 = 0.1, 300, 0.08, 0.98
+    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.5, 0.1, 0.1, 0.1
+    learning_rate, warmup_steps, u_gain, beta_2 = 0.0005, 300, 0.08, 0.98
+    s_step_decay, e_step_decay = 4000, 32000
     small, eval_valid_from, eval_valid_freq = True, 5000, 100
-    epoch_eval, max_grad_norm = True, 0.
+    epoch_eval, max_grad_norm = True, 5.
     batch_size = 40 if batch_type == 'sents' else 2048
 if model_config == 't2t_base':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'

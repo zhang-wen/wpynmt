@@ -54,13 +54,6 @@ class Optim(object):
 
     def step(self):
 
-        # clip by the gradients norm
-        if self.max_grad_norm > 0.:
-            #wlog('L2 norm Grad clip ... {}'.format(self.max_grad_norm))
-            clip_grad_norm_(self.params, max_norm=self.max_grad_norm)
-
-        self.optimizer.step()
-
         # update the learning rate
         self.n_current_steps += 1
         if wargs.lr_update_way == 'noam':
@@ -96,4 +89,12 @@ class Optim(object):
            [torch.FloatTensor of size 3x4]],
           'weight_decay': 0}]
         '''
+
+        # clip by the gradients norm
+        if self.max_grad_norm > 0.:
+            #wlog('L2 norm Grad clip ... {}'.format(self.max_grad_norm))
+            clip_grad_norm_(self.params, max_norm=self.max_grad_norm)
+
+        self.optimizer.step()
+
 
