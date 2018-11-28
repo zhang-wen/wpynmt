@@ -24,6 +24,7 @@ class Classifier(nn.Module):
         if bow_loss is True:
             wlog('using the bag of words loss')
             self.sigmoid = nn.Sigmoid()
+            self.ctx_map_vocab = nn.Linear(2*input_size, output_size, bias=True)
             #self.softmax = MaskSoftmax()
         self.bow_loss = bow_loss
 
@@ -33,7 +34,6 @@ class Classifier(nn.Module):
             wlog('copying weights of target word embedding into classifier')
             self.map_vocab.weight = trg_word_emb.we.weight
         self.log_prob = MyLogSoftmax(wargs.self_norm_alpha)
-        self.ctx_map_vocab = nn.Linear(2*input_size, output_size, bias=True)
 
         assert 0. <= label_smoothing <= 1., 'label smoothing value should be in [0, 1]'
         wlog('NLL loss with label_smoothing: {}'.format(label_smoothing))

@@ -41,6 +41,7 @@ class Trainer(object):
             self.look_ys = [train_data.y_list_files[i][0] for i in rand_idxs]
         self.look_tor = Translator(self.model, self.sv, self.tv)
         self.n_eval = 0
+        self.tor = Translator(self.model, self.sv, self.tv, print_att=wargs.print_att)
 
         self.snip_size, self.trunc_size = wargs.snip_size, wargs.trunc_size
         self.grad_accum_count = wargs.grad_accum_count
@@ -142,8 +143,7 @@ class Trainer(object):
             eval_start = time.time()
             self.n_eval += 1
             wlog('\nAmong epo, batch [{}], [{}] eval save model ...'.format(e_bidx, self.n_eval))
-            bleu = self.mt_eval(epo, e_bidx)
-            self.optim.update_learning_rate(bleu, epo)
+            self.mt_eval(epo, e_bidx)
             self.eval_spend = time.time() - eval_start
 
     def mt_eval(self, eid, bid):
@@ -156,13 +156,8 @@ class Trainer(object):
         wlog('Saving temporary model in {}'.format(model_file))
 
         self.model.eval()
-
-        tor0 = Translator(self.model, self.sv, self.tv, print_att=wargs.print_att)
-        bleu = tor0.trans_eval(self.valid_data, eid, bid, model_file, self.tests_data)
-
+        self.tor.trans_eval(self.valid_data, eid, bid, model_file, self.tests_data)
         self.model.train()
-
-        return bleu
 
     def train(self):
 
@@ -247,8 +242,7 @@ class Trainer(object):
                 self.e_batch_logZ, self.e_sents, self.e_batch_logZ / self.e_sents))
             wlog('batch [{}], [{}] eval save model ...'.format(e_bidx, self.n_eval))
             if wargs.epoch_eval is True:
-                bleu = self.mt_eval(epo, e_bidx)
-                self.optim.update_learning_rate(bleu, epo)
+                self.mt_eval(epo, e_bidx)
             # decay the probability value epslion of scheduled sampling per batch
             if wargs.ss_type is not None: ss_eps_cur = schedule_sample_eps_decay(epo, ss_eps_cur)   # start from 1
             epo_time_consume = time.time() - epo_start

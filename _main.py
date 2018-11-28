@@ -147,12 +147,7 @@ def main():
         wargs.start_epoch = eid + 1
 
     else:
-        optim = Optim(
-            wargs.opt_mode, wargs.learning_rate, wargs.max_grad_norm,
-            learning_rate_decay=wargs.learning_rate_decay,
-            start_decay_from=wargs.start_decay_from,
-            last_valid_bleu=wargs.last_valid_bleu
-        )
+        optim = Optim(wargs.opt_mode, wargs.learning_rate, wargs.max_grad_norm)
         for n, p in nmtModel.named_parameters():
             # bias can not be initialized uniformly
             init_params(p, n, init_D=wargs.param_init_D, a=float(wargs.u_gain))

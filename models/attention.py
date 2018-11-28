@@ -17,7 +17,7 @@ class Additive_Attention(nn.Module):
 
         e_ij = self.a1( self.tanh(self.sa(s_tm1)[:, None, :] + uh) ).squeeze(-1)
 
-        e_ij = self.maskSoftmax(e_ij, mask=xs_mask, dim=1)
+        e_ij = self.maskSoftmax(e_ij, mask=xs_mask, dim=1)  # (batch_size, key_len)
         # weighted sum of the h_j: (batch_size, enc_hid_size)
         attend = (e_ij[:, :, None] * xs_h).sum(1)
 

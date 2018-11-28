@@ -126,7 +126,8 @@ class StackedTransDecoder(nn.Module):
         for layer_idx in range(self.n_layers - 1):
             s_t = self.cond_tgrus[layer_idx](s_t, y_mask)
 
-        alpha = alpha[:, 0, :].transpose(0, 1)  # get the attention of the first head, [key_len, batch_size]
+        alpha = alpha[:, 0, :]  # get the attention of the first head, [batch_size, key_len]
+        #alpha = alpha[:, 0, :].transpose(0, 1)  # get the attention of the first head, [key_len, batch_size]
         return context, s_t, y_tm1, alpha
 
     def forward(self, xs_h, ys, xs_mask, ys_mask, isAtt=False, ss_eps=1., oracles=None):

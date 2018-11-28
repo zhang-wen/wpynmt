@@ -314,6 +314,8 @@ class Nbs(object):
             if len(del_batch_idx) < n_remainings:
                 self.enc_src0 = self.enc_src0[filter(lambda x: x not in del_batch_idx, range(n_remainings))]
                 self.uh0 = self.uh0[filter(lambda x: x not in del_batch_idx, range(n_remainings))]
+            del enc_src, uh, y_im1, y_part_seqs, s_im1   # free the tensor
+
         # no early stop, back tracking
         n_remainings = len(self.beam[self.maxL])   # loop ends, how many sentences left
         self.no_early_best(n_remainings)

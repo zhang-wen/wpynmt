@@ -176,7 +176,7 @@ class Nbs(object):
             # -- Preparing decoded data seq -- #
             y_part_seqs = track_ys(i) # (preb_sz, trg_part_L)
             y_part_seqs = tc.tensor(y_part_seqs, requires_grad=False).view(-1, i)
-            if wargs.gpu_id: y_part_seqs = y_part_seqs.cuda()
+            if wargs.gpu_id is not None: y_part_seqs = y_part_seqs.cuda()
             # encoded_src0: (len_q, d_model)
             x_BL = self.x_BL.contiguous().view(-1, L).expand(preb_sz, L)
             # (1, x_len, src_nhids) -> (preb_sz, x_len, src_nhids)
@@ -253,6 +253,7 @@ class Nbs(object):
             for b in self.beam[i][0]:    # do not output state
                 debug(b[0:1] + b[-2:])
             hyp_scores = np.array([b[0] for b in self.beam[i][0]])
+            del y_part_seqs, x_BL, enc_srcs     # free the tensor
 
         # no early stop, back tracking
         #return back_tracking(self.beam, 0, self.no_early_best(), self.attent_probs)
