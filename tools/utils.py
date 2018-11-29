@@ -676,7 +676,7 @@ def sort_batches(srcs, trgs, slens, batch_size, k=1):
     #assert len(trgFs) == 1, 'Unsupport to sort validation set in k batches.'
     final_srcs, final_trgs, train_size = [], [], len(srcs)
     if k == 0:
-        wlog('Sorting the whole dataset by ascending order of source length ... ', False)
+        wlog('sorting the whole dataset by ascending order of source length ... ', False)
         # sort the whole training data by ascending order of source length
         #_, sorted_idx = tc.sort(tc.IntTensor(slens))
         sorted_idx = sorted(range(train_size), key=lambda k: slens[k])
@@ -684,7 +684,7 @@ def sort_batches(srcs, trgs, slens, batch_size, k=1):
         final_trgs = [trgs[k] for k in sorted_idx]
         wlog('done.')
     elif k > 1:
-        wlog('Sorting for each {} batches ... '.format(k), False)
+        wlog('sorting for each {} batches ... '.format(k), False)
         k_batch = batch_size * k
         number = int(math.ceil(train_size / k_batch))
         for start in range(number + 1):

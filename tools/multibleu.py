@@ -88,6 +88,7 @@ def closest_min_length(candidate, references):
 def safe_log(n):
     if n <= 0:
         return -9999999999
+        #return 0
     return log(n)
 
 def precision_n(candidate, references, n):
@@ -146,6 +147,18 @@ def multi_bleu(candidates, all_references, tokenize_fn=tokenize, ngram=4, char=F
     score = 100 * brevity_penalty * exp(
         sum(safe_log(precisions[n]) for n in range(ngram)) / ngram)
     prec_pc = [100 * p for p in precisions]
+    '''
+    for n in range(ngram):
+        if total[n] == 0:   # back to n-gram BLEU
+            if n == 0:
+                wlog('What ? Null references ... ')
+                bleu, prec_pc = 0., 0.
+                break
+            score = 100 * brevity_penalty * exp(
+                sum(safe_log(precisions[t]) for t in range(n)) / n)
+            prec_pc = [100 * precisions[t] for t in range(n)]
+            break
+    '''
 
     return score, prec_pc, brevity_penalty, cand_tot_length, ref_closest_length
 

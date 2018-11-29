@@ -90,6 +90,7 @@ def build_decoder(trg_emb):
                                  enc_hid_size = wargs.d_enc_hid,
                                  dec_hid_size = wargs.d_dec_hid,
                                  n_layers = wargs.n_dec_layers,
+                                 attention_type=wargs.attention_type,
                                  rnn_dropout_prob = wargs.rnn_dropout,
                                  out_dropout_prob = wargs.output_dropout)
     if wargs.decoder_type == 'att':

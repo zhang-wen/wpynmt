@@ -28,6 +28,7 @@ d_dec_hid, d_model = 512, 512
 ''' evaluate settings '''
 eval_valid_from = 500 if eval_small else 100000
 eval_valid_freq = 100 if eval_small else 5000
+attention_type = 'multihead_additive'
 if model_config == 't2t_tiny':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     lr_update_way = 'chen'  # 'noam' or 'chen'

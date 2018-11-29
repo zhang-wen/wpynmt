@@ -201,12 +201,12 @@ class Input(object):
         data = list(zip(self.x_list, self.y_list_files))
         x_tuple, y_tuple = zip(*[data[i] for i in tc.randperm(len(data))])
         self.x_list, self.y_list_files = list(x_tuple), list(y_tuple)
+        wlog('done.')
 
         slens = [len(self.x_list[k]) for k in range(self.n_sent)]
         self.x_list, self.y_list_files = sort_batches(self.x_list, self.y_list_files,
                                                       slens, wargs.batch_size,
                                                       wargs.sort_k_batches)
-        wlog('done.')
 
 
 
