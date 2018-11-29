@@ -40,7 +40,7 @@ class Trainer(object):
             self.look_xs = [train_data.x_list[i][0] for i in rand_idxs]
             self.look_ys = [train_data.y_list_files[i][0] for i in rand_idxs]
         self.look_tor = Translator(self.model, self.sv, self.tv)
-        self.n_eval = 0
+        self.n_eval = 1
         self.tor = Translator(self.model, self.sv, self.tv, print_att=wargs.print_att)
 
         self.snip_size, self.trunc_size = wargs.snip_size, wargs.trunc_size
@@ -141,8 +141,7 @@ class Trainer(object):
         if wargs.epoch_eval is not True and n_steps > wargs.eval_valid_from and \
            n_steps % wargs.eval_valid_freq == 0:
             eval_start = time.time()
-            self.n_eval += 1
-            wlog('\nAmong epo, batch [{}], [{}] eval save model ...'.format(e_bidx, self.n_eval))
+            wlog('\nAmong epoch, batch [{}], {}-th validation ...'.format(e_bidx, self.n_eval))
             self.mt_eval(epo, e_bidx)
             self.eval_spend = time.time() - eval_start
 
@@ -158,6 +157,7 @@ class Trainer(object):
         self.model.eval()
         self.tor.trans_eval(self.valid_data, eid, bid, model_file, self.tests_data)
         self.model.train()
+        self.n_eval += 1
 
     def train(self):
 
@@ -240,8 +240,8 @@ class Trainer(object):
             wlog('avg. |w-logZ|: {:.2f}/{}={:.2f} |s-logZ|: {:.2f}/{}={:.2f}'.format(
                 self.e_batch_logZ, self.e_ytoks, self.e_batch_logZ / self.e_ytoks,
                 self.e_batch_logZ, self.e_sents, self.e_batch_logZ / self.e_sents))
-            wlog('batch [{}], [{}] eval save model ...'.format(e_bidx, self.n_eval))
             if wargs.epoch_eval is True:
+                wlog('\nEnd epoch, batch [{}], {}-th validation ...'.format(e_bidx, self.n_eval))
                 self.mt_eval(epo, e_bidx)
             # decay the probability value epslion of scheduled sampling per batch
             if wargs.ss_type is not None: ss_eps_cur = schedule_sample_eps_decay(epo, ss_eps_cur)   # start from 1

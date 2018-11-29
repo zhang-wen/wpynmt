@@ -88,6 +88,6 @@ class Multihead_Additive_Attention(nn.Module):
 
         attn = self.final_proj(attn.sum(1))       # [batch_size, 2 * d_model]
 
-        return alpha, attn
+        return alpha[:, 0, :], attn
 
 

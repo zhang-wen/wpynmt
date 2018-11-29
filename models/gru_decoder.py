@@ -14,7 +14,7 @@ from tools.utils import *
 class StackedGRUDecoder(nn.Module):
 
     def __init__(self, trg_emb, enc_hid_size=512, dec_hid_size=512, n_layers=3,
-                 attention_type='additive', max_out=False,
+                 attention_type='multihead_additive', max_out=False,
                  rnn_dropout_prob=0.3, out_dropout_prob=0.5,
                  prefix='GRU_Decoder', **kwargs):
 
