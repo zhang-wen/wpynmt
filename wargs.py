@@ -71,8 +71,8 @@ if model_config == 'gru_tiny':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 2, 2
     learning_rate, u_gain, beta_2, adam_epsilon = 0.0012, 0.08, 0.999, 1e-6
-    s_step_decay, e_step_decay, warmup_steps = 4000, 32000, 8000
-    eval_valid_from, eval_valid_freq = 4000, 200
+    s_step_decay, e_step_decay, warmup_steps = 2000, 16000, 8000
+    eval_valid_from, eval_valid_freq = 3000, 300
     small, epoch_eval = True, False
     batch_size = 40 if batch_type == 'sents' else 2048
 if model_config == 'gru_base':
