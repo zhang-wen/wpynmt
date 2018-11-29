@@ -25,6 +25,9 @@ lr_update_way, param_init_D, learning_rate = 'chen', 'U', 0.001  # 'noam' or 'ch
 beta_1, beta_2, u_gain, adam_epsilon, warmup_steps, snip_size = 0.9, 0.98, 0.01, 1e-9, 500, 20
 max_grad_norm = 5.      # the norm of the gradient exceeds this, renormalize it to max_grad_norm
 d_dec_hid, d_model = 512, 512
+''' evaluate settings '''
+eval_valid_from = 500 if eval_small else 100000
+eval_valid_freq = 100 if eval_small else 5000
 if model_config == 't2t_tiny':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     lr_update_way = 'chen'  # 'noam' or 'chen'
@@ -71,9 +74,9 @@ if model_config == 'gru_tiny':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 2, 2
     learning_rate, u_gain, beta_2, adam_epsilon = 0.0012, 0.08, 0.999, 1e-6
-    s_step_decay, e_step_decay, warmup_steps = 2000, 16000, 8000
+    s_step_decay, e_step_decay, warmup_steps = 1000, 16000, 8000
     eval_valid_from, eval_valid_freq = 3000, 300
-    small, epoch_eval = True, False
+    small, epoch_eval, max_epochs = True, False, 50
     batch_size = 40 if batch_type == 'sents' else 2048
 if model_config == 'gru_base':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
@@ -140,9 +143,6 @@ pre_train = None
 fix_pre_params = False
 ''' display settings '''
 n_look, fix_looking = 5, False
-''' evaluate settings '''
-eval_valid_from = 500 if eval_small else 100000
-eval_valid_freq = 100 if eval_small else 5000
 
 ''' decoder settings '''
 search_mode = 1
