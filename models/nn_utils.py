@@ -78,15 +78,15 @@ class PositionwiseFeedForward(nn.Module):
     def forward(self, x):
 
         # (batch_size, input_len, model_dim) -> (batch_size, input_len, model_dim)
-        hidden = self.filter_transform(x)
-        hidden = self.relu(hidden)
+        x = self.filter_transform(x)
+        x = self.relu(x)
 
         if self.dropout_prob is not None and 0. < self.dropout_prob <= 1.0:
-            hidden = self.dropout(hidden)
+            x = self.dropout(x)
 
-        output = self.output_transform(hidden)
+        x = self.output_transform(x)
 
-        return output
+        return x
 
 
 

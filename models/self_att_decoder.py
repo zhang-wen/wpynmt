@@ -37,10 +37,12 @@ class SelfAttDecoderLayer(nn.Module):
                  att_dropout=0.3,
                  residual_dropout=0.,
                  relu_dropout=0.,
-                 self_attn_type='scaled-dot'):
+                 self_attn_type='scaled-dot',
+                 decoder_normalize_before=False):
 
         super(SelfAttDecoderLayer, self).__init__()
 
+        self.decoder_normalize_before = decoder_normalize_before
         self.layer_norm_0 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
 
         self.self_attn_type = self_attn_type
@@ -59,64 +61,74 @@ class SelfAttDecoderLayer(nn.Module):
         self.pos_ffn = PositionwiseFeedForward(d_model, d_ff_filter, d_model, dropout_prob=relu_dropout)
         self.drop_residual_2 = nn.Dropout(residual_dropout)
 
-        subsequent_mask = get_attn_subsequent_mask(MAX_SEQ_SIZE)
+        #subsequent_mask = get_attn_subsequent_mask(MAX_SEQ_SIZE)
         # Register self.mask as a buffer in TransformerDecoderLayer, so
         # it gets TransformerDecoderLayer's cuda behavior automatically.
-        self.register_buffer('subsequent_mask', subsequent_mask)
+        #self.register_buffer('subsequent_mask', subsequent_mask)
 
-    def forward(self, dec_inputs, enc_output, trg_self_attn_mask=None, trg_src_attn_mask=None):
+    def forward(self, x, enc_output, trg_self_attn_mask=None, trg_src_attn_mask=None):
         '''
         Args:
-            dec_inputs (FloatTensor):       [batch_size, trg_len, d_model]
+            x (FloatTensor):                [batch_size, trg_len, d_model]
             enc_output (FloatTensor):       [batch_size, src_len, d_model]
             trg_self_attn_mask (LongTensor):[batch_size, trg_len, trg_len]
             trg_src_attn_mask  (LongTensor):[batch_size, trg_len, src_len]
         Returns: (FloatTensor, FloatTensor, FloatTensor, FloatTensor):
             dec_output:         [batch_size, trg_len, d_model]
-            dec_self_attns:     [batch_size, n_head, trg_len, trg_len]
-            dec_enc_attns:      [batch_size, n_head, trg_len, src_len]
+            trg_self_attns:     [batch_size, n_head, trg_len, trg_len]
+            trg_src_attns:      [batch_size, n_head, trg_len, src_len]
             one_dec_enc_attn:   [batch_size, trg_len, src_len]
         '''
 
         trg_len = trg_self_attn_mask.size(1)
-        dec_mask = tc.gt(trg_self_attn_mask + self.subsequent_mask[:, :trg_len, :trg_len], 0)
+        future_mask = x.new(trg_len, trg_len).fill_(1.).type_as(trg_self_attn_mask).cuda()
+        trg_self_att_mask = tc.gt(trg_self_attn_mask + future_mask[None, :, :], 0)
 
         # target self-attention
-        norm_inputs = self.layer_norm_0(dec_inputs)     # 'n' for preprocess
+        residual = x
+        if self.decoder_normalize_before is True:
+            x = self.layer_norm_0(x)     # before 'n' for preprocess
 
-        # dec_mask: (batch_size, trg_len, trg_len)
+        # trg_self_att_mask: (batch_size, trg_len, trg_len)
         if self.self_attn_type == 'scaled-dot':
-            query, dec_self_attns = self.self_attn(
-                norm_inputs, norm_inputs, norm_inputs, attn_mask=dec_mask)
+            x, trg_self_attns = self.self_attn(x, x, x, attn_mask=trg_self_att_mask)
             # query:                [batch_size, trg_len, d_model]
-            # dec_self_attns:       [batch_size, n_head, trg_len, trg_len]
+            # trg_self_attns:       [batch_size, n_head, trg_len, trg_len]
             # one_dec_self_attn:    [batch_size, trg_len, trg_len]
         elif self.self_attn_type == 'average':
-            query, attn = self.self_attn(input_norm, mask=dec_mask,
+            query, attn = self.self_attn(input_norm, mask=trg_self_att_mask,
                                          layer_cache=layer_cache, step=step)
 
-        query = self.drop_residual_0(query) + dec_inputs  # 'da' for postprocess
+        x = self.drop_residual_0(x) + residual # 'da' for postprocess
+        if self.decoder_normalize_before is False:
+            x = self.layer_norm_0(x)
 
         # encoder-decoder attention
-        norm_query = self.layer_norm_1(query)   # 'n' for preprocess
+        residual = x
+        if self.decoder_normalize_before is True:
+            x = self.layer_norm_1(x)   # before 'n' for preprocess
 
         # trg_src_attn_mask: (batch_size, trg_len, src_len)
-        dec_output, dec_enc_attns = self.trg_src_attn(
-            enc_output, enc_output, norm_query, attn_mask=trg_src_attn_mask)
-        # dec_output:           [batch_size, trg_len, d_model]
-        # dec_enc_attns:        [batch_size, n_head, trg_len, src_len]
-        # one_dec_enc_attn:     [batch_size, trg_len, src_len]
+        x, trg_src_attns = self.trg_src_attn(enc_output, enc_output, x, attn_mask=trg_src_attn_mask)
+        # x:                    [batch_size, trg_len, d_model]
+        # trg_src_attns:        [batch_size, trg_len, src_len]
 
-        x = self.drop_residual_1(dec_output) + query    # 'da' for postprocess
+        x = self.drop_residual_1(x) + residual # before 'da' for postprocess
+        if self.decoder_normalize_before is False:
+            x = self.layer_norm_1(x)
 
         # feed forward
-        norm_x = self.layer_norm_2(x)   # 'n' for preprocess
+        residual = x
+        if self.decoder_normalize_before is True:
+            x = self.layer_norm_2(x)   # 'n' for preprocess
 
-        dec_output = self.pos_ffn(norm_x)
+        x = self.pos_ffn(x)
 
-        dec_output = self.drop_residual_2(dec_output) + x     # 'da' for postprocess
+        x = self.drop_residual_2(x) + residual     # 'da' for postprocess
+        if self.decoder_normalize_before is False:
+            x = self.layer_norm_2(x)
 
-        return dec_output, dec_self_attns, dec_enc_attns
+        return x, trg_self_attns, trg_src_attns
 
 ''' A decoder model with self attention mechanism '''
 class SelfAttDecoder(nn.Module):
@@ -130,7 +142,8 @@ class SelfAttDecoder(nn.Module):
                  residual_dropout=0.,
                  relu_dropout=0.,
                  self_attn_type='scaled-dot',
-                 proj_share_weight=False):
+                 proj_share_weight=False,
+                 decoder_normalize_before=False):
 
         wlog('Transformer decoder ========================= ')
         wlog('\ttrg_word_emb:       {}'.format(trg_emb.we.weight.size()))
@@ -156,7 +169,9 @@ class SelfAttDecoder(nn.Module):
             for _ in range(n_layers)])
 
         self.trg_word_emb = trg_emb
-        self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
+        if decoder_normalize_before is True:
+            self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
+        self.decoder_normalize_before = decoder_normalize_before
 
     def forward(self, trg_seq, src_seq, enc_output):
 
@@ -175,18 +190,20 @@ class SelfAttDecoder(nn.Module):
 
         _, dec_output = self.trg_word_emb(trg_seq)
 
-        nlayer_outputs, nlayer_self_attns, nlayer_attns = [], [], []
+        #nlayer_outputs, nlayer_self_attns, nlayer_attns = [], [], []
         for dec_layer in self.layer_stack:
-            dec_output, dec_self_attns, dec_enc_attns = dec_layer(
+            dec_output, trg_self_attns, trg_src_attns = dec_layer(
                 dec_output, enc_output,
                 trg_self_attn_mask=trg_self_attn_mask,
                 trg_src_attn_mask=trg_src_attn_mask)
             #nlayer_outputs += [dec_output]
-            nlayer_self_attns += [dec_self_attns]
-            nlayer_attns += [dec_enc_attns]
+            #nlayer_self_attns += [trg_self_attns]
+            #nlayer_attns += [trg_src_attns]
 
-        dec_output = self.layer_norm(dec_output)    # layer norm for the last layer output
+        if self.decoder_normalize_before is True:
+            dec_output = self.layer_norm(dec_output)    # layer norm for the last layer output
 
-        return (dec_output, nlayer_self_attns, nlayer_attns)
+        #return (dec_output, nlayer_self_attns, nlayer_attns)
+        return dec_output, trg_self_attns, trg_src_attns
 
 

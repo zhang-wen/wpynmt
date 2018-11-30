@@ -182,7 +182,7 @@ class Trainer(object):
 
             #for bidx in range(self.n_batches):
             bidx = 0
-            while True:
+            while self.optim.learning_rate > wargs.min_lr:
                 if self.train_data.eos() is True: break
                 b_counter += 1
                 e_bidx = shuffled_bidx[bidx] if self.epoch_shuffle_batch else bidx

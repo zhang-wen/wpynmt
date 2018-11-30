@@ -30,8 +30,9 @@ class NMTModel(nn.Module):
             logits, attends, contexts = results['logit'], results['attend'], results['context']
         if wargs.encoder_type == 'att':
             enc_output, _ = self.encoder(src)
-            logits, _, nlayer_attns = self.decoder(trg, src, enc_output)
-            attends = nlayer_attns[-1][:, 0, :, :]
+            logits, _, attends = self.decoder(trg, src, enc_output)
+            #logits, _, nlayer_attns = self.decoder(trg, src, enc_output)
+            #attends = nlayer_attns[-1]
         elif wargs.encoder_type == 'tgru':
             enc_output = self.encoder(src, src_mask)    # batch_size, max_L, hidden_size
             results = self.decoder(enc_output, trg, src_mask, trg_mask, isAtt=True)

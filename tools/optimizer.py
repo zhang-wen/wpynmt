@@ -19,11 +19,26 @@ class Optim(object):
         self.n_current_steps = 0
         self.warmup_steps = wargs.warmup_steps
 
+        if wargs.lr_update_way == 'invsqrt':
+            self.warmup_end_lr = wargs.learning_rate
+            self.warmup_init_lr = wargs.warmup_init_lr if wargs.warmup_init_lr >= 0 else self.warmup_end_lr
+            # linearly warmup for the first args.warmup_updates
+            self.lr_step = (self.warmup_end_lr - self.warmup_init_lr) / wargs.warmup_steps
+            # then, decay prop. to the inverse square root of the update number
+            self.decay_factor = self.warmup_end_lr * ( wargs.warmup_steps**0.5 )
+            # initial learning rate
+            self.learning_rate = self.warmup_init_lr
+
     def __repr__(self):
 
-        return '\nOptimizer: {}\nLearning rate: {}\nGrad norm: {}\nwarmup steps: {} ' \
+        rst =  '\nOptimizer: {}\nLearning rate: {}\nGrad norm: {}\nwarmup steps: {} ' \
                 '\ncurrent steps: {}\n'.format(self.opt_mode, self.learning_rate, self.max_grad_norm,
                     self.warmup_steps, self.n_current_steps)
+        if wargs.lr_update_way == 'invsqrt':
+            rst += 'warmup init lr: {}\nlr step: {}\ndecay factor: {}\nend lr: {}'.format(
+                self.warmup_init_lr, self.lr_step, self.decay_factor, self.warmup_end_lr)
+
+        return rst
 
     def init_optimizer(self, params):
 
@@ -52,6 +67,9 @@ class Optim(object):
         else:
             wlog('Do not support this opt_mode {}'.format(self.opt_mode))
 
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = self.learning_rate
+
     def step(self):
 
         # update the learning rate
@@ -63,14 +81,21 @@ class Optim(object):
             )
             #self.learning_rate = factor
             #wlog('lrate = {}'.format(factor))
+            self.learning_rate = wargs.learning_rate * factor
         elif wargs.lr_update_way == 'chen':
             n, s, e = wargs.n_co_models, wargs.s_step_decay, wargs.e_step_decay
             factor = min( 1 + ( self.n_current_steps * (n - 1) ) / ( n * self.warmup_steps ),
                          n,
                          n * ( (2 * n) ** ( ( s - n * self.n_current_steps ) / ( e - s ) ) ) )
+            self.learning_rate = wargs.learning_rate * factor
+        elif wargs.lr_update_way == 'invsqrt':
+            if self.n_current_steps < wargs.warmup_steps:
+                self.learning_rate = self.warmup_init_lr + self.n_current_steps*self.lr_step
+            else:
+                self.learning_rate = self.decay_factor * ( self.n_current_steps ** (-0.5) )
 
-        self.learning_rate = wargs.learning_rate * factor
         #wlog('lr0 * factor = {} * {} = {}'.format(wargs.learning_rate, factor, self.learning_rate))
+        wlog('lr = {}'.format(self.learning_rate))
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = self.learning_rate
 

@@ -186,24 +186,20 @@ class Nbs(object):
             # -- Decoding -- #
             debug('Whole x seq: {}'.format(x_BL.size()))
             debug('Part y seq: {}'.format(y_part_seqs.size()))
-            dec_output, _, nlayer_attns = self.decoder(y_part_seqs, x_BL, enc_srcs)
-            alpha_ij = nlayer_attns[-1][:, 0, :, :]
+            #dec_output, _, nlayer_attns = self.decoder(y_part_seqs, x_BL, enc_srcs)
+            dec_output, _, alpha_ij = self.decoder(y_part_seqs, x_BL, enc_srcs)
+            #alpha_ij = nlayer_attns[-1]
             debug('History decoder output: {}'.format(dec_output.size()))
             # (preb_sz, part_Len, d_model) -> (preb_sz, d_model)
             dec_output = dec_output[:, -1, :] # (preb_sz, d_model) previous decoder hidden state
             debug('Previous decoder output: {}'.format(dec_output.size()))
             alpha_ij = alpha_ij[:, -1, :].permute(1, 0)    # (B, trgL, x_len) -> (x_len, B)
             if self.attent_probs is not None:
-                #print 'alpha_ij: ', alpha_ij.size()
                 self.attent_probs[0].append(alpha_ij)
             self.C[2] += 1
             self.C[3] += 1
             debug('For beam[{}], pre-beam ids: {}'.format(i - 1, prevb_id))
             next_ces = self.classifier(dec_output)
-            '''
-            dec_output = self.model.tgt_word_proj(dec_output)
-            next_ces = -self.model.prob_projection(dec_output)
-            '''
             next_ces = next_ces.cpu().data.numpy()
             cand_scores = hyp_scores[:, None] + next_ces
             cand_scores_flat = cand_scores.flatten()

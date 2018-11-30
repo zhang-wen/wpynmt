@@ -31,11 +31,12 @@ eval_valid_freq = 100 if eval_small else 5000
 attention_type = 'multihead_additive'
 if model_config == 't2t_tiny':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    lr_update_way = 'chen'  # 'noam' or 'chen'
-    param_init_D = 'U'      # 'U': uniform , 'X': xavier, 'N': normal
-    d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 8, 2, 2
-    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.5, 0.1, 0.1, 0.1
-    learning_rate, warmup_steps, u_gain, beta_2 = 0.0005, 300, 0.08, 0.98
+    lr_update_way = 'invsqrt'  # 'noam' or 'chen' or 'invsqrt'
+    param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
+    d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 2048, 8, 2, 2
+    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0., 0., 0.3
+    learning_rate, warmup_steps, u_gain, beta_2 = 0.0005, 4000, 0.08, 0.98
+    warmup_init_lr, min_lr = 1e-06, 1e-09
     s_step_decay, e_step_decay = 4000, 32000
     small, eval_valid_from, eval_valid_freq = True, 5000, 100
     epoch_eval, max_grad_norm = True, 5.

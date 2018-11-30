@@ -20,7 +20,8 @@ class SelfAttEncoderLayer(nn.Module):
                  d_ff_filter=2048,
                  att_dropout=0.3,
                  residual_dropout=0.0,
-                 relu_dropout=0.0):
+                 relu_dropout=0.0,
+                 encoder_normalize_before=False):
 
         super(SelfAttEncoderLayer, self).__init__()
         self.layer_norm_0 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
@@ -29,30 +30,40 @@ class SelfAttEncoderLayer(nn.Module):
         self.layer_norm_1 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
         self.pos_ffn = PositionwiseFeedForward(d_model, d_ff_filter, d_model, dropout_prob=relu_dropout)
         self.dropout_1 = nn.Dropout(residual_dropout)
+        self.encoder_normalize_before = encoder_normalize_before
 
-    def forward(self, inputs, self_attn_mask=None):
-        # inputs (FloatTensor):         [batch_size, src_L, d_model]
+    def forward(self, x, self_attn_mask=None):
+        # x (FloatTensor):         [batch_size, src_L, d_model]
         # self_attn_mask(LongTensor):   [batch_size, src_L, src_L]
         # return:                       [batch_size, src_L, d_model]
 
         # self attention
-        norm_inputs = self.layer_norm_0(inputs)   # 'n' for source self attention preprocess
-        x, enc_self_attns = self.self_attn(
-            norm_inputs, norm_inputs, norm_inputs, attn_mask=self_attn_mask)
-        # enc_output: (B_q, L_q, d_model), enc_self_attns: (B_q, n_head, L_q, L_k)
+        residual = x
+        if self.encoder_normalize_before is True:
+            x = self.layer_norm_0(x)   # before 'n' for source self attention preprocess
+        x, enc_self_attns = self.self_attn(x, x, x, attn_mask=self_attn_mask)
+        # enc_output: (B_q, L_q, d_model), enc_self_attns: (B_q, L_q, L_k)
 
-        x = self.dropout_0(x) + inputs     # 'da' for self attention postprocess
+        x = self.dropout_0(x) + residual     # 'da' for self attention postprocess
+        if self.encoder_normalize_before is False:
+            x = self.layer_norm_0(x)   # after 'n' for source self attention preprocess
 
+        residual = x
         # feed forward
-        norm_x = self.layer_norm_1(x)        # 'n' for feedforward preprocess
-        enc_output = self.pos_ffn(norm_x)
+        if self.encoder_normalize_before is True:
+            x = self.layer_norm_1(x)        # before 'n' for feedforward preprocess
 
-        enc_output = self.dropout_1(enc_output) + x   # 'da' for feedforward postprocess
+        x = self.pos_ffn(x)
 
-        # enc_output:           [batch_size, src_L, d_model]
-        # enc_self_attns:       [batch_size, n_head, src_L, src_L]
+        x = self.dropout_1(x) + residual    # 'da' for feedforward postprocess
+
+        if self.encoder_normalize_before is False:
+            x = self.layer_norm_1(x)        # after 'n' for feedforward preprocess
+
+        # x:                    [batch_size, src_L, d_model]
+        # enc_self_attns:       [batch_size, src_L, src_L]
         # one_enc_self_attn:    [batch_size, src_L, src_L]
-        return enc_output, enc_self_attns
+        return x, enc_self_attns
 
 ''' A encoder model with self attention mechanism '''
 class SelfAttEncoder(nn.Module):
@@ -65,7 +76,8 @@ class SelfAttEncoder(nn.Module):
                  d_ff_filter=2048,
                  att_dropout=0.3,
                  residual_dropout=0.0,
-                 relu_dropout=0.0):
+                 relu_dropout=0.0,
+                 encoder_normalize_before=False):
 
         super(SelfAttEncoder, self).__init__()
 
@@ -87,29 +99,34 @@ class SelfAttEncoder(nn.Module):
                                 d_ff_filter,
                                 att_dropout=att_dropout,
                                 residual_dropout=residual_dropout,
-                                relu_dropout=relu_dropout)
+                                relu_dropout=relu_dropout,
+                                encoder_normalize_before=encoder_normalize_before)
             for _ in range(n_layers)])
 
-        self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
+        if encoder_normalize_before is True:
+            self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
+        self.encoder_normalize_before = encoder_normalize_before
 
     def forward(self, src_seq):
 
         batch_size, src_L = src_seq.size()
         # word embedding look up
         _, enc_output = self.embed(src_seq)
-        nlayer_outputs, nlayer_attns = [], []
+        #nlayer_outputs, nlayer_attns = [], []
         src_self_attn_mask = src_seq.data.eq(PAD).unsqueeze(1).expand(batch_size, src_L, src_L) # 0. is 1 !!!
         for enc_layer in self.layer_stack:
-            # enc_output: (B_q, L_q, d_model), enc_self_attns: (B, n_head, L_q, L_k)
+            # enc_output: (B_q, L_q, d_model), enc_self_attns: (B, L_q, L_k)
             enc_output, enc_self_attns = enc_layer(enc_output, src_self_attn_mask)
             #nlayer_outputs += [enc_output]
-            nlayer_attns += [enc_self_attns]
+            #nlayer_attns += [enc_self_attns]
 
-        enc_output = self.layer_norm(enc_output)    # layer norm for the last layer output
+        if self.encoder_normalize_before is True:
+            enc_output = self.layer_norm(enc_output)    # layer norm for the last layer output
 
         # nlayer_outputs:   n_layers: [ [batch_size, src_L, d_model], ... ]
-        # nlayer_attns:     n_layers: [ [batch_size, n_head, src_L, src_L], ... ]
+        # nlayer_attns:     n_layers: [ [batch_size, src_L, src_L], ... ]
         # one_enc_self_attn:          [batch_size, src_L, src_L]
-        return (enc_output, nlayer_attns)
+        #return (enc_output, nlayer_attns)
+        return enc_output, enc_self_attns
 
 

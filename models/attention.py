@@ -1,6 +1,9 @@
+from __future__ import print_function
+
 import math
 import torch as tc
 import torch.nn as nn
+import torch.nn.functional as F
 from nn_utils import MaskSoftmax
 
 class Additive_Attention(nn.Module):
@@ -88,7 +91,7 @@ class Multihead_Additive_Attention(nn.Module):
 
         attn = self.final_proj(attn.sum(1))       # [batch_size, 2 * d_model]
 
-        alpha = alpha[:, 0, :]  # get the attention of the first head, [batch_size, key_len]
+        alpha = alpha.sum(1) / self.n_head # get the attention of the first head, [batch_size, key_len]
         #alpha = alpha[:, 0, :].transpose(0, 1)  # get the attention of the first head, [key_len, batch_size]
 
         return alpha, attn
@@ -153,15 +156,18 @@ class MultiHeadAttention(nn.Module):
             attn_mask = attn_mask.unsqueeze(1).expand_as(attn).byte()    # expand along n_head dim
             assert attn_mask.size() == attn.size(), 'Attention mask shape {} mismatch ' \
                     'with Attention logit tensor shape {}.'.format(attn_mask.size(), attn.size())
-            attn.masked_fill_(attn_mask, -1e18)
+            attn.masked_fill_(attn_mask, float('-inf'))
 
         # 3. apply attention dropout and compute context vectors
         attn = self.mSoftMax(attn)
-        attn_drop = self.dropout(attn)              # [batch_size, n_head, query_len, key_len]
-        context = tc.matmul(attn_drop, value_up)    # [batch_size, n_head, query_len, dim_per_head]
+        #attn = F.softmax(attn, dim=-1)
+        attn = self.dropout(attn)              # [batch_size, n_head, query_len, key_len]
+        context = tc.matmul(attn, value_up)    # [batch_size, n_head, query_len, dim_per_head]
         context = unshape_head(context)             # [batch_size, query_len, n_head * dim_per_head]
 
         output = self.final_proj(context)   # [batch_size, query_len, d_model]
+
+        attn = attn.sum(dim=1) / self.n_head    # average attention weights over heads
 
         return output, attn
 
