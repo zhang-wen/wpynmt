@@ -22,7 +22,7 @@ class StackedGRUDecoder(nn.Module):
 
         self.s_init = nn.Linear(2 * enc_hid_size, dec_hid_size, bias=True)
         self.tanh = nn.Tanh()
-        self.word_emb = trg_emb
+        self.trg_word_emb = trg_emb
         n_embed = trg_emb.n_embed
         f = lambda name: str_cat(prefix, name)  # return 'Encoder_' + parameters name
 
@@ -99,7 +99,7 @@ class StackedGRUDecoder(nn.Module):
             if isinstance(y_tm1, int): y_tm1 = tc.tensor([y_tm1], dtype=tc.long, requires_grad=False)
             elif isinstance(y_tm1, list): y_tm1 = tc.tensor(y_tm1, dtype=tc.long, requires_grad=False)
             if wargs.gpu_id is not None: y_tm1 = y_tm1.cuda()
-            _, y_tm1 = self.word_emb(y_tm1)
+            _, y_tm1 = self.trg_word_emb(y_tm1)
 
         state = self.gru_cell(y_tm1, s_tm1)
         if y_mask is not None: state = state * y_mask[:, None]
@@ -120,7 +120,7 @@ class StackedGRUDecoder(nn.Module):
         batch_size, y_Lm1 = ys.size(0), ys.size(1)
 
         if ys.dim() == 3: ys_e = ys
-        else: _, ys_e = self.word_emb(ys)   # (batch_size, y_Lm1, d_trg_emb)
+        else: _, ys_e = self.trg_word_emb(ys)   # (batch_size, y_Lm1, d_trg_emb)
 
         logits, attends, contexts, y_tm1_model = [], [], [], ys_e[:, 0, :]
         for k in range(y_Lm1):
@@ -135,7 +135,7 @@ class StackedGRUDecoder(nn.Module):
             if wargs.ss_type is not None and ss_eps < 1. and wargs.greed_sampling is True:
                 logit = self.classifier.get_a(logit, noise=wargs.greed_gumbel_noise)
                 y_tm1_model = logit.max(-1)[1]
-                _, y_tm1_model = self.word_emb(y_tm1_model)
+                _, y_tm1_model = self.trg_word_emb(y_tm1_model)
                 #wlog('word-level greedy sampling, noise {}'.format(wargs.greed_gumbel_noise))
 
         logits = tc.stack(logits, dim=1) * ys_mask[:, :, None]    # (batch_size, y_Lm1, d_dec_hid)

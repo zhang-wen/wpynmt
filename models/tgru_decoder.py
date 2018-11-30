@@ -24,7 +24,7 @@ class StackedTransDecoder(nn.Module):
 
         self.s_init = nn.Linear(2 * enc_hid_size, dec_hid_size, bias=True)
         self.tanh = nn.Tanh()
-        self.word_emb = trg_emb
+        self.trg_word_emb = trg_emb
         n_embed = trg_emb.n_embed
         f = lambda name: str_cat(prefix, name)  # return 'Encoder_' + parameters name
 
@@ -107,7 +107,7 @@ class StackedTransDecoder(nn.Module):
             if isinstance(y_tm1, int): y_tm1 = tc.tensor([y_tm1], dtype=tc.long, requires_grad=False)
             elif isinstance(y_tm1, list): y_tm1 = tc.tensor(y_tm1, dtype=tc.long, requires_grad=False)
             if wargs.gpu_id is not None: y_tm1 = y_tm1.cuda()
-            _, y_tm1 = self.word_emb(y_tm1)
+            _, y_tm1 = self.trg_word_emb(y_tm1)
 
         #if xs_mask is not None:
         #    xs_mask = tc.tensor(xs_mask, requires_grad=False)
@@ -119,15 +119,13 @@ class StackedTransDecoder(nn.Module):
         # state: (batch_size, d_dec_hid)
 
         alpha, context = self.attention(state, xs_h, uh, xs_mask)
-        # alpha:   [batch_size, n_head, key_len]
+        # alpha:   [batch_size, key_len]
         # context: [batch_size, 2 * d_dec_hid]
 
         s_t = self.cond_lgru(context, state, y_mask)
         for layer_idx in range(self.n_layers - 1):
             s_t = self.cond_tgrus[layer_idx](s_t, y_mask)
 
-        alpha = alpha[:, 0, :]  # get the attention of the first head, [batch_size, key_len]
-        #alpha = alpha[:, 0, :].transpose(0, 1)  # get the attention of the first head, [key_len, batch_size]
         return context, s_t, y_tm1, alpha
 
     def forward(self, xs_h, ys, xs_mask, ys_mask, isAtt=False, ss_eps=1., oracles=None):
@@ -138,7 +136,7 @@ class StackedTransDecoder(nn.Module):
 
         if isAtt is True: attends = []
         if ys.dim() == 3: ys_e = ys
-        else: _, ys_e = self.word_emb(ys)   # (batch_size, max_tlen_batch - 1, d_trg_emb)
+        else: _, ys_e = self.trg_word_emb(ys)   # (batch_size, max_tlen_batch - 1, d_trg_emb)
 
         sent_logit, y_tm1_model = [], ys_e[:, 0, :]
         for k in range(y_Lm1):
@@ -151,7 +149,7 @@ class StackedTransDecoder(nn.Module):
             if wargs.ss_type is not None and ss_eps < 1. and wargs.greed_sampling is True:
                 logit = self.classifier.get_a(logit, noise=wargs.greed_gumbel_noise)
                 y_tm1_model = logit.max(-1)[1]
-                _, y_tm1_model = self.word_emb(y_tm1_model)
+                _, y_tm1_model = self.trg_word_emb(y_tm1_model)
                 #wlog('word-level greedy sampling, noise {}'.format(wargs.greed_gumbel_noise))
 
             if isAtt is True: attends.append(alpha_ij)

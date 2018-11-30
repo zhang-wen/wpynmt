@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import wargs
-from tools.utils import *
+from tools.utils import wlog, PAD, schedule_bow_lambda
 from models.nn_utils import MaskSoftmax, MyLogSoftmax
 
 class Classifier(nn.Module):
@@ -17,14 +17,13 @@ class Classifier(nn.Module):
         super(Classifier, self).__init__()
         if emb_loss is True:
             assert trg_word_emb is not None, 'embedding loss needs target embedding'
-            #self.trg_word_emb = trg_word_emb.we.weight
             self.trg_word_emb = trg_word_emb.we
             self.euclidean_dist = nn.PairwiseDistance(p=2, eps=1e-06, keepdim=True)
         self.emb_loss = emb_loss
         if bow_loss is True:
             wlog('using the bag of words loss')
             self.sigmoid = nn.Sigmoid()
-            self.ctx_map_vocab = nn.Linear(2*input_size, output_size, bias=True)
+            self.ctx_map_vocab = nn.Linear(2 * input_size, output_size, bias=True)
             #self.softmax = MaskSoftmax()
         self.bow_loss = bow_loss
 

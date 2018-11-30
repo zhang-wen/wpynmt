@@ -27,7 +27,7 @@ def str1(content, encoding='utf-8'):
 
 #DEBUG = True
 DEBUG = False
-MAX_SEQ_SIZE = 200
+MAX_SEQ_SIZE = 1000
 PAD_WORD = '<pad>'
 UNK_WORD = 'unk'
 BOS_WORD = '<b>'
@@ -39,7 +39,7 @@ UNK = RESERVED_TOKENS.index(UNK_WORD)  # 1
 BOS = RESERVED_TOKENS.index(BOS_WORD)  # 2
 EOS = RESERVED_TOKENS.index(EOS_WORD)  # 3
 
-def _load_model(model_path):
+def load_model(model_path):
     wlog('Loading pre-trained model ... from {} '.format(model_path), 0)
     state_dict = tc.load(model_path, map_location=lambda storage, loc: storage)
     if len(state_dict) == 4:
@@ -338,7 +338,7 @@ def dec_conf():
              wargs.m_threshold,
              True if wargs.with_batch else False,
              True if wargs.vocab_norm else False,
-             True if wargs.len_norm else False,
+             wargs.len_norm,
              True if wargs.with_mv else False,
              wargs.merge_way,
              True if wargs.avg_att else False

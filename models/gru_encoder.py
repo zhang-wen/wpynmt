@@ -24,7 +24,7 @@ class StackedGRUEncoder(nn.Module):
 
         super(StackedGRUEncoder, self).__init__()
 
-        self.word_emb = src_emb
+        self.src_word_emb = src_emb
         n_embed = src_emb.n_embed
         self.enc_hid_size = enc_hid_size
         f = lambda name: str_cat(prefix, name)  # return 'Encoder_' + parameters name
@@ -38,7 +38,7 @@ class StackedGRUEncoder(nn.Module):
     def forward(self, xs, xs_mask=None):
 
         if xs.dim() == 3: xs_e = xs
-        else: x_w_e, xs_e = self.word_emb(xs)
+        else: x_w_e, xs_e = self.src_word_emb(xs)
 
         self.bigru.flatten_parameters()
 

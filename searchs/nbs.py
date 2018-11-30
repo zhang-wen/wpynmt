@@ -215,7 +215,7 @@ class Nbs(object):
 
             debug(y_im1)
             debug(y_part_seqs)
-            y_im1 = self.decoder.word_emb(y_part_seqs)[1][:, -1, :]
+            y_im1 = self.decoder.trg_word_emb(y_part_seqs)[1][:, -1, :]
             step_output = self.decoder.step(s_im1, enc_src, uh, y_im1)
             a_i, s_i, y_im1, alpha_ij = step_output[:4]
             # a_i: (n_remainings*p, enc_hid_size), s_i: (n_remainings*p, dec_hid_size),

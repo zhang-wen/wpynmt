@@ -8,7 +8,6 @@ import time
 import numpy
 import collections
 from shutil import copyfile
-from torch.autograd import Variable
 
 import wargs
 if wargs.decoder_type in ('rnn', 'gru', 'tgru'): from searchs.nbs import *
@@ -296,7 +295,6 @@ class Translator(object):
         final_bleu = multi_bleu if wargs.use_multi_bleu is True else mteval_bleu
 
         return final_bleu
-        #return mteval_bleu_opost if wargs.with_postproc is True else mteval_bleu
 
     def trans_tests(self, tests_data, eid, bid):
 

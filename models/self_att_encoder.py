@@ -1,6 +1,7 @@
 import torch.nn as nn
 from tools.utils import *
-from nn_utils import PositionwiseFeedForward, MultiHeadAttention
+from nn_utils import PositionwiseFeedForward
+from attention import MultiHeadAttention
 
 '''
     Args:

@@ -2,7 +2,7 @@
 max_seq_len = 128
 worse_counter = 0
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset, model_config = 'zhen', 'gru_tiny'
+dataset, model_config = 'toy', 't2t_tiny'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
 batch_size = 40 if batch_type == 'sents' else 4096
 gpu_id = [0]
@@ -26,7 +26,7 @@ beta_1, beta_2, u_gain, adam_epsilon, warmup_steps, snip_size = 0.9, 0.98, 0.01,
 max_grad_norm = 5.      # the norm of the gradient exceeds this, renormalize it to max_grad_norm
 d_dec_hid, d_model = 512, 512
 ''' evaluate settings '''
-eval_valid_from = 500 if eval_small else 100000
+eval_valid_from = 500 if eval_small else 50000
 eval_valid_freq = 100 if eval_small else 5000
 attention_type = 'multihead_additive'
 if model_config == 't2t_tiny':
@@ -57,7 +57,7 @@ if model_config == 't2t_big':
 if model_config == 'tgru_tiny':
     encoder_type, decoder_type = 'tgru', 'tgru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 8, 2, 2
-    learning_rate, warmup_steps, u_gain, beta_2, adam_epsilon = 0.01, 500, 0.08, 0.999, 1e-6
+    learning_rate, warmup_steps, u_gain, beta_2, adam_epsilon = 0.001, 500, 0.08, 0.999, 1e-6
     s_step_decay, e_step_decay, warmup_steps = 500, 32000, 500
     small, epoch_eval = True, True
     batch_size = 40 if batch_type == 'sents' else 2048
@@ -77,19 +77,20 @@ if model_config == 'gru_tiny':
     learning_rate, u_gain, beta_2, adam_epsilon = 0.0012, 0.08, 0.999, 1e-6
     s_step_decay, e_step_decay, warmup_steps = 1000, 16000, 8000
     eval_valid_from, eval_valid_freq = 3000, 300
-    small, epoch_eval, max_epochs = True, False, 50
+    small, epoch_eval, max_epochs = True, True, 50
     batch_size = 40 if batch_type == 'sents' else 2048
 if model_config == 'gru_base':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 2, 2
+    d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 4, 2
     #d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid = 1024, 1024, 1024, 1024
     learning_rate, u_gain, beta_2, adam_epsilon = 0.001, 0.08, 0.999, 1e-6
-    s_step_decay, e_step_decay, warmup_steps = 10000, 96000, 8000
+    s_step_decay, e_step_decay, warmup_steps = 8000, 64000, 8000
     #snip_size = 10
 
 if dataset == 'toy':
     val_tst_dir = './data/'
     val_src_suffix, val_ref_suffix, val_prefix, tests_prefix = 'zh', 'en', 'devset1_2.lc', ['devset3.lc']
+    tests_prefix = None
     max_epochs = 50
 elif dataset == 'deen':
     #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
@@ -103,6 +104,7 @@ elif dataset == 'zhen':
     #dev_prefix = 'nist02'
     val_src_suffix, val_ref_suffix = 'src.BPE', 'trg.tok.sb'
     val_prefix, tests_prefix = 'mt06_u8', ['mt02_u8', 'mt03_u8', 'mt04_u8', 'mt05_u8', 'mt08_u8']
+    tests_prefix = None
     n_src_vcb_plan, n_trg_vcb_plan = 50000, 50000
     max_epochs, with_bpe = 15, True
 elif dataset == 'uyzh':
@@ -127,7 +129,7 @@ inputs_data = dir_data + 'inputs.pt'
 
 ''' training '''
 epoch_shuffle_train, epoch_shuffle_batch = True, False
-sort_k_batches = 1      # 0 for all sort, 1 for no sort
+sort_k_batches = 100      # 0 for all sort, 1 for no sort
 save_one_model = True
 start_epoch = 1
 trg_bow, emb_loss, bow_loss = True, False, False

@@ -1,4 +1,4 @@
-python wtrans.py \
+python bin/wtrans.py \
 	--model-file wvalid/best.model.pt \
-	--test-file 1 \
-	--search-mode 3
+	--input-file devset3.lc
+

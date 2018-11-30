@@ -2,23 +2,19 @@
 from __future__ import division
 from __future__ import absolute_import
 
+import io
 import os
+import sys
 import math
 import numpy
 import torch as tc
+from collections import defaultdict
 
 import wargs
 from tools.utils import *
-from tools.vocab import Vocab
-
-import sys
-import tools.text_encoder as text_encoder
-import tools.tokenizer as tokenizer
-from collections import defaultdict
 from tools.inputs import *
+from tools.vocab import Vocab
 from tools.bleu import zh_to_chars
-import json
-import io
 
 def extract_vocab(data_file, vocab_file, max_vcb_size=30000, max_seq_len=50, char=False):
 

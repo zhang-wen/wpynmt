@@ -1,14 +1,20 @@
+#!/usr/bin/env python
+
+import os
+import sys
+sys.path.append(os.getcwd())
+
 import torch as tc
 from torch import cuda
 
 import wargs
-from inputs_handler import *
+from tools.inputs_handler import *
 from tools.inputs import Input
 from tools.optimizer import Optim
 from models.losser import Classifier
 from models.embedding import WordEmbedding
 from models.model_builder import build_NMT
-from tools.utils import init_dir, wlog, _load_model
+from tools.utils import init_dir, wlog
 
 # Check if CUDA is available
 if cuda.is_available():
@@ -23,7 +29,6 @@ if wargs.gpu_id is not None:
         wargs.gpu_id[0], len(wargs.gpu_id), wargs.gpu_id))
 
 from trainer import *
-from translate import Translator
 
 import torch.backends.cudnn as cudnn
 cudnn.benchmark = True
@@ -120,7 +125,8 @@ def main():
 
     if wargs.pre_train is not None:
         assert os.path.exists(wargs.pre_train)
-        _dict = _load_model(wargs.pre_train)
+        from tools.utils import load_model
+        _dict = load_model(wargs.pre_train)
         # initializing parameters of interactive attention model
         class_dict = None
         if len(_dict) == 5:

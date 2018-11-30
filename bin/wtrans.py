@@ -1,32 +1,29 @@
-#( -*- coding: utf-8 -*-
+# coding=utf-8
 from __future__ import division
 
 import os
 import sys
 import time
 import argparse
-import subprocess
 import torch as tc
+import torch.nn as nn
 from torch import cuda
 
+import sys
+sys.path.append(os.getcwd())
 import wargs
+
 from tools.inputs import Input
-from tools.utils import _load_model
-
 from translate import Translator
-from inputs_handler import extract_vocab, wrap_tst_data, wrap_data
-from models.losser import *
+from tools.utils import load_model, wlog, dec_conf, init_dir, append_file
+from tools.inputs_handler import extract_vocab, wrap_tst_data
+from models.losser import Classifier
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 
     A = argparse.ArgumentParser(prog='NMT translator ... ')
-
-    #A.add_argument('--model', dest='model', default=0,
-    #               help='0: groundhog, 1: rnnsearch, 2: ia, 3: ran, 4: rn, 5: sru, 6: cyknet')
-
-    A.add_argument("-m", '--model-file', required=True, dest='model_file', help='model file')
-
-    A.add_argument("-i", '--input-file', dest='input_file', default=None,
+    A.add_argument('-m', '--model-file', required=True, dest='model_file', help='model file')
+    A.add_argument('-i', '--input-file', dest='input_file', default=None,
                    help='name of file to be translated')
 
     '''
@@ -61,24 +58,10 @@ if __name__ == "__main__":
     '''
 
     args = A.parse_args()
-
-    #model = args.model
     model_file = args.model_file
-
-    wlog('Using model: {}'.format(wargs.model))
-
-    if wargs.model == 0: from models.groundhog import *
-    elif wargs.model == 1: from models.rnnsearch import *
-    elif wargs.model == 2: from models.rnnsearch_ia import *
-    elif wargs.model == 3: from models.ran_agru import *
-    elif wargs.model == 4: from models.rnnsearch_rn import *
-    elif wargs.model == 5: from models.nmt_sru import *
-    elif wargs.model == 6: from models.nmt_cyk import *
-
     '''
     search_mode = args.search_mode
     beam_size = args.beam_size
-
     useValid = args.use_valid
     useBatch = args.use_batch
     vocabNorm = args.vocab_norm
@@ -86,50 +69,43 @@ if __name__ == "__main__":
     useMv = args.use_mv
     mergeWay = args.merge_way
     avgAtt = args.avg_att
-
     m_threshold = args.m_threshold
-
     switchs = [useBatch, vocabNorm, lenNorm, useMv, mergeWay, avgAtt]
     '''
 
-    assert os.path.exists(wargs.src_dict) and os.path.exists(wargs.trg_dict), 'need vocabulary ...'
-    src_vocab = extract_vocab(None, wargs.src_dict)
-    trg_vocab = extract_vocab(None, wargs.trg_dict)
+    wlog('Starting load vocabularies ... ')
+    assert os.path.exists(wargs.src_vcb) and os.path.exists(wargs.trg_vcb), 'need vocabulary ...'
+    src_vocab = extract_vocab(None, wargs.src_vcb)
+    trg_vocab = extract_vocab(None, wargs.trg_vcb)
+    n_src_vcb, n_trg_vcb = src_vocab.size(), trg_vocab.size()
+    wlog('Vocabulary size: |source|={}, |target|={}'.format(n_src_vcb, n_trg_vcb))
 
-    src_vocab_size, trg_vocab_size = src_vocab.size(), trg_vocab.size()
-    wlog('Vocabulary size: |source|={}, |target|={}'.format(src_vocab_size, trg_vocab_size))
-
-    wlog('Start decoding ... init model ... ', 0)
-
-    nmtModel = NMT(src_vocab_size, trg_vocab_size)
-    #classifier = Classifier(wargs.out_size, trg_vocab_size,
-    #                        nmtModel.decoder.trg_lookup_table if wargs.proj_share_weight is True else None)
-
-    if wargs.gpu_id:
-        cuda.set_device(wargs.gpu_id[0])
-        wlog('Push model onto GPU {} ... '.format(wargs.gpu_id[0]), 0)
-        nmtModel.cuda()
-        #classifier.cuda()
-    else:
-        wlog('Push model onto CPU ... ', 0)
-        nmtModel.cpu()
-        #classifier.cpu()
-    wlog('done.')
-
-    _dict = _load_model(model_file)
+    _dict = load_model(model_file)
     if len(_dict) == 4: model_dict, eid, bid, optim = _dict
     elif len(_dict) == 5: model_dict, class_dict, eid, bid, optim = _dict
+    from models.embedding import WordEmbedding
+    src_emb = WordEmbedding(n_src_vcb, wargs.d_src_emb, wargs.position_encoding, prefix='Src')
+    trg_emb = WordEmbedding(n_trg_vcb, wargs.d_trg_emb, wargs.position_encoding, prefix='Trg')
+    from models.model_builder import build_NMT
+    nmtModel = build_NMT(src_emb, trg_emb)
+    classifier = Classifier(wargs.d_dec_hid, n_trg_vcb, trg_emb, loss_norm=wargs.loss_norm,
+                            label_smoothing=wargs.label_smoothing, emb_loss=wargs.emb_loss, bow_loss=wargs.bow_loss)
+    nmtModel.classifier = classifier
 
+    if wargs.gpu_id is not None:
+        wlog('push model onto GPU {} ... '.format(wargs.gpu_id), 0)
+        nmtModel = nn.DataParallel(nmtModel, device_ids=wargs.gpu_id)
+        nmtModel.to(tc.device('cuda'))
+    else:
+        wlog('push model onto CPU ... ', 0)
+        nmtModel.to(tc.device('cpu'))
+    wlog('done.')
     nmtModel.load_state_dict(model_dict)
-    #classifier.load_state_dict(class_dict)
-    #nmtModel.classifier = classifier
-
     wlog('\nFinish to load model.')
 
     dec_conf()
 
     nmtModel.eval()
-    #nmtModel.classifier.eval()
     tor = Translator(nmtModel, src_vocab.idx2key, trg_vocab.idx2key, print_att=wargs.print_att)
 
     if not args.input_file:
@@ -147,27 +123,9 @@ if __name__ == "__main__":
         #s = '我 想 预约 一下 理发 。'
         #s = '玻利维亚 举行 总统 与 国会 选举 。'
 
-        #s = '经过 国际 奥委会 的 不懈 努力 , 意大利 方面 在 冬奥会 开幕 前 四 天 作出 让步 , 承诺' \
-        #' 冬奥会 期间 警方 不 会 进入 奥运村 搜查 运动员 驻地 , 但是 , 药检 呈 阳性 的 运动员 仍将' \
-        #' 接受 意大利 检察 机关 的 调查 。'
-
-        #s = '谢瓦尔德纳泽说 , 格鲁吉亚 内务 部队 、 警察 部队 、 安全 部门 和 国防部 在 去年 秋天'\
-        #' 开展 的 特别 行动 中 , 已 将 潜入 潘基 西峡 谷 的 外国 武装 团伙 清理 干净 , 但 不 能 排除'\
-        #' 部分 非法 武装 分子 以 难民 身份 继续 躲藏 在 潘基西 峡谷 。'
-
-        #s = '询以 美国 将 于 何时 提出 旨在 执行 安理会 一四四一 号 决议案 的 后续 决议案 , 佛莱谢'\
-        #' 表示 「 现在 言之过早 」 , 但是 美国 将 会 就 内容 措词 问题 与 盟国 磋商 。'
-
-        #s = '新华社 华盛顿 1月 31日 电 ( 记者 王振华 ) 美国 商务部 31日 发布 的 报告 显示 , 尽管'\
-        #' 美国 的 个人 消费 去年 12月份 出现 了 较 快 的 增长 , 但是 全 年 的 增长 幅度 仅 与 经济'\
-        #' 发生 衰退 的 2001年 持平 。'
-
         #s = '在 路易斯 安那 , 我 看见 一棵 松树 在 生长 , 它 独自 站 在 那里 , 枝条 上 挂着 苔藓 。'
         #t = 'I saw in Louisiana a live-oak growing, all alone stood it and the 3)moss hung down' \
         #    ' from the branches.'
-
-        #s = '好吧 , 我 想 我 会 一直 爱 , 但 我 从未 有 过 , 直 到 我 被 包裹 在 密西西比州 的 男人'\
-        #' 的 怀抱 。'
 
         #s = "章启月 昨天 也 证实 了 俄罗斯 媒体 的 报道 , 说 中国 国家 主席 江泽民 前晚 应 " \
         #        "俄罗斯 总统 普京 的 要求 与 他 通 了 电话 , 双方 主要 是 就中 俄 互利 合作 " \
@@ -178,68 +136,57 @@ if __name__ == "__main__":
         #        "ports this year and refused to confirm whether the country 's vice president " \
         #        "hu jintao will visit the united states as planned ."
 
-        #s = '当 林肯 去 新奥尔良 时 , 我 听到 密西 西比 河 的 歌声 。'
-        #t = "When Lincoln goes to New Orleans, I hear Mississippi river's singing sound"
-        s = '新奥尔良 是 爵士 音乐 的 发源 地 。'
+        s = '当 林肯 去 新奥尔良 时 , 我 听到 密西 西比 河 的 歌声 。'
+        t = "When Lincoln goes to New Orleans, I hear Mississippi river's singing sound"
+        #s = '新奥尔良 是 爵士 音乐 的 发源 地 。'
         #s = '新奥尔良 以 其 美食 而 闻名 。'
         # = '休斯顿 是 仅 次于 新奥尔良 和 纽约 的 美国 第三 大 港 。'
-        t = "When Lincoln goes to New Orleans, I hear Mississippi river's singing sound"
 
-        s = [src_vocab.key2idx[x] if x in src_vocab.key2idx else UNK for x in s.split(' ')]
-        #wlog(s)
-        s = tc.Tensor([s])
-        t = [trg_vocab.key2idx[x] if x in trg_vocab.key2idx else UNK for x in t.split(' ')]
-        #wlog(t)
-        t = tc.Tensor([t])
-        pv = tc.Tensor([0, 10782, 2102, 1735, 4, 1829, 1657, 29999])
+        s = [[src_vocab.key2idx[x] if x in src_vocab.key2idx else UNK for x in s.split(' ')]]
+        t = [[trg_vocab.key2idx[x] if x in trg_vocab.key2idx else UNK for x in t.split(' ')]]
         tor.trans_samples(s, t)
         sys.exit(0)
 
     input_file = '{}{}.{}'.format(wargs.val_tst_dir, args.input_file, wargs.val_src_suffix)
+    input_abspath = os.path.realpath(input_file)
+    wlog('Translating test file {} ... '.format(input_abspath))
     ref_file = '{}{}.{}'.format(wargs.val_tst_dir, args.input_file, wargs.val_ref_suffix)
-    #input_file = args.input_file
-
-    wlog('Translating test file {} ... '.format(input_file))
-    test_src_tlst, test_src_lens = wrap_tst_data(input_file, src_vocab)
-    test_input_data = Input(test_src_tlst, None, 1, volatile=True)
+    test_src_tlst, _ = wrap_tst_data(input_abspath, src_vocab, char=wargs.src_char)
+    test_input_data = Input(test_src_tlst, None, 1, batch_sort=False)
 
     batch_tst_data = None
     if os.path.exists(ref_file):
         wlog('With force decoding test file {} ... to get alignments'.format(input_file))
         wlog('\t\tRef file {}'.format(ref_file))
+        from tools.inputs_handler import wrap_data
         tst_src_tlst, tst_trg_tlst = wrap_data(wargs.val_tst_dir, args.input_file,
                                                wargs.val_src_suffix, wargs.val_ref_suffix,
                                                src_vocab, trg_vocab, False, False, 1000000)
         batch_tst_data = Input(tst_src_tlst, tst_trg_tlst, 1, batch_sort=False)
 
-    trans, alns, _ = tor.single_trans_file(test_input_data, batch_tst_data=batch_tst_data)
-    #trans, alns = tor.single_trans_file(test_input_data)
-    #trans = tor.multi_process(viter, n_process=nprocess)
+    trans, alns = tor.single_trans_file(test_input_data, batch_tst_data=batch_tst_data)
 
     if wargs.search_mode == 0: p1 = 'greedy'
     elif wargs.search_mode == 1: p1 = 'nbs'
     elif wargs.search_mode == 2: p1 = 'cp'
-    p2 = 'GPU' if wargs.gpu_id else 'CPU'
+    p2 = 'gpu' if wargs.gpu_id else 'cpu'
     p3 = 'wb' if wargs.with_batch else 'wob'
 
-    #input_file_name = input_file if '/' not in input_file else input_file.split('/')[-1]
-    outdir = 'wexp-{}-{}-{}-{}-{}'.format(args.input_file, p1, p2, p3, model_file.split('/')[0])
-    if wargs.ori_search: outdir = '{}-{}'.format(outdir, 'ori')
+    outdir = 'wout_{}_{}_{}'.format(p1, p2, p3)
+    if wargs.ori_search: outdir = '{}_{}'.format(outdir, 'ori')
     init_dir(outdir)
-    outprefix = outdir + '/trans_' + args.input_file
-    # wTrans/trans
-    file_out = "{}_e{}_upd{}_b{}m{}_bch{}".format(
-        outprefix, eid, bid, wargs.beam_size, wargs.search_mode, wargs.with_batch)
+    outprefix = '{}/{}'.format(outdir, args.input_file)
+    # wout_nbs_gpu_wb_wvalid/nist06_
+    file_out = '{}_e{}_b{}_beam{}'.format(outprefix, eid, bid, wargs.beam_size)
 
     mteval_bleu = tor.write_file_eval(file_out, trans, args.input_file, alns)
-
     bleus_record_fname = '{}/record_bleu.log'.format(outdir)
     bleu_content = 'epoch [{}], batch[{}], BLEU score : {}'.format(eid, bid, mteval_bleu)
     with open(bleus_record_fname, 'a') as f:
         f.write(bleu_content + '\n')
         f.close()
 
-    sfig = '{}.{}'.format(outprefix, 'sfig')
+    sfig = '{}/{}'.format(outdir, 'record_bleu.sfig')
     sfig_content = ('{} {} {} {} {}').format(
         #alpha,
         #beta,

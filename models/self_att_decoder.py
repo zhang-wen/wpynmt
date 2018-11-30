@@ -2,7 +2,8 @@ import numpy as np
 import torch as tc
 import torch.nn as nn
 from tools.utils import MAX_SEQ_SIZE, wlog, PAD
-from nn_utils import PositionwiseFeedForward, MultiHeadAttention
+from nn_utils import PositionwiseFeedForward
+from attention import MultiHeadAttention
 
 '''
 Get an attention mask to avoid using the subsequent info.
@@ -144,8 +145,6 @@ class SelfAttDecoder(nn.Module):
 
         super(SelfAttDecoder, self).__init__()
 
-        self.embed = trg_emb
-
         self.layer_stack = nn.ModuleList([
             SelfAttDecoderLayer(d_model,
                                 n_head,
@@ -156,6 +155,7 @@ class SelfAttDecoder(nn.Module):
                                 self_attn_type=self_attn_type)
             for _ in range(n_layers)])
 
+        self.trg_word_emb = trg_emb
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
 
     def forward(self, trg_seq, src_seq, enc_output):
@@ -173,7 +173,7 @@ class SelfAttDecoder(nn.Module):
         trg_src_attn_mask = src_seq.data.eq(PAD).unsqueeze(1).expand(src_B, trg_L, src_L)
         trg_self_attn_mask = trg_seq.data.eq(PAD).unsqueeze(1).expand(trg_B, trg_L, trg_L)
 
-        _, dec_output = self.embed(trg_seq)
+        _, dec_output = self.trg_word_emb(trg_seq)
 
         nlayer_outputs, nlayer_self_attns, nlayer_attns = [], [], []
         for dec_layer in self.layer_stack:

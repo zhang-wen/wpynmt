@@ -21,8 +21,8 @@ class Optim(object):
 
     def __repr__(self):
 
-        return '\nOptimizer: {}\nLearning rate: {}\nGrad norm: {}\nwarmup steps: {}, ' \
-                '\ncurrent steps: {}'.format(self.opt_mode, self.learning_rate, self.max_grad_norm,
+        return '\nOptimizer: {}\nLearning rate: {}\nGrad norm: {}\nwarmup steps: {} ' \
+                '\ncurrent steps: {}\n'.format(self.opt_mode, self.learning_rate, self.max_grad_norm,
                     self.warmup_steps, self.n_current_steps)
 
     def init_optimizer(self, params):

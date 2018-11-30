@@ -18,12 +18,12 @@ class StackedTransEncoder(nn.Module):
                  src_emb,
                  enc_hid_size=512,
                  rnn_dropout=0.3,
-                 n_layers=3,
+                 n_layers=1,
                  prefix='TGRU_Encoder', **kwargs):
 
         super(StackedTransEncoder, self).__init__()
 
-        self.word_emb = src_emb
+        self.src_word_emb = src_emb
         n_embed = src_emb.n_embed
         self.enc_hid_size = enc_hid_size
         f = lambda name: str_cat(prefix, name)  # return 'Encoder_' + parameters name
@@ -45,7 +45,7 @@ class StackedTransEncoder(nn.Module):
 
         batch_size, max_L = xs.size(0), xs.size(1)
         if xs.dim() == 3: xs_e = xs
-        else: x_w_e, xs_e = self.word_emb(xs)
+        else: x_w_e, xs_e = self.src_word_emb(xs)
 
         r_anns, l_anns = [], []
         f_h = b_h = h0 if h0 else tc.zeros(batch_size, self.enc_hid_size, requires_grad=False)
