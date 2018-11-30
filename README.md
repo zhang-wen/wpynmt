@@ -1,23 +1,56 @@
 # wpynmt
 
-1. update on 2018.2.7
+### Runtime Environment
+This system has been tested in the following environment.
++ 64bit-Ubuntu
++ Python 2.7
++ > Pytorch 0.4
 
-	a. update the file structures, different models corresponding to different searchers;
-	b. fix some other small bugs;
-	c. add some tricks:
-			such as copy trg vocab weight;
-			fit segmentation for source sentence;
-			add layer norm for gru.py;
-			with bpe support, but need to preprocess by open-source bpe tools;
-			add rn model and sru model;
-	d. fix the force-decoding alignment generation for AER calculation when translating a file
+### Data Preparation
+Name the file names of the datasets according to the variables in the ``wargs.py`` file  
 
+#### Training Dataset
 
-# translate
++ **Source side**: ``dir_data + train_prefix + '.' + train_src_suffix``  
++ **Target side**: ``dir_data + train_prefix + '.' + train_trg_suffix``  
 
-python wtrans.py -m model_file -i 900
+#### Validation Set
+
++ **Source side**: ``val_tst_dir + val_prefix + '.' + val_src_suffix``    
++ **Target side**:  
+	+ One reference  
+``val_tst_dir + val_prefix + '.' + val_ref_suffix``  
+	+ multiple references  
+``val_tst_dir + val_prefix + '.' + val_ref_suffix + '0'``  
+``val_tst_dir + val_prefix + '.' + val_ref_suffix + '1'``  
+``......``
+
+#### Test Dataset
++ **Source side**: ``val_tst_dir + test_prefix + '.' + val_src_suffix``  
++ **Target side**:  
+``for test_prefix in tests_prefix``
+	+ One reference  
+``val_tst_dir + test_prefix + '.' + val_ref_suffix``  
+	+ multiple references  
+``val_tst_dir + test_prefix + '.' + val_ref_suffix + '0'``  
+``val_tst_dir + test_prefix + '.' + val_ref_suffix + '1'``  
+``......``
+ 
+### Training
+Before training, parameters about training in the file ``wargs.py`` should be configured  
+then, run ``sh train.sh``
+
+### Inference
+Assume that the trained model is named ``best.model.pt``  
+Before decoding, parameters about inference in the file ``wargs.py`` should be configured  
++ translate one sentence  
+run ``python bin/wtrans.py -m best.model.pt``
++ translate one file  
+	+ put the test file to be translated into the path ``val_tst_dir + '/'``  
+	+ run ``sh trans.sh filename``
 
 # evaluate alignment
 
 score-alignments.py -d path/900 -s zh -t en -g wa -i force_decoding_alignment
+
 
