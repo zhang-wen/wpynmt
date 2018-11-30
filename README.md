@@ -4,7 +4,7 @@
 This system has been tested in the following environment.
 + 64bit-Ubuntu
 + Python 2.7
-+ > Pytorch 0.4
++ \> Pytorch 0.4
 
 ### Data Preparation
 Name the file names of the datasets according to the variables in the ``wargs.py`` file  
