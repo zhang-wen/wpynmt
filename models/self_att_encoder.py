@@ -1,5 +1,6 @@
 import torch.nn as nn
 from tools.utils import *
+import torch.nn.functional as F
 from nn_utils import PositionwiseFeedForward
 from attention import MultiHeadAttention
 
@@ -26,10 +27,9 @@ class SelfAttEncoderLayer(nn.Module):
         super(SelfAttEncoderLayer, self).__init__()
         self.layer_norm_0 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
         self.self_attn = MultiHeadAttention(d_model, n_head, dropout_prob=att_dropout)
-        self.dropout_0 = nn.Dropout(residual_dropout)
+        self.residual_dropout_prob = residual_dropout
         self.layer_norm_1 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
         self.pos_ffn = PositionwiseFeedForward(d_model, d_ff_filter, d_model, dropout_prob=relu_dropout)
-        self.dropout_1 = nn.Dropout(residual_dropout)
         self.encoder_normalize_before = encoder_normalize_before
 
     def forward(self, x, self_attn_mask=None):
@@ -44,7 +44,8 @@ class SelfAttEncoderLayer(nn.Module):
         x, enc_self_attns = self.self_attn(x, x, x, attn_mask=self_attn_mask)
         # enc_output: (B_q, L_q, d_model), enc_self_attns: (B_q, L_q, L_k)
 
-        x = self.dropout_0(x) + residual     # 'da' for self attention postprocess
+        x = F.dropout(x, p=self.residual_dropout_prob, training=self.training)
+        x = residual + x     # 'da' for self attention postprocess
         if self.encoder_normalize_before is False:
             x = self.layer_norm_0(x)   # after 'n' for source self attention preprocess
 
@@ -55,7 +56,8 @@ class SelfAttEncoderLayer(nn.Module):
 
         x = self.pos_ffn(x)
 
-        x = self.dropout_1(x) + residual    # 'da' for feedforward postprocess
+        x = F.dropout(x, p=self.residual_dropout_prob, training=self.training)
+        x = residual + x   # 'da' for feedforward postprocess
 
         if self.encoder_normalize_before is False:
             x = self.layer_norm_1(x)        # after 'n' for feedforward preprocess

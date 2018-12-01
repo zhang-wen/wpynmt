@@ -31,15 +31,15 @@ eval_valid_freq = 100 if eval_small else 5000
 attention_type = 'multihead_additive'
 if model_config == 't2t_tiny':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    lr_update_way = 'invsqrt'  # 'noam' or 'chen' or 'invsqrt'
+    lr_update_way = 'chen'  # 'noam' or 'chen' or 'invsqrt'
     param_init_D = 'X'      # 'U': uniform , 'X': xavier, 'N': normal
-    d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 2048, 8, 2, 2
-    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0., 0., 0.3
-    learning_rate, warmup_steps, u_gain, beta_2 = 0.0005, 4000, 0.08, 0.98
-    warmup_init_lr, min_lr = 1e-06, 1e-09
-    s_step_decay, e_step_decay = 4000, 32000
+    d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 8, 2, 2
+    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.5, 0., 0., 0.1
+    learning_rate, warmup_steps, u_gain, beta_2 = 0.0005, 300, 0.08, 0.98
+    warmup_init_lr, min_lr = 1e-04, 1e-09
+    s_step_decay, e_step_decay = 400, 4000
     small, eval_valid_from, eval_valid_freq = True, 5000, 100
-    epoch_eval, max_grad_norm = True, 5.
+    epoch_eval, max_grad_norm = True, 0.1
     batch_size = 40 if batch_type == 'sents' else 2048
 if model_config == 't2t_base':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
@@ -75,7 +75,7 @@ if model_config == 'tgru_big':
 if model_config == 'gru_tiny':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 2, 2
-    learning_rate, u_gain, beta_2, adam_epsilon = 0.0012, 0.08, 0.999, 1e-6
+    learning_rate, u_gain, beta_2, adam_epsilon = 0.0002, 0.08, 0.999, 1e-6
     s_step_decay, e_step_decay, warmup_steps = 1000, 16000, 8000
     eval_valid_from, eval_valid_freq = 3000, 300
     small, epoch_eval, max_epochs = True, True, 50
@@ -91,7 +91,7 @@ if model_config == 'gru_base':
 if dataset == 'toy':
     val_tst_dir = './data/'
     val_src_suffix, val_ref_suffix, val_prefix, tests_prefix = 'zh', 'en', 'devset1_2.lc', ['devset3.lc']
-    tests_prefix = None
+    #tests_prefix = None
     max_epochs = 50
 elif dataset == 'deen':
     #val_tst_dir = '/home5/wen/2.data/iwslt14-de-en/'
@@ -154,7 +154,7 @@ with_batch, ori_search, vocab_norm = 1, 0, 1
 len_norm = 2    # 0: no noraml, 1: length normal, 2: alpha-beta
 with_mv, avg_att, m_threshold, ngram = 0, 0, 100., 3
 merge_way = 'Y'
-beam_size, alpha_len_norm, beta_cover_penalty = 4, 0.6, 0.
+beam_size, alpha_len_norm, beta_cover_penalty = 8, 0.6, 0.
 print_att = True
 
 copy_attn, segments = False, False

@@ -1,6 +1,7 @@
 import math
 import torch as tc
 import torch.nn as nn
+import torch.nn.functional as F
 
 epsilon = 1e-20
 
@@ -70,8 +71,6 @@ class PositionwiseFeedForward(nn.Module):
         super(PositionwiseFeedForward, self).__init__()
         self.filter_transform = nn.Linear(input_size, filter_size, bias=True)
         self.relu = nn.ReLU()
-        if dropout_prob is not None and 0. < dropout_prob <= 1.0:
-            self.dropout = nn.Dropout(dropout_prob)
         self.dropout_prob = dropout_prob
         self.output_transform = nn.Linear(filter_size, output_size, bias=True)
 
@@ -81,8 +80,7 @@ class PositionwiseFeedForward(nn.Module):
         x = self.filter_transform(x)
         x = self.relu(x)
 
-        if self.dropout_prob is not None and 0. < self.dropout_prob <= 1.0:
-            x = self.dropout(x)
+        x = F.dropout(x, p=self.dropout_prob, training=self.training)
 
         x = self.output_transform(x)
 

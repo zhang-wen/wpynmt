@@ -1,6 +1,7 @@
 import numpy as np
 import torch as tc
 import torch.nn as nn
+import torch.nn.functional as F
 from tools.utils import MAX_SEQ_SIZE, wlog, PAD
 from nn_utils import PositionwiseFeedForward
 from attention import MultiHeadAttention
@@ -51,15 +52,13 @@ class SelfAttDecoderLayer(nn.Module):
         elif self_attn_type == 'average':
             self.self_attn = AverageAttention(d_model, dropout_prob=att_dropout)
 
-        self.drop_residual_0= nn.Dropout(residual_dropout)
+        self.residual_dropout_prob = residual_dropout
 
         self.layer_norm_1 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
         self.trg_src_attn = MultiHeadAttention(d_model, n_head, dropout_prob=att_dropout)
-        self.drop_residual_1 = nn.Dropout(residual_dropout)
 
         self.layer_norm_2 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
         self.pos_ffn = PositionwiseFeedForward(d_model, d_ff_filter, d_model, dropout_prob=relu_dropout)
-        self.drop_residual_2 = nn.Dropout(residual_dropout)
 
         #subsequent_mask = get_attn_subsequent_mask(MAX_SEQ_SIZE)
         # Register self.mask as a buffer in TransformerDecoderLayer, so
@@ -99,7 +98,8 @@ class SelfAttDecoderLayer(nn.Module):
             query, attn = self.self_attn(input_norm, mask=trg_self_att_mask,
                                          layer_cache=layer_cache, step=step)
 
-        x = self.drop_residual_0(x) + residual # 'da' for postprocess
+        x = F.dropout(x, p=self.residual_dropout_prob, training=self.training)
+        x = residual + x    # 'da' for postprocess
         if self.decoder_normalize_before is False:
             x = self.layer_norm_0(x)
 
@@ -113,7 +113,8 @@ class SelfAttDecoderLayer(nn.Module):
         # x:                    [batch_size, trg_len, d_model]
         # trg_src_attns:        [batch_size, trg_len, src_len]
 
-        x = self.drop_residual_1(x) + residual # before 'da' for postprocess
+        x = F.dropout(x, p=self.residual_dropout_prob, training=self.training)
+        x = residual + x    # before 'da' for postprocess
         if self.decoder_normalize_before is False:
             x = self.layer_norm_1(x)
 
@@ -124,7 +125,8 @@ class SelfAttDecoderLayer(nn.Module):
 
         x = self.pos_ffn(x)
 
-        x = self.drop_residual_2(x) + residual     # 'da' for postprocess
+        x = F.dropout(x, p=self.residual_dropout_prob, training=self.training)
+        x = residual + x    # 'da' for postprocess
         if self.decoder_normalize_before is False:
             x = self.layer_norm_2(x)
 

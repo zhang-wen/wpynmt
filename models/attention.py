@@ -113,7 +113,7 @@ class MultiHeadAttention(nn.Module):
         self.linear_values = nn.Linear(d_model, n_head * self.dim_per_head)
         self.linear_query = nn.Linear(d_model, n_head * self.dim_per_head)
         self.mSoftMax = MaskSoftmax()
-        self.dropout = nn.Dropout(dropout_prob)
+        self.dropout_prob = dropout_prob
         self.final_proj = nn.Linear(d_model, d_model)
 
     '''
@@ -159,10 +159,13 @@ class MultiHeadAttention(nn.Module):
             attn.masked_fill_(attn_mask, float('-inf'))
 
         # 3. apply attention dropout and compute context vectors
-        attn = self.mSoftMax(attn)
+        attn = self.mSoftMax(attn, dim=-1)
         #attn = F.softmax(attn, dim=-1)
-        attn = self.dropout(attn)              # [batch_size, n_head, query_len, key_len]
-        context = tc.matmul(attn, value_up)    # [batch_size, n_head, query_len, dim_per_head]
+        attn_weights = F.dropout(attn, p=self.dropout_prob, training=self.training) # [batch_size, n_head, query_len, key_len]
+        #context = tc.matmul(attn, value_up)    # [batch_size, n_head, query_len, dim_per_head]
+        context = tc.bmm(attn.contiguous().view(-1, query_len, key_len),
+                         value_up.contiguous().view(-1, key_len, dim_per_head))    # [batch_size, n_head, query_len, dim_per_head]
+        context = context.view(batch_size, n_head, query_len, dim_per_head)
         context = unshape_head(context)             # [batch_size, query_len, n_head * dim_per_head]
 
         output = self.final_proj(context)   # [batch_size, query_len, d_model]
