@@ -72,8 +72,8 @@ def main():
 
     batch_valid = None
     if wargs.val_prefix is not None:
-        val_src_file = '{}{}.{}'.format(wargs.val_tst_dir, wargs.val_prefix, wargs.val_src_suffix)
-        val_trg_file = '{}{}.{}'.format(wargs.val_tst_dir, wargs.val_prefix, wargs.val_ref_suffix)
+        val_src_file = os.path.join(wargs.val_tst_dir, '{}.{}'.format(wargs.val_prefix, wargs.val_src_suffix))
+        val_trg_file = os.path.join(wargs.val_tst_dir, '{}.{}'.format(wargs.val_prefix, wargs.val_ref_suffix))
         wlog('\nPreparing validation set from {} and {} ... '.format(val_src_file, val_trg_file))
         valid_src_tlst, valid_trg_tlst = wrap_data(wargs.val_tst_dir, wargs.val_prefix,
                                                    wargs.val_src_suffix, wargs.val_ref_suffix,
