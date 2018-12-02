@@ -16,8 +16,9 @@ class Nbs(object):
 
         if isinstance(model, tc.nn.DataParallel): self.model = model.module
         else: self.model = model
-
         self.decoder = self.model.decoder
+        self.classifier = self.decoder.classifier
+
         self.k = k
         self.ptv = ptv
         self.noise = noise
@@ -101,7 +102,7 @@ class Nbs(object):
                 # alpha_ij: (srcL, 1)
                 preb_alpha.append(alpha_ij.squeeze(-1))
 
-                next_ces = self.decoder.classifier(logit)
+                next_ces = self.classifier(logit)
                 next_ces = next_ces.cpu().data.numpy()
                 next_ces_flat = next_ces.flatten()    # (1,vocsize) -> (vocsize,)
                 ranks_idx_flat = part_sort(next_ces_flat, self.k - len(self.hyps[0]))
@@ -228,7 +229,7 @@ class Nbs(object):
 
             # (n_remainings*prevb_sz, vocab_size)
             #wlog('bleu sampling, noise {}'.format(self.noise))
-            next_ces = self.model.classifier(logit, noise=self.noise)
+            next_ces = self.classifier(logit, noise=self.noise)
             next_ces = next_ces.cpu().data.numpy()
             voc_size = next_ces.shape[1]
             cand_scores = hyp_scores[:, None] + next_ces
@@ -381,7 +382,7 @@ class Nbs(object):
             # logit = self.decoder.logit(s_i)
             logit = self.decoder.step_out(s_im1, y_im1, a_i)
             self.C[3] += 1
-            next_ces = self.model.classifier(logit)
+            next_ces = self.classifier(logit)
             next_ces = next_ces.cpu().data.numpy()
             #cand_scores = hyp_scores[:, None] - numpy.log(next_scores)
             cand_scores = hyp_scores[:, None] + next_ces

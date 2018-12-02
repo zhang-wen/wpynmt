@@ -12,7 +12,7 @@ class NMTModel(nn.Module):
         self.encoder = encoder
         self.decoder = decoder
 
-    def forward(self, src, trg, src_mask=None, trg_mask=None):
+    def forward(self, src, trg, src_mask=None, trg_mask=None, ss_prob=1.):
         '''
             src:        [batch_size, src_len]
             trg:        [batch_size, trg_len]
@@ -26,7 +26,7 @@ class NMTModel(nn.Module):
         contexts = None
         if wargs.encoder_type == 'gru':
             enc_output = self.encoder(src, src_mask)    # batch_size, max_L, hidden_size
-            results = self.decoder(enc_output, trg, src_mask, trg_mask)
+            results = self.decoder(enc_output, trg, src_mask, trg_mask, ss_prob=ss_prob)
             logits, attends, contexts = results['logit'], results['attend'], results['context']
         if wargs.encoder_type == 'att':
             enc_output, _ = self.encoder(src)

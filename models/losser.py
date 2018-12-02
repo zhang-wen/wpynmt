@@ -9,6 +9,7 @@ import wargs
 from tools.utils import wlog, PAD, schedule_bow_lambda
 from models.nn_utils import MaskSoftmax, MyLogSoftmax
 
+epsilon = 1e-20
 class Classifier(nn.Module):
 
     def __init__(self, input_size, output_size, trg_word_emb=None, loss_norm='tokens',
@@ -59,8 +60,9 @@ class Classifier(nn.Module):
         logit = self.map_vocab(logit)
 
         if noise is not None:
-            logit.data.add_( -tc.log(-tc.log(tc.Tensor(
-                logit.size()).cuda().uniform_(0, 1) + epsilon) + epsilon) ) / noise
+            with tc.no_grad():
+                logit.data.add_( -tc.log(-tc.log(tc.Tensor(
+                    logit.size()).cuda().uniform_(0, 1) + epsilon) + epsilon) ) / noise
 
         return logit
 

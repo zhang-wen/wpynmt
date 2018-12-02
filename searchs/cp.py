@@ -18,6 +18,7 @@ class Wcp(object):
 
         self.model = model
         self.decoder = model.decoder
+        self.classifier = self.decoder.classifier
 
         self.k = k
         self.lm = lm
@@ -179,12 +180,12 @@ class Wcp(object):
             self.C[5] += 1
             #t2 = time.time()
 
-            _cei = self.decoder.classifier(_logit)
+            _cei = self.classifier(_logit)
             #if wargs.vocab_norm:
-                #_cei = self.decoder.classifier.get_a(_logit)
+                #_cei = self.classifier.pred_map(_logit)
                 #t3 = time.time()
-                #_cei = -self.decoder.classifier.log_prob(_cei)[-1]
-            #else: _cei = -self.decoder.classifier.get_a(_logit)
+                #_cei = -self.classifier.log_prob(_cei)[-1]
+            #else: _cei = -self.classifier.pred_map(_logit)
             #t4 = time.time()
             #total = t4 - t1
             #if bidx == 1 and sub_cube_id == 0:
@@ -253,8 +254,8 @@ class Wcp(object):
                 logit = self.decoder.step_out(true_si, ye_im1, a_i)
                 self.C[5] += 1
 
-                if wargs.vocab_norm: _cei = self.model.classifier(logit)
-                else: _cei = -self.model.classifier.get_a(logit)
+                if wargs.vocab_norm: _cei = self.classifier(logit)
+                else: _cei = -self.classifier.pred_map(logit)
                 _cei = _cei.cpu().data.numpy().flatten()    # (1,vocsize) -> (vocsize,)
 
                 self.buf_state_merge[which][iexp] = (true_si, _cei)
@@ -321,8 +322,8 @@ class Wcp(object):
                     logit = self.decoder.step_out(true_si, ye_im1, a_i)
                     self.C[5] += 1
 
-                    _cei = self.decoder.classifier(logit)
-                    #else: _cei = -self.decoder.classifier.get_a(logit)
+                    _cei = self.classifier(logit)
+                    #else: _cei = -self.classifier.pred_map(logit)
                     _cei = _cei.cpu().data.numpy().flatten()    # (1,vocsize) -> (vocsize,)
 
                     self.buf_state_merge[which][iexp] = (true_si, true_pi, _cei)

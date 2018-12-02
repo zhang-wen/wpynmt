@@ -2,7 +2,7 @@
 max_seq_len = 128
 worse_counter = 0
 # 'toy', 'zhen', 'ende', 'deen', 'uyzh'
-dataset, model_config = 'toy', 't2t_tiny'
+dataset, model_config = 'toy', 'gru_tiny'
 batch_type = 'token'    # 'sents' or 'tokens', sents is default, tokens will do dynamic batching
 batch_size = 40 if batch_type == 'sents' else 4096
 gpu_id = [0]
@@ -37,7 +37,7 @@ if model_config == 't2t_tiny':
     input_dropout, att_dropout, relu_dropout, residual_dropout = 0.5, 0., 0., 0.1
     learning_rate, warmup_steps, u_gain, beta_2 = 0.0005, 300, 0.08, 0.98
     warmup_init_lr, min_lr = 1e-04, 1e-09
-    s_step_decay, e_step_decay = 400, 4000
+    s_step_decay, e_step_decay = 300, 3000
     small, eval_valid_from, eval_valid_freq = True, 5000, 100
     epoch_eval, max_grad_norm = True, 0.1
     batch_size = 40 if batch_type == 'sents' else 2048
@@ -75,8 +75,8 @@ if model_config == 'tgru_big':
 if model_config == 'gru_tiny':
     encoder_type, decoder_type = 'gru', 'gru'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     d_src_emb, d_trg_emb, d_enc_hid, d_dec_hid, n_enc_layers, n_dec_layers = 512, 512, 512, 512, 2, 2
-    learning_rate, u_gain, beta_2, adam_epsilon = 0.0002, 0.08, 0.999, 1e-6
-    s_step_decay, e_step_decay, warmup_steps = 1000, 16000, 8000
+    learning_rate, u_gain, beta_2, adam_epsilon = 0.001, 0.08, 0.999, 1e-6
+    s_step_decay, e_step_decay, warmup_steps = 200, 3000, 8000
     eval_valid_from, eval_valid_freq = 3000, 300
     small, epoch_eval, max_epochs = True, True, 50
     batch_size = 40 if batch_type == 'sents' else 2048
@@ -166,15 +166,17 @@ d_fltr_feats = [128, 256]
 d_mlp = 256
 
 ''' Scheduled Sampling of Samy bengio's paper '''
-greed_sampling = False
+greed_sampling = True
 greed_gumbel_noise = 0.5     # None: w/o noise
 bleu_sampling = False
 bleu_gumbel_noise = 0.5     # None: w/o noise
-ss_type = None     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
-ss_eps_begin = 1.   # set None for no scheduled sampling
-ss_eps_end = 1.
-ss_decay_rate = (ss_eps_begin - ss_eps_end) / 10.
-ss_k = 12.     # k < 1 for exponential decay, k >= 1 for inverse sigmoid decay
+ss_type = 3     # 1: linear decay, 2: exponential decay, 3: inverse sigmoid decay
+ss_prob_begin, ss_k = 1., 12.     # k < 1. for exponential decay, k >= 1. for inverse sigmoid decay
+if ss_type == 1:
+    ss_prob_end = 0.
+    ss_decay_rate = (ss_prob_begin - ss_prob_end) / 10.
+if ss_type == 2: assert ss_k < 1., 'requires ss_k < 1.'
+if ss_type == 3: assert ss_k >= 1., 'requires ss_k >= 1.'
 
 ''' self-normalization settings '''
 self_norm_alpha = None  # None or 0.5

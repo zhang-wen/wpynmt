@@ -147,7 +147,7 @@ class StackedTransDecoder(nn.Module):
             sent_logit.append(logit)
 
             if wargs.ss_type is not None and ss_eps < 1. and wargs.greed_sampling is True:
-                logit = self.classifier.get_a(logit, noise=wargs.greed_gumbel_noise)
+                logit = self.classifier.pred_map(logit, noise=wargs.greed_gumbel_noise)
                 y_tm1_model = logit.max(-1)[1]
                 _, y_tm1_model = self.trg_word_emb(y_tm1_model)
                 #wlog('word-level greedy sampling, noise {}'.format(wargs.greed_gumbel_noise))

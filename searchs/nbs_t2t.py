@@ -17,7 +17,7 @@ class Nbs(object):
         else: self.model = model
         self.encoder = self.model.encoder
         self.decoder = self.model.decoder
-        self.classifier = self.model.classifier
+        self.classifier = self.decoder.classifier
 
         self.tvcb_i2w = tvcb_i2w
         self.k = k
@@ -66,7 +66,7 @@ class Nbs(object):
         elif wargs.ori_search:   best_trans, best_loss = self.ori_batch_search()
         else:                    self.batch_search()
         # best_trans w/o <bos> and <eos> !!!
-        tc.cuda.empty_cache()
+        #tc.cuda.empty_cache()
 
         #batch_tran_cands: [(trans, loss, attend)]
         for bidx in range(self.B):

@@ -20,8 +20,8 @@ class Trainer(object):
     def __init__(self, model, train_data, vocab_data, optim, valid_data=None, tests_data=None):
 
         self.model, self.optim = model, optim
-        if isinstance(model, tc.nn.DataParallel): self.classifier = model.module.classifier
-        else: self.classifier = model.classifier
+        if isinstance(model, tc.nn.DataParallel): self.classifier = model.module.decoder.classifier
+        else: self.classifier = model.decoder.classifier
 
         self.sv, self.tv = vocab_data['src'].idx2key, vocab_data['trg'].idx2key
         self.train_data, self.valid_data, self.tests_data = train_data, valid_data, tests_data
@@ -48,12 +48,12 @@ class Trainer(object):
 
         self.epoch_shuffle_train = wargs.epoch_shuffle_train
         self.epoch_shuffle_batch = wargs.epoch_shuffle_batch
-        self.ss_eps_cur = wargs.ss_eps_begin
+        self.ss_cur_prob = wargs.ss_prob_begin
         if wargs.ss_type is not None:
             wlog('word-level optimizing bias between training and decoding ...')
             if wargs.bleu_sampling is True: wlog('sentence-level optimizing ...')
-            wlog('schedule sampling value {}'.format(self.ss_eps_cur))
-            if self.ss_eps_cur < 1. and wargs.bleu_sampling:
+            wlog('schedule sampling value {}'.format(self.ss_cur_prob))
+            if self.ss_cur_prob < 1. and wargs.bleu_sampling is True:
                 self.sampler = Nbs(self.model, self.tv, k=3, noise=wargs.bleu_gumbel_noise,
                                    batch_sample=True)
         if self.grad_accum_count > 1:
@@ -104,7 +104,7 @@ class Trainer(object):
                 # 2. F-prop all but generator.
                 if self.grad_accum_count == 1: self.model.zero_grad()
                 # exclude last target word from inputs
-                results = self.model(xs, part_ys[:, :-1], xs_mask, part_ys_mask[:, :-1])
+                results = self.model(xs, part_ys[:, :-1], xs_mask, part_ys_mask[:, :-1], self.ss_cur_prob)
                 logits, alphas, contexts = results['logit'], results['attend'], results['context']
                 # (batch_size, y_Lm1, out_size)
 
@@ -182,11 +182,12 @@ class Trainer(object):
 
             #for bidx in range(self.n_batches):
             bidx = 0
-            while self.optim.learning_rate > wargs.min_lr:
+            cond = True if wargs.lr_update_way != 'invsqrt' else self.optim.learning_rate > wargs.min_l
+            while cond:
                 if self.train_data.eos() is True: break
                 b_counter += 1
                 e_bidx = shuffled_bidx[bidx] if self.epoch_shuffle_batch else bidx
-                if wargs.ss_type is not None and self.ss_eps_cur < 1. and wargs.bleu_sampling:
+                if wargs.ss_type is not None and self.ss_cur_prob < 1. and wargs.bleu_sampling:
                     batch_beam_trgs = self.sampler.beam_search_trans(xs, xs_mask, ys_mask)
                     batch_beam_trgs = [list(zip(*b)[0]) for b in batch_beam_trgs]
                     #wlog(batch_beam_trgs)
@@ -244,7 +245,7 @@ class Trainer(object):
                 wlog('\nEnd epoch, batch [{}], {}-th validation ...'.format(e_bidx, self.n_eval))
                 self.mt_eval(epo, e_bidx)
             # decay the probability value epslion of scheduled sampling per batch
-            if wargs.ss_type is not None: ss_eps_cur = schedule_sample_eps_decay(epo, ss_eps_cur)   # start from 1
+            if wargs.ss_type is not None: self.ss_cur_prob = ss_prob_decay(epo)   # start from 1.
             epo_time_consume = time.time() - epo_start
             wlog('Consuming: {:4.2f}s'.format(epo_time_consume))
 

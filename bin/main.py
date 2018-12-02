@@ -112,11 +112,11 @@ def main():
         classifier = Classifier(wargs.d_model, n_trg_vcb, trg_emb, loss_norm=wargs.loss_norm,
                                 label_smoothing=wargs.label_smoothing,
                                 emb_loss=wargs.emb_loss, bow_loss=wargs.bow_loss)
-    nmtModel.classifier = classifier
+    nmtModel.decoder.classifier = classifier
 
     if wargs.gpu_id is not None:
         wlog('push model onto GPU {} ... '.format(wargs.gpu_id), 0)
-        nmtModel = nn.DataParallel(nmtModel, device_ids=wargs.gpu_id)
+        #nmtModel = nn.DataParallel(nmtModel, device_ids=wargs.gpu_id)
         nmtModel.to(tc.device('cuda'))
     else:
         wlog('push model onto CPU ... ', 0)

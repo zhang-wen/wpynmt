@@ -49,10 +49,12 @@ class Translator(object):
 
         trans_start = time.time()
 
-        if self.search_mode == 0: trans = self.greedy.greedy_trans(s)
-        elif self.search_mode == 1: batch_tran_cands = self.nbs.beam_search_trans(s)
-        #elif self.search_mode == 2: (trans, ids), loss = self.wcp.cube_prune_trans(s)
-        elif self.search_mode == 2: batch_tran_cands = self.wcp.cube_prune_trans(s)
+        with tc.no_grad():
+            if self.search_mode == 0: trans = self.greedy.greedy_trans(s)
+            elif self.search_mode == 1: batch_tran_cands = self.nbs.beam_search_trans(s)
+            #elif self.search_mode == 2: (trans, ids), loss = self.wcp.cube_prune_trans(s)
+            elif self.search_mode == 2: batch_tran_cands = self.wcp.cube_prune_trans(s)
+
         trans, loss, attent_matrix = batch_tran_cands[0][0] # first sent, best cand
         trans, ids, attent_matrix = filter_reidx(trans, self.tvcb_i2w, attent_matrix)
 

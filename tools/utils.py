@@ -1,4 +1,5 @@
 from __future__ import division
+
 import sys
 import os
 import re
@@ -545,30 +546,27 @@ def schedule_sample(ss_eps, y_tm1_gold, y_tm1_hypo):
 def schedule_bow_lambda(epo_idx, max_lambda=3.0, k=0.1, alpha=0.1):
     return min(max_lambda, k + alpha * epo_idx)
 
-def schedule_sample_eps_decay(i, ss_eps_cur):
+def ss_prob_decay(i):
 
     ss_type, k = wargs.ss_type, wargs.ss_k
-    if ss_type is None: return ss_eps_cur
-    if ss_type == 1:
-        # Linear decay
-        ss = wargs.ss_eps_begin - ( wargs.ss_decay_rate * i )
-        if ss < wargs.ss_eps_end:
-            eps_i = wargs.ss_eps_end
+    if ss_type == 1:    # Linear decay
+        ss = wargs.ss_prob_begin - ( wargs.ss_decay_rate * i )
+        if ss < wargs.ss_prob_end:
+            prob_i = wargs.ss_prob_end
+            wlog('[Linear] schedule sampling probability do not change {}'.format(prob_i))
         else:
-            eps_i = ss
-            wlog('[Linear] decay schedule sampling value to {}'.format(eps_i))
+            prob_i = ss
+            wlog('[Linear] decay schedule sampling probability to {}'.format(prob_i))
 
-    elif ss_type == 2:
-        # Exponential decay
-        eps_i = numpy.power(k, i)
-        wlog('[Exponential] decay schedule sampling value to {}'.format(eps_i))
+    elif ss_type == 2:  # Exponential decay
+        prob_i = numpy.power(k, i)
+        wlog('[Exponential] decay schedule sampling probability to {}'.format(prob_i))
 
-    elif ss_type == 3:
-        # Inverse sigmoid decay
-        eps_i = k / ( k + numpy.exp( ( i / k ) ) )
-        wlog('[Inverse] decay schedule sampling value to {}'.format(eps_i))
+    elif ss_type == 3:  # Inverse sigmoid decay
+        prob_i = k / ( k + numpy.exp( ( i / k ) ) )
+        wlog('[Inverse] decay schedule sampling probability to {}'.format(prob_i))
 
-    return eps_i
+    return prob_i
 
 from tools.bleu import *
 def batch_search_oracle(B_hypos_list, y_LB, y_mask_LB):

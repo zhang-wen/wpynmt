@@ -59,18 +59,19 @@ class StackedGRUDecoder(nn.Module):
 
         return self.tanh(self.s_init(annotations)), uh
 
-    def sample_prev_y(self, k, ys_e, y_tm1_model=None, oracles=None):
+    def sample_prev_y(self, k, ys_e, y_tm1_model=None, oracles=None, ss_prob=1.):
 
         batch_size = ys_e.size(0)
-        if wargs.ss_type is not None and ss_eps < 1. and (wargs.greed_sampling or wargs.bleu_sampling):
+        if wargs.ss_type is not None and ss_prob < 1. and (wargs.greed_sampling or wargs.bleu_sampling):
 
             if wargs.greed_sampling is True:
                 if oracles is not None:     # joint word and sentence level
-                    _seed = tc.zeros(batch_size, 1, requires_grad=False).bernoulli_()
-                    if wargs.gpu_id is not None: _seed = _seed.cuda()
-                    y_tm1_oracle = y_tm1_model * _seed + oracles[k] * (1. - _seed)
-                    #y_tm1_oracle = y_tm1_model.data.mul_(_seed) + y_tm1_oracle.data.mul_(1. - _seed)
-                    #wlog('joint word and sent ... ')
+                    with tc.no_grad():
+                        _seed = tc.zeros(batch_size, 1, requires_grad=False).bernoulli_()
+                        if wargs.gpu_id is not None: _seed = _seed.cuda()
+                        y_tm1_oracle = y_tm1_model * _seed + oracles[k] * (1. - _seed)
+                        #y_tm1_oracle = y_tm1_model.data.mul_(_seed) + y_tm1_oracle.data.mul_(1. - _seed)
+                        #wlog('joint word and sent ... ')
                 else:
                     y_tm1_oracle = y_tm1_model  # word-level oracle (w/o w/ noise)
                     #wlog('word level oracle ... ')
@@ -80,12 +81,13 @@ class StackedGRUDecoder(nn.Module):
 
             #uval = tc.rand(batch_size, 1)    # different word and differet batch
             #if wargs.gpu_id: uval = uval.cuda()
-            _g = tc.bernoulli( ss_eps * tc.ones(batch_size, 1) )   # pick gold with the probability of ss_eps
-            _g = tc.tensor(_g, requires_grad=False)
-            if wargs.gpu_id is not None: _g = _g.cuda()
-            y_tm1 = ys_e[:, k, :] * _g + y_tm1_oracle * (1. - _g)
-            #y_tm1 = schedule_sample_word(_h, _g, ss_eps, ys_e[k], y_tm1_oracle)
-            #y_tm1 = ys_e[k].data.mul_(_g) + y_tm1_oracle.data.mul_(1. - _g)
+            # pick gold with the probability of ss_prob
+            with tc.no_grad():
+                _g = tc.bernoulli( ss_prob * tc.ones(batch_size, 1, requires_grad=False) )
+                if wargs.gpu_id is not None: _g = _g.cuda()
+                y_tm1 = ys_e[:, k, :] * _g + y_tm1_oracle * (1. - _g)
+                #y_tm1 = schedule_sample_word(_h, _g, ss_prob, ys_e[k], y_tm1_oracle)
+                #y_tm1 = ys_e[k].data.mul_(_g) + y_tm1_oracle.data.mul_(1. - _g)
         else:
             y_tm1 = ys_e[:, k, :]
             #g = self.sigmoid(self.w_gold(y_tm1) + self.w_hypo(y_tm1_oracle))
@@ -114,7 +116,7 @@ class StackedGRUDecoder(nn.Module):
 
         return context, s_t, y_tm1, alpha
 
-    def forward(self, xs_h, ys, xs_mask, ys_mask, ss_eps=1., oracles=None):
+    def forward(self, xs_h, ys, xs_mask, ys_mask, ss_prob=1., oracles=None):
 
         s_tm1, uh = self.init_state(xs_h, xs_mask)
         batch_size, y_Lm1 = ys.size(0), ys.size(1)
@@ -125,18 +127,19 @@ class StackedGRUDecoder(nn.Module):
         logits, attends, contexts, y_tm1_model = [], [], [], ys_e[:, 0, :]
         for k in range(y_Lm1):
 
-            y_tm1 = self.sample_prev_y(k, ys_e, y_tm1_model, oracles)
+            y_tm1 = self.sample_prev_y(k, ys_e, y_tm1_model, oracles, ss_prob)
             context, s_tm1, _, alpha_ij = self.step(s_tm1, xs_h, uh, y_tm1, xs_mask, ys_mask[:, k])
             logit = self.step_out(s_tm1, y_tm1, context)
             logits.append(logit)
             attends.append(alpha_ij)
             contexts.append(context)
 
-            if wargs.ss_type is not None and ss_eps < 1. and wargs.greed_sampling is True:
-                logit = self.classifier.get_a(logit, noise=wargs.greed_gumbel_noise)
+            if wargs.ss_type is not None and ss_prob < 1. and wargs.greed_sampling is True:
+                logit = self.classifier.pred_map(logit, noise=wargs.greed_gumbel_noise)
                 y_tm1_model = logit.max(-1)[1]
                 _, y_tm1_model = self.trg_word_emb(y_tm1_model)
-                #wlog('word-level greedy sampling, noise {}'.format(wargs.greed_gumbel_noise))
+                #wlog('word-level greedy sampling, noise {}, ss_prob {}'.format(
+                    #wargs.greed_gumbel_noise, ss_prob))
 
         logits = tc.stack(logits, dim=1) * ys_mask[:, :, None]    # (batch_size, y_Lm1, d_dec_hid)
         attends = tc.stack(attends, dim=1) * ys_mask[:, :, None]  # (batch_size, y_Lm1, key_len)

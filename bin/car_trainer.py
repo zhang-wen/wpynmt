@@ -24,8 +24,8 @@ class Trainer:
 
         self.model = model
         self.decoder = model.decoder
-        self.sv = sv
-        self.tv = tv
+        self.classifier = self.decoder.classifier
+        self.sv, self.tv = sv, tv
         self.trg_dict_size = trg_dict_size
 
         self.n_critic = 1
@@ -157,7 +157,7 @@ class Trainer:
     def gumbel_sampling(self, B, y_maxL, feed_gold_out, noise=False):
 
         # feed_gold_out (L * B, V)
-        logit = self.decoder.classifier.get_a(feed_gold_out, noise=noise)
+        logit = self.classifier.pred_map(feed_gold_out, noise=noise)
 
         if logit.is_cuda: logit = logit.cpu()
         hyps = tc.max(logit, 1)[1]
@@ -311,7 +311,7 @@ class Trainer:
                 self.optim_G.zero_grad()
 
                 feed_gold_out, _ = self.model(srcs, gold_feed, srcs_m, gold_feed_mask)
-                p_y_gold = self.decoder.classifier.logit_to_prob(feed_gold_out)
+                p_y_gold = self.classifier.logit_to_prob(feed_gold_out)
                 # p_y_gold: (gold_max_len - 1, B, trg_dict_size)
 
                 if wargs.sampling == 'gumbeling':
@@ -331,7 +331,7 @@ class Trainer:
                 oracle, oracle_mask = oracles[1:], oracles_mask[1:]
                 # oracles same with trgs, with bos and eos,(L, B)
                 feed_oracle_out, _ = self.model(srcs, oracle_feed, srcs_m, oracle_feed_mask)
-                p_y_hyp = self.decoder.classifier.logit_to_prob(feed_oracle_out)
+                p_y_hyp = self.classifier.logit_to_prob(feed_oracle_out)
                 p_y_hyp_pad, oracle = self.hyps_padding_dist(oracle, oracles_L, y_gold_maxL, p_y_hyp)
                 #wlog('feed oracle dist: {}, feed gold dist: {}, oracle: {}'.format(p_y_hyp_pad.size(), p_y_gold.size(), oracle.size()))
                 #B_KL_loss = self.distance(p_y_gold, p_y_hyp_pad, hyps_mask[1:], type='KL', y_gold=gold)
@@ -418,12 +418,12 @@ class Trainer:
                 self.optim_G.step()
 
                 ###################################################### discrimitor
-                #mle_loss, _, _ = self.decoder.classifier(feed_gold_out, gold, gold_mask)
+                #mle_loss, _, _ = self.classifier(feed_gold_out, gold, gold_mask)
                 #mle_loss = mle_loss.div(B)
                 #mle_loss = mle_loss.data[0]
 
                 self.optim_D.zero_grad()
-                mle_loss, _, _ = self.decoder.classifier.snip_back_prop(feed_gold_out, gold, gold_mask)
+                mle_loss, _, _ = self.classifier.snip_back_prop(feed_gold_out, gold, gold_mask)
                 self.optim_D.step()
 
                 w_mle_seen += ( mle_loss / N )
