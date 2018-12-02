@@ -95,7 +95,7 @@ class Optim(object):
                 self.learning_rate = self.decay_factor * ( self.n_current_steps ** (-0.5) )
 
         #wlog('lr0 * factor = {} * {} = {}'.format(wargs.learning_rate, factor, self.learning_rate))
-        wlog('lr = {}'.format(self.learning_rate))
+        #wlog('lr = {}'.format(self.learning_rate))
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = self.learning_rate
 
