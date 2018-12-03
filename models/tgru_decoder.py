@@ -2,7 +2,7 @@ import torch as tc
 import torch.nn as nn
 import wargs
 from tools.utils import *
-from gru import LGRU, TGRU
+from gru import TransiLNCell
 from attention import Multihead_Additive_Attention
 
 '''
@@ -11,35 +11,24 @@ from attention import Multihead_Additive_Attention
         trg_emb:        class WordEmbedding
         enc_hid_size:   the size of TGRU hidden state in encoder
         dec_hid_size:   the size of TGRU hidden state in decoder
-        n_layers:       layer nubmer of decoder
 '''
 class StackedTransDecoder(nn.Module):
 
-    def __init__(self, trg_emb, enc_hid_size=512, dec_hid_size=512, n_head=8, n_layers=3,
+    def __init__(self, trg_emb, enc_hid_size=512, dec_hid_size=512, n_head=8,
                  attention_type='multihead_additive', max_out=False,
                  rnn_dropout=0.3, out_dropout_prob=0.5,
-                 prefix='TGRU_Decoder', **kwargs):
+                 prefix='Decoder', **kwargs):
 
         super(StackedTransDecoder, self).__init__()
 
-        self.s_init = nn.Linear(2 * enc_hid_size, dec_hid_size, bias=True)
-        self.tanh = nn.Tanh()
         self.trg_word_emb = trg_emb
         n_embed = trg_emb.n_embed
         f = lambda name: str_cat(prefix, name)  # return 'Encoder_' + parameters name
 
-        self.lgru = LGRU(n_embed, dec_hid_size, dropout_prob=rnn_dropout, prefix=f('{}_{}'.format(prefix, 0)))
-        self.tgrus = nn.ModuleList( [ TGRU(dec_hid_size, dropout_prob=rnn_dropout,
-                                           prefix=f('{}_{}'.format(prefix, n)))
-                                     for n in range(1, n_layers) ] )
+        self.s_init = nn.Linear(2 * enc_hid_size, dec_hid_size, bias=True)
+        self.cell = TransiLNCell(input_size=n_embed, hidden_size=dec_hid_size,
+                                 dropout_prob=rnn_dropout, prefix=f('TransiLNCell'))
 
-        self.cond_lgru = LGRU(2 * enc_hid_size, dec_hid_size, dropout_prob=rnn_dropout,
-                              prefix=f('{}_{}_{}'.format(prefix, 'cond', 0)))
-        self.cond_tgrus = nn.ModuleList( [ TGRU(dec_hid_size, dropout_prob=rnn_dropout,
-                                                prefix=f('{}_{}_{}'.format(prefix, 'cond', n)))
-                                          for n in range(n_layers - 1) ] )
-
-        self.n_layers = n_layers
         if attention_type == 'additive':
             self.keys_transform = nn.Linear(enc_hid_size, dec_hid_size)
             self.attention = Additive_Attention(dec_hid_size, wargs.align_size)
@@ -47,13 +36,13 @@ class StackedTransDecoder(nn.Module):
             self.keys_transform = nn.Linear(2 * enc_hid_size, dec_hid_size, bias=False)
             self.attention = Multihead_Additive_Attention(enc_hid_size, dec_hid_size, n_head=n_head)
 
-        self.sigmoid = nn.Sigmoid()
-        self.s_transform = nn.Linear(dec_hid_size, dec_hid_size)
+        self.cond_cell = TransiLNCell(input_size=2 * enc_hid_size, hidden_size=dec_hid_size,
+                                      dropout_prob=rnn_dropout, prefix=f('TransiLNCell_cond'))
+
         self.y_transform = nn.Linear(n_embed, dec_hid_size)
-        self.c_transform = nn.Linear(2*dec_hid_size, dec_hid_size)
+        self.c_transform = nn.Linear(2 * dec_hid_size, dec_hid_size)
+        self.s_transform = nn.Linear(dec_hid_size, dec_hid_size)
         self.max_out = max_out
-        if out_dropout_prob is not None and 0. < out_dropout_prob <= 1.0:
-            self.output_dropout = nn.Dropout(p=out_dropout_prob)
         self.out_dropout_prob = out_dropout_prob
 
     def init_state(self, annotations, xs_mask=None):
@@ -65,7 +54,7 @@ class StackedTransDecoder(nn.Module):
         else:
             annotations = annotations.mean(1)
 
-        return self.tanh(self.s_init(annotations)), uh
+        return tc.tanh(self.s_init(annotations)), uh
 
     def sample_prev_y(self, k, ys_e, y_tm1_model=None, oracles=None):
 
@@ -96,7 +85,7 @@ class StackedTransDecoder(nn.Module):
             #y_tm1 = ys_e[k].data.mul_(_g) + y_tm1_oracle.data.mul_(1. - _g)
         else:
             y_tm1 = ys_e[:, k, :]
-            #g = self.sigmoid(self.w_gold(y_tm1) + self.w_hypo(y_tm1_oracle))
+            #g = tc.sigmoid(self.w_gold(y_tm1) + self.w_hypo(y_tm1_oracle))
             #y_tm1 = g * y_tm1 + (1. - g) * y_tm1_oracle
 
         return y_tm1
@@ -113,25 +102,20 @@ class StackedTransDecoder(nn.Module):
         #    xs_mask = tc.tensor(xs_mask, requires_grad=False)
         #    if wargs.gpu_id is not None: xs_mask = xs_mask.cuda()
 
-        state = self.lgru(y_tm1, s_tm1, y_mask)
-        for layer_idx in range(self.n_layers - 1):
-            state = self.tgrus[layer_idx](state, y_mask)
+        _, state = self.cell(y_tm1, s_tm1, y_mask)
         # state: (batch_size, d_dec_hid)
 
         alpha, context = self.attention(state, xs_h, uh, xs_mask)
-        # alpha:   [batch_size, key_len]
-        # context: [batch_size, 2 * d_dec_hid]
+        if y_mask is not None: context = context * y_mask[:, None]
+        # alpha:   [batch_size, key_len], context: [batch_size, 2 * d_dec_hid]
 
-        s_t = self.cond_lgru(context, state, y_mask)
-        for layer_idx in range(self.n_layers - 1):
-            s_t = self.cond_tgrus[layer_idx](s_t, y_mask)
+        o_t, s_t = self.cond_cell(context, state, y_mask)
 
-        return context, s_t, y_tm1, alpha
+        return context, o_t, y_tm1, alpha
 
     def forward(self, xs_h, ys, xs_mask, ys_mask, isAtt=False, ss_eps=1., oracles=None):
 
         s_tm1, uh = self.init_state(xs_h, xs_mask)
-        tlen_batch_s, tlen_batch_y, tlen_batch_c = [], [], []
         batch_size, y_Lm1 = ys.size(0), ys.size(1)
 
         if isAtt is True: attends = []
@@ -143,7 +127,7 @@ class StackedTransDecoder(nn.Module):
 
             y_tm1 = self.sample_prev_y(k, ys_e, y_tm1_model, oracles)
             context, s_tm1, _, alpha_ij = self.step(s_tm1, xs_h, uh, y_tm1, xs_mask, ys_mask[:, k])
-            logit = self.step_out(s_tm1, y_tm1, context)
+            logit = self.step_out(y_tm1, context, s_tm1)
             sent_logit.append(logit)
 
             if wargs.ss_type is not None and ss_eps < 1. and wargs.greed_sampling is True:
@@ -161,10 +145,10 @@ class StackedTransDecoder(nn.Module):
 
         return results
 
-    def step_out(self, s, y, c):
+    def step_out(self, y, c, s):
 
         # (max_tlen_batch - 1, batch_size, dec_hid_size)
-        logit = self.s_transform(s) + self.y_transform(y) + self.c_transform(c)
+        logit = self.y_transform(y) + self.c_transform(c) + self.s_transform(s)
 
         if self.max_out is True:
             if logit.dim() == 2:    # for decoding
@@ -173,10 +157,8 @@ class StackedTransDecoder(nn.Module):
                 logit = logit.view(logit.size(0), logit.size(1), logit.size(2)/2, 2)
             logit = logit.max(-1)[0]
 
-        logit = self.tanh(logit)
-
-        if self.out_dropout_prob is not None and 0. < self.out_dropout_prob <= 1.0:
-            logit = self.output_dropout(logit)
+        logit = tc.tanh(logit)
+        logit = F.dropout(logit, p=self.out_dropout_prob, training=self.training)
 
         return logit
 

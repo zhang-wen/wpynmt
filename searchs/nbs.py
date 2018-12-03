@@ -97,7 +97,7 @@ class Nbs(object):
                 a_i, s_i, y_im1, alpha_ij, _, _, _ = self.decoder.step(
                     s_im1, self.enc_src0, self.uh0, y_im1)
                 self.C[2] += 1
-                logit = self.decoder.step_out(s_i, y_im1, a_i)
+                logit = self.decoder.step_out(y_im1, a_i, s_i)
                 self.C[3] += 1
                 # alpha_ij: (srcL, 1)
                 preb_alpha.append(alpha_ij.squeeze(-1))
@@ -224,7 +224,7 @@ class Nbs(object):
 
             self.C[2] += 1
             # (preb_sz, out_size)
-            logit = self.decoder.step_out(s_i, y_im1, a_i)
+            logit = self.decoder.step_out(y_im1, a_i, s_i)
             self.C[3] += 1
 
             # (n_remainings*prevb_sz, vocab_size)
@@ -380,7 +380,7 @@ class Nbs(object):
             self.C[2] += 1
             # (preb_sz, out_size)
             # logit = self.decoder.logit(s_i)
-            logit = self.decoder.step_out(s_im1, y_im1, a_i)
+            logit = self.decoder.step_out(y_im1, a_i, s_im1)
             self.C[3] += 1
             next_ces = self.classifier(logit)
             next_ces = next_ces.cpu().data.numpy()

@@ -72,8 +72,6 @@ class GRU(nn.Module):
                 self.ln4 = nn.LayerNorm(2 * hidden_size)
                 self.ln5 = nn.LayerNorm(hidden_size)
 
-        self.sigmoid = nn.Sigmoid()
-        self.tanh = nn.Tanh()
         if dropout_prob is not None and 0. < dropout_prob <= 1.0:
             self.dropout = nn.Dropout(p=dropout_prob)
         self.dropout_prob = dropout_prob
@@ -90,14 +88,14 @@ class GRU(nn.Module):
         if self.with_ln is not True:
 
             if self.enc_hid_size is None:
-                #r_t = self.sigmoid(self.xr(x_t) + self.hr(h_tm1))
-                #z_t = self.sigmoid(self.xz(x_t) + self.hz(h_tm1))
-                #h_t_above = self.tanh(self.xh(x_t) + self.hh(r_t * h_tm1))
+                #r_t = tc.sigmoid(self.xr(x_t) + self.hr(h_tm1))
+                #z_t = tc.sigmoid(self.xz(x_t) + self.hz(h_tm1))
+                #h_t_above = tc.tanh(self.xh(x_t) + self.hh(r_t * h_tm1))
                 rz_t = x_rz_t + h_rz_tm1
             else:
-                #z_t = self.sigmoid(self.xz(x_t) + self.hz(h_tm1) + self.cz(attend))
-                #r_t = self.sigmoid(self.xr(x_t) + self.hr(h_tm1) + self.cr(attend))
-                #h_t_above = self.tanh(self.xh(x_t) + self.hh(r_t * h_tm1) + self.ch(attend))
+                #z_t = tc.sigmoid(self.xz(x_t) + self.hz(h_tm1) + self.cz(attend))
+                #r_t = tc.sigmoid(self.xr(x_t) + self.hr(h_tm1) + self.cr(attend))
+                #h_t_above = tc.tanh(self.xh(x_t) + self.hh(r_t * h_tm1) + self.ch(attend))
                 a_rz_t, a_h_t = self.crz(attend), self.ch(attend)
                 rz_t = x_rz_t + h_rz_tm1 + a_rz_t
 
@@ -113,7 +111,7 @@ class GRU(nn.Module):
                 rz_t = x_rz_t + h_rz_tm1 + a_rz_t
 
         assert rz_t.dim() == 2
-        rz_t = self.sigmoid(rz_t)
+        rz_t = tc.sigmoid(rz_t)
         r_t, z_t = rz_t[:, :self.hidden_size], rz_t[:, self.hidden_size:]
 
         h_h_tm1 = self.hh(r_t * h_tm1)
@@ -122,7 +120,7 @@ class GRU(nn.Module):
         if self.enc_hid_size is None: h_h_tm1 = x_h_t + h_h_tm1
         else: h_h_tm1 = x_h_t + h_h_tm1 + a_h_t
 
-        h_t_above = self.tanh(h_h_tm1)
+        h_t_above = tc.tanh(h_h_tm1)
 
         if self.dropout_prob is not None and 0. < self.dropout_prob <= 1.0:
             h_t_above = self.dropout(h_t_above)
@@ -152,11 +150,11 @@ Linear Linear Transformation enhanced GRU with initial state as parameter:
 
 all parameters are initialized in [-0.01, 0.01]
 '''
-class LGRU(nn.Module):
+class TransiLNCell(nn.Module):
 
-    def __init__(self, input_size, hidden_size, dropout_prob=None, prefix='LGRU', **kwargs):
+    def __init__(self, input_size, hidden_size, dropout_prob=None, prefix='TransiLNCell', **kwargs):
 
-        super(LGRU, self).__init__()
+        super(TransiLNCell, self).__init__()
 
         self.hidden_size = hidden_size
         self.prefix = prefix
@@ -173,11 +171,25 @@ class LGRU(nn.Module):
 
         self.layer_norm_rz_gate = nn.LayerNorm(2 * hidden_size, elementwise_affine=True)
         self.layer_norm_l_gate = nn.LayerNorm(hidden_size, elementwise_affine=True)
-        self.sigmoid = nn.Sigmoid()
-        self.tanh = nn.Tanh()
-        if dropout_prob is not None and 0. < dropout_prob <= 1.0:
-            self.dropout = nn.Dropout(p=dropout_prob)
         self.dropout_prob = dropout_prob
+
+        self.t1_hrz = nn.Linear(hidden_size, 2 * hidden_size, bias=False)
+        self.t1_layer_norm_rz_gate = nn.LayerNorm(2 * hidden_size, elementwise_affine=True)
+        self.t1_hh = nn.Linear(hidden_size, hidden_size, bias=True)
+
+        '''
+        self.t2_hrz = nn.Linear(hidden_size, 2 * hidden_size, bias=False)
+        self.t2_layer_norm_rz_gate = nn.LayerNorm(2 * hidden_size, elementwise_affine=True)
+        self.t2_hh = nn.Linear(hidden_size, hidden_size, bias=True)
+
+        self.t3_hrz = nn.Linear(hidden_size, 2 * hidden_size, bias=False)
+        self.t3_layer_norm_rz_gate = nn.LayerNorm(2 * hidden_size, elementwise_affine=True)
+        self.t3_hh = nn.Linear(hidden_size, hidden_size, bias=True)
+
+        self.t4_hrz = nn.Linear(hidden_size, 2 * hidden_size, bias=False)
+        self.t4_layer_norm_rz_gate = nn.LayerNorm(2 * hidden_size, elementwise_affine=True)
+        self.t4_hh = nn.Linear(hidden_size, hidden_size, bias=True)
+        '''
 
     '''
         x_t: input at time t
@@ -187,24 +199,67 @@ class LGRU(nn.Module):
     def forward(self, x_t, h_tm1, x_m=None):
 
         assert ( x_t.dim() == 2 and h_tm1.dim() == 2 ), 'dim of hidden state should be 2'
+
+        # 1-th layer LGRU
         x_rz_t, h_rz_tm1 = self.xrz(x_t), self.hrz(h_tm1)
-        rz_t = self.sigmoid( self.layer_norm_rz_gate( x_rz_t + h_rz_tm1 ) )
+        rz_t = tc.sigmoid( self.layer_norm_rz_gate( x_rz_t + h_rz_tm1 ) )
         r_t, z_t = rz_t[:, :self.hidden_size], rz_t[:, self.hidden_size:]
 
-        l_t = self.sigmoid( self.layer_norm_l_gate( self.xl(x_t) + self.hl(h_tm1) ) )
+        l_t = tc.sigmoid( self.layer_norm_l_gate( self.xl(x_t) + self.hl(h_tm1) ) )
 
-        h_t_above = self.tanh( self.xh(x_t) + r_t * self.hh(h_tm1) ) + l_t * self.wx(x_t)
-
-        if self.dropout_prob is not None and 0. < self.dropout_prob <= 1.0:
-            h_t_above = self.dropout(h_t_above)
+        h_t_above = tc.tanh( self.xh(x_t) + r_t * self.hh(h_tm1) ) + l_t * self.wx(x_t)
+        h_t_above = F.dropout(h_t_above, p=self.dropout_prob, training=self.training)
 
         h_t = (1. - z_t) * h_tm1 + z_t * h_t_above
 
+        # 1-th layer TGRU
+        rz_t = self.t1_hrz(h_t)
+        rz_t = tc.sigmoid( self.t1_layer_norm_rz_gate( rz_t ) )
+        r_t, z_t = rz_t[:, :self.hidden_size], rz_t[:, self.hidden_size:]
+        h_t_above = tc.tanh( r_t * self.t1_hh(h_t) )
+        h_t_above = F.dropout(h_t_above, p=self.dropout_prob, training=self.training)
+
+        h_t = (1. - z_t) * h_tm1 + z_t * h_t_above
+
+        '''
+        # 2-th layer TGRU
+        rz_t = self.t2_hrz(h_t)
+        rz_t = tc.sigmoid( self.t2_layer_norm_rz_gate( rz_t ) )
+        r_t, z_t = rz_t[:, :self.hidden_size], rz_t[:, self.hidden_size:]
+        h_t_above = tc.tanh( r_t * self.t2_hh(h_t) )
+        h_t_above = F.dropout(h_t_above, p=self.dropout_prob, training=self.training)
+
+        h_t = (1. - z_t) * h_tm1 + z_t * h_t_above
+
+        # 3-th layer TGRU
+        rz_t = self.t3_hrz(h_t)
+        rz_t = tc.sigmoid( self.t3_layer_norm_rz_gate( rz_t ) )
+        r_t, z_t = rz_t[:, :self.hidden_size], rz_t[:, self.hidden_size:]
+        h_t_above = tc.tanh( r_t * self.t3_hh(h_t) )
+        h_t_above = F.dropout(h_t_above, p=self.dropout_prob, training=self.training)
+
+        h_t = (1. - z_t) * h_tm1 + z_t * h_t_above
         if x_m is not None:
             #h_t = x_m[:, None] * h_t + (1. - x_m[:, None]) * h_tm1
             h_t = x_m[:, None] * h_t
 
-        return h_t
+        # 4-th layer TGRU
+        rz_t = self.t4_hrz(h_t)
+        rz_t = tc.sigmoid( self.t4_layer_norm_rz_gate( rz_t ) )
+        r_t, z_t = rz_t[:, :self.hidden_size], rz_t[:, self.hidden_size:]
+        h_t_above = tc.tanh( r_t * self.t4_hh(h_t) )
+        h_t_above = F.dropout(h_t_above, p=self.dropout_prob, training=self.training)
+
+        h_t = (1. - z_t) * h_tm1 + z_t * h_t_above
+        '''
+
+        if x_m is not None:
+            x_m = x_m[:, None]
+            o_t = h_t * x_m
+            h_t = o_t + h_tm1 * (1. - x_m)
+        else: o_t = h_t
+
+        return o_t, h_t
 
 
 '''
@@ -235,8 +290,6 @@ class TGRU(nn.Module):
         self.hh = nn.Linear(hidden_size, hidden_size, bias=True)
 
         self.layer_norm_rz_gate = nn.LayerNorm(2 * hidden_size, elementwise_affine=True)
-        self.sigmoid = nn.Sigmoid()
-        self.tanh = nn.Tanh()
         if dropout_prob is not None and 0. < dropout_prob <= 1.0:
             self.dropout = nn.Dropout(p=dropout_prob)
         self.dropout_prob = dropout_prob
@@ -248,11 +301,12 @@ class TGRU(nn.Module):
     def forward(self, h_tm1, x_m=None):
 
         assert h_tm1.dim() == 2, 'dim of hidden state should be 2'
+
         rz_t = self.hrz(h_tm1)
-        rz_t = self.sigmoid( self.layer_norm_rz_gate( rz_t ) )
+        rz_t = tc.sigmoid( self.layer_norm_rz_gate( rz_t ) )
         r_t, z_t = rz_t[:, :self.hidden_size], rz_t[:, self.hidden_size:]
 
-        h_t_above = self.tanh( r_t * self.hh(h_tm1) )
+        h_t_above = tc.tanh( r_t * self.hh(h_tm1) )
 
         if self.dropout_prob is not None and 0. < self.dropout_prob <= 1.0:
             h_t_above = self.dropout(h_t_above)
