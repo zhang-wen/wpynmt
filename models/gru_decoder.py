@@ -13,19 +13,18 @@ from tools.utils import *
 '''
 class StackedGRUDecoder(nn.Module):
 
-    def __init__(self, trg_emb, enc_hid_size=512, dec_hid_size=512, n_layers=3,
-                 attention_type='additive', max_out=False,
+    def __init__(self, trg_emb, enc_hid_size=512, dec_hid_size=512, n_layers=2,
+                 attention_type='multihead_additive', max_out=False,
                  rnn_dropout_prob=0.3, out_dropout_prob=0.5,
                  prefix='GRU_Decoder', **kwargs):
 
         super(StackedGRUDecoder, self).__init__()
 
-        self.s_init = nn.Linear(2 * enc_hid_size, dec_hid_size, bias=True)
-        self.tanh = nn.Tanh()
         self.trg_word_emb = trg_emb
         n_embed = trg_emb.n_embed
         f = lambda name: str_cat(prefix, name)  # return 'Encoder_' + parameters name
 
+        self.s_init = nn.Linear(2 * enc_hid_size, dec_hid_size, bias=True)
         self.gru_cell = nn.GRUCell(n_embed, dec_hid_size, bias=True)
         self.cgru_cell = nn.GRUCell(2 * enc_hid_size, dec_hid_size, bias=True)
 
@@ -44,8 +43,6 @@ class StackedGRUDecoder(nn.Module):
         self.y_transform = nn.Linear(n_embed, dec_hid_size)
         self.c_transform = nn.Linear(2*dec_hid_size, dec_hid_size)
         self.max_out = max_out
-        if out_dropout_prob is not None and 0. < out_dropout_prob <= 1.0:
-            self.output_dropout = nn.Dropout(p=out_dropout_prob)
         self.out_dropout_prob = out_dropout_prob
 
     def init_state(self, annotations, xs_mask=None):
@@ -57,7 +54,7 @@ class StackedGRUDecoder(nn.Module):
         else:
             annotations = annotations.mean(1)
 
-        return self.tanh(self.s_init(annotations)), uh
+        return tc.tanh(self.s_init(annotations)), uh
 
     def sample_prev_y(self, k, ys_e, y_tm1_model=None, oracles=None, ss_prob=1.):
 
@@ -110,6 +107,7 @@ class StackedGRUDecoder(nn.Module):
         alpha, context = self.attention(state, xs_h, uh, xs_mask)
         # alpha:   [batch_size, n_head, key_len] or [batch_size, key_len]
         # context: [batch_size, 2 * enc_hid_size]
+        if y_mask is not None: context = context * y_mask[:, None]
 
         s_t = self.cgru_cell(context, state)
         if y_mask is not None: s_t = s_t * y_mask[:, None]
@@ -129,7 +127,7 @@ class StackedGRUDecoder(nn.Module):
 
             y_tm1 = self.sample_prev_y(k, ys_e, y_tm1_model, oracles, ss_prob)
             context, s_tm1, _, alpha_ij = self.step(s_tm1, xs_h, uh, y_tm1, xs_mask, ys_mask[:, k])
-            logit = self.step_out(s_tm1, y_tm1, context)
+            logit = self.step_out(y_tm1, context, s_tm1)
             logits.append(logit)
             attends.append(alpha_ij)
             contexts.append(context)
@@ -151,10 +149,10 @@ class StackedGRUDecoder(nn.Module):
             'context': contexts
         }
 
-    def step_out(self, s, y, c):
+    def step_out(self, y, c, s):
 
         # (batch_size, y_Lm1, dec_hid_size)
-        logit = self.s_transform(s) + self.y_transform(y) + self.c_transform(c)
+        logit = self.y_transform(y) + self.c_transform(c) + self.s_transform(s)
 
         if self.max_out is True:
             if logit.dim() == 2:    # for decoding
@@ -163,10 +161,8 @@ class StackedGRUDecoder(nn.Module):
                 logit = logit.view(logit.size(0), logit.size(1), logit.size(2)/2, 2)
             logit = logit.max(-1)[0]
 
-        logit = self.tanh(logit)
-
-        if self.out_dropout_prob is not None and 0. < self.out_dropout_prob <= 1.0:
-            logit = self.output_dropout(logit)
+        logit = tc.tanh(logit)
+        logit = F.dropout(logit, p=self.out_dropout_prob, training=self.training)
 
         return logit
 

@@ -18,7 +18,7 @@ class StackedGRUEncoder(nn.Module):
                  src_emb,
                  enc_hid_size=512,
                  dropout_prob=0.3,
-                 n_layers=3,
+                 n_layers=2,
                  bidirectional=True,
                  prefix='GRU_Encoder', **kwargs):
 
