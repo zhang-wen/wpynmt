@@ -43,11 +43,13 @@ if model_config == 't2t_tiny':
     batch_size = 40 if batch_type == 'sents' else 2048
 if model_config == 't2t_base':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
-    lr_update_way, param_init_D = 'noam', 'X'
+    lr_update_way, param_init_D = 'invsqrt', 'X'
     d_src_emb, d_trg_emb, d_model, d_ff_filter, n_head, n_enc_layers, n_dec_layers = 512, 512, 512, 2048, 8, 6, 6
-    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.1, 0.1, 0.1, 0.1
-    learning_rate, warmup_steps, u_gain, beta_2 = 0.2, 8000, 0.08, 0.997
+    input_dropout, att_dropout, relu_dropout, residual_dropout = 0.3, 0., 0., 0.3
+    learning_rate, warmup_steps, u_gain, beta_2 = 0.0005, 4000, 0.08, 0.98
+    warmup_init_lr, min_lr = 1e-07, 1e-09
     snip_size, max_grad_norm = 1, 0.
+    batch_size = 40 if batch_type == 'sents' else 2048
 if model_config == 't2t_big':
     encoder_type, decoder_type = 'att', 'att'   # 'cnn', 'att', 'sru', 'gru', 'lstm', 'tgru'
     lr_update_way, param_init_D = 'noam', 'X'

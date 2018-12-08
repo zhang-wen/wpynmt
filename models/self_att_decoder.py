@@ -9,15 +9,15 @@ from attention import MultiHeadAttention
 '''
 Get an attention mask to avoid using the subsequent info.
 Args: d_model: int
-Returns: (LongTensor): subsequent_mask [1, d_model, d_model]
+Returns: (LongTensor): future_mask [1, d_model, d_model]
 '''
-def get_attn_subsequent_mask(size):
+def get_attn_future_mask(size):
 
-    attn_shape = (1, size, size)
-    subsequent_mask = np.triu(np.ones(attn_shape), k=1).astype('uint8')
-    subsequent_mask = tc.from_numpy(subsequent_mask)
+    attn_shape = (size, size)
+    future_mask = np.triu(np.ones(attn_shape), k=1).astype('uint8')
+    future_mask = tc.from_numpy(future_mask)
 
-    return subsequent_mask
+    return future_mask
 
 '''
 Compose with three layers
@@ -73,25 +73,19 @@ class SelfAttDecoderLayer(nn.Module):
             trg_src_attns:      [batch_size, n_head, trg_len, src_len]
             one_dec_enc_attn:   [batch_size, trg_len, src_len]
         '''
-
-        trg_len = trg_self_attn_mask.size(1)
-        future_mask = x.new(trg_len, trg_len).fill_(1.).type_as(trg_self_attn_mask)
-        future_mask = tc.triu(future_mask, diagonal=1).cuda()   # no future
-        trg_self_att_mask = tc.gt(trg_self_attn_mask + future_mask[None, :, :], 0)
-
         # target self-attention
         residual = x
         if self.decoder_normalize_before is True:
             x = self.layer_norm_0(x)     # before 'n' for preprocess
 
-        # trg_self_att_mask: (batch_size, trg_len, trg_len)
+        # trg_self_attn_mask: (batch_size, trg_len, trg_len)
         if self.self_attn_type == 'scaled-dot':
-            x, trg_self_attns = self.self_attn(x, x, x, attn_mask=trg_self_att_mask)
+            x, trg_self_attns = self.self_attn(x, x, x, attn_mask=trg_self_attn_mask)
             # query:                [batch_size, trg_len, d_model]
             # trg_self_attns:       [batch_size, n_head, trg_len, trg_len]
             # one_dec_self_attn:    [batch_size, trg_len, trg_len]
         elif self.self_attn_type == 'average':
-            query, attn = self.self_attn(input_norm, mask=trg_self_att_mask,
+            query, attn = self.self_attn(input_norm, mask=trg_self_attn_mask,
                                          layer_cache=layer_cache, step=step)
 
         x = F.dropout(x, p=self.residual_dropout_prob, training=self.training)
@@ -185,6 +179,11 @@ class SelfAttDecoder(nn.Module):
         '''
         trg_src_attn_mask = src_seq.data.eq(PAD).unsqueeze(1).expand(src_B, trg_L, src_L)
         trg_self_attn_mask = trg_seq.data.eq(PAD).unsqueeze(1).expand(trg_B, trg_L, trg_L)
+
+        with tc.no_grad():
+            trg_len = trg_self_attn_mask.size(1)
+            future_mask = get_attn_future_mask(trg_len).cuda()
+            trg_self_attn_mask = tc.gt(trg_self_attn_mask + future_mask[None, :, :], 0)
 
         _, dec_output = self.trg_word_emb(trg_seq)
 

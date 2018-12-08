@@ -112,7 +112,7 @@ class MultiHeadAttention(nn.Module):
         #self.linear_keys = nn.Linear(d_model, n_head * self.dim_per_head)
         #self.linear_values = nn.Linear(d_model, n_head * self.dim_per_head)
         #self.linear_query = nn.Linear(d_model, n_head * self.dim_per_head)
-        self.mSoftMax = MaskSoftmax()
+        #self.mSoftMax = MaskSoftmax()
         self.dropout_prob = dropout_prob
         #self.final_proj = nn.Linear(d_model, d_model)
         self.final_proj_weight = nn.Parameter(tc.Tensor(d_model, d_model))
@@ -173,13 +173,9 @@ class MultiHeadAttention(nn.Module):
                     'with Attention logit tensor shape {}.'.format(attn_mask.size(), attn.size())
             attn.masked_fill_(attn_mask, float('-inf'))
 
-        #print(attn.data.cpu().numpy())
-        #print(attn_mask.data.cpu().numpy())
         # 3. apply attention dropout and compute context vectors
         #attn = self.mSoftMax(attn, dim=-1)
         attn = F.softmax(attn, dim=-1)
-        #print('2222222222222222222222222')
-        #print(attn.data.cpu().numpy())
         attn = F.dropout(attn, p=self.dropout_prob, training=self.training) # [batch_size, n_head, query_len, key_len]
         context = tc.matmul(attn, v)    # [batch_size, n_head, query_len, dim_per_head]
         #context = tc.bmm(attn.contiguous().view(-1, query_len, key_len),
