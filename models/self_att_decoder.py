@@ -60,11 +60,6 @@ class SelfAttDecoderLayer(nn.Module):
         self.layer_norm_2 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
         self.pos_ffn = PositionwiseFeedForward(d_model, d_ff_filter, d_model, dropout_prob=relu_dropout)
 
-        #subsequent_mask = get_attn_subsequent_mask(MAX_SEQ_SIZE)
-        # Register self.mask as a buffer in TransformerDecoderLayer, so
-        # it gets TransformerDecoderLayer's cuda behavior automatically.
-        #self.register_buffer('subsequent_mask', subsequent_mask)
-
     def forward(self, x, enc_output, trg_self_attn_mask=None, trg_src_attn_mask=None):
         '''
         Args:
@@ -80,7 +75,8 @@ class SelfAttDecoderLayer(nn.Module):
         '''
 
         trg_len = trg_self_attn_mask.size(1)
-        future_mask = x.new(trg_len, trg_len).fill_(1.).type_as(trg_self_attn_mask).cuda()
+        future_mask = x.new(trg_len, trg_len).fill_(1.).type_as(trg_self_attn_mask)
+        future_mask = tc.triu(future_mask, diagonal=1).cuda()   # no future
         trg_self_att_mask = tc.gt(trg_self_attn_mask + future_mask[None, :, :], 0)
 
         # target self-attention
@@ -145,7 +141,7 @@ class SelfAttDecoder(nn.Module):
                  relu_dropout=0.,
                  self_attn_type='scaled-dot',
                  proj_share_weight=False,
-                 decoder_normalize_before=False):
+                 decoder_normalize_before=True):
 
         wlog('Transformer decoder ========================= ')
         wlog('\ttrg_word_emb:       {}'.format(trg_emb.we.weight.size()))

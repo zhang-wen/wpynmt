@@ -127,6 +127,8 @@ class WordEmbedding(nn.Module):
         wlog('WordEmbedding_{}'.format(prefix))
         self.position_encoding = position_encoding
         self.we = nn.Embedding(n_vocab, n_embed, padding_idx=PAD)
+        nn.init.normal_(self.we.weight, mean=0, std=n_embed ** -0.5)
+        nn.init.constant_(self.we.weight[PAD], 0)
         self.n_embed = n_embed
         if position_encoding is True:
             wlog('with position emb ...')

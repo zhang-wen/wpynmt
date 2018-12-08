@@ -54,7 +54,7 @@ class Multihead_Additive_Attention(nn.Module):
                     which keys have non-zero attention [batch_size, key_len]
         Returns:
            (FloatTensor, FloatTensor) :
-           * output context vectors [batch_size, 2 * dec_hid_size]
+           * context vectors [batch_size, 2 * dec_hid_size]
            * probability            [batch_size, n_head, key_len]
     '''
     def forward(self, q, v, k, attn_mask=None):
@@ -76,7 +76,7 @@ class Multihead_Additive_Attention(nn.Module):
             attn_mask = attn_mask.unsqueeze(1).expand_as(attn).byte()    # expand along n_head dim
             assert attn_mask.size() == attn.size(), 'Attention mask shape {} mismatch ' \
                     'with Attention logit tensor shape {}.'.format(attn_mask.size(), attn.size())
-            attn = attn.masked_fill_(1 - attn_mask, float('-inf'))
+            attn = attn.masked_fill_(1. - attn_mask, float('-inf'))
 
         # 3. apply attention dropout and compute context vectors
         #alpha = self.mSoftMax(attn)            # [batch_size, n_head, key_len]
@@ -103,15 +103,25 @@ class MultiHeadAttention(nn.Module):
 
         assert d_model % n_head == 0, 'd_model {} divided by n_head {}.'.format(d_model, n_head)
         self.dim_per_head = d_model // n_head
+        self.scaling = self.dim_per_head ** -0.5
         self.d_model = d_model
         self.n_head = n_head
 
-        self.linear_keys = nn.Linear(d_model, n_head * self.dim_per_head)
-        self.linear_values = nn.Linear(d_model, n_head * self.dim_per_head)
-        self.linear_query = nn.Linear(d_model, n_head * self.dim_per_head)
+        self.kqv_proj_weight = nn.Parameter(tc.Tensor(3 * d_model, d_model))
+        self.kqv_proj_bias = nn.Parameter(tc.Tensor(3 * d_model))
+        #self.linear_keys = nn.Linear(d_model, n_head * self.dim_per_head)
+        #self.linear_values = nn.Linear(d_model, n_head * self.dim_per_head)
+        #self.linear_query = nn.Linear(d_model, n_head * self.dim_per_head)
         self.mSoftMax = MaskSoftmax()
         self.dropout_prob = dropout_prob
-        self.final_proj = nn.Linear(d_model, d_model)
+        #self.final_proj = nn.Linear(d_model, d_model)
+        self.final_proj_weight = nn.Parameter(tc.Tensor(d_model, d_model))
+        self.final_proj_bias = nn.Parameter(tc.Tensor(d_model))
+
+        nn.init.xavier_uniform_(self.kqv_proj_weight)
+        nn.init.xavier_uniform_(self.final_proj_weight)
+        nn.init.constant_(self.kqv_proj_bias, 0.)
+        nn.init.constant_(self.final_proj_bias, 0.)
 
     '''
         Compute the context vector and the attention vectors.
@@ -123,31 +133,39 @@ class MultiHeadAttention(nn.Module):
                     which keys have non-zero attention [batch_size, query_len, key_len]
         Returns:
            (FloatTensor, FloatTensor, FloatTensor) :
-           * output context vectors [batch_size, query_len, d_model]
+           * context vectors [batch_size, query_len, d_model]
            * all attention vectors [batch_size, n_head, query_len, key_len]
            * one of the attention vectors [batch_size, query_len, key_len]
     '''
     def forward(self, k, v, q, attn_mask=None):
 
         batch_size, key_len = k.size(0), k.size(1)
-        dim_per_head = self.dim_per_head
         n_head = self.n_head
         query_len = q.size(1)
 
         def split_heads(x):
-            return x.view(batch_size, -1, n_head, dim_per_head).transpose(1, 2)
+            return x.view(batch_size, -1, n_head, self.dim_per_head).transpose(1, 2)
 
         def combine_heads(x):
-            return x.transpose(1, 2).contiguous().view(batch_size, -1, n_head * dim_per_head)
+            return x.transpose(1, 2).contiguous().view(batch_size, -1, n_head * self.dim_per_head)
 
         # 1. project key, value, and query
-        key_up = split_heads(self.linear_keys(k)) # [batch_size, n_head, key_len, dim_per_head]
-        value_up = split_heads(self.linear_values(v)) # [batch_size, n_head, key_len, dim_per_head]
-        query_up = split_heads(self.linear_query(q))  # [batch_size, n_head, query_len, dim_per_head]
+        #k = split_heads(self.linear_keys(k)) # [batch_size, n_head, key_len, dim_per_head]
+        #v = split_heads(self.linear_values(v)) # [batch_size, n_head, key_len, dim_per_head]
+        #q = split_heads(self.linear_query(q))  # [batch_size, n_head, query_len, dim_per_head]
+        k = F.linear(k, self.kqv_proj_weight[0 : self.d_model, :],
+                     self.kqv_proj_bias[0 : self.d_model])
+        q = F.linear(q, self.kqv_proj_weight[self.d_model : 2 * self.d_model, :],
+                     self.kqv_proj_bias[self.d_model : 2 * self.d_model])
+        v = F.linear(v, self.kqv_proj_weight[2 * self.d_model :, :],
+                     self.kqv_proj_bias[2 * self.d_model :])
+        k = split_heads(k)
+        q = split_heads(q)
+        v = split_heads(v)
 
         # 2. calculate and scale scores: Attention(Q,K,V) = softmax(QK/sqrt(d_k))*V
-        query_up = query_up / math.sqrt(dim_per_head)# [batch_size, n_head, query_len, dim_per_head]
-        attn = tc.matmul(query_up, key_up.transpose(2, 3))#[batch_size, n_head, query_len, key_len]
+        q = q * self.scaling # [batch_size, n_head, query_len, dim_per_head]
+        attn = tc.matmul(q, k.transpose(2, 3)) #[batch_size, n_head, query_len, key_len]
 
         if attn_mask is not None:   # [batch_size, query_len, key_len]
             attn_mask = attn_mask.unsqueeze(1).expand_as(attn).byte()    # expand along n_head dim
@@ -155,21 +173,26 @@ class MultiHeadAttention(nn.Module):
                     'with Attention logit tensor shape {}.'.format(attn_mask.size(), attn.size())
             attn.masked_fill_(attn_mask, float('-inf'))
 
+        #print(attn.data.cpu().numpy())
+        #print(attn_mask.data.cpu().numpy())
         # 3. apply attention dropout and compute context vectors
-        attn = self.mSoftMax(attn, dim=-1)
-        #attn = F.softmax(attn, dim=-1)
-        attn_weights = F.dropout(attn, p=self.dropout_prob, training=self.training) # [batch_size, n_head, query_len, key_len]
-        #context = tc.matmul(attn, value_up)    # [batch_size, n_head, query_len, dim_per_head]
-        context = tc.bmm(attn.contiguous().view(-1, query_len, key_len),
-                         value_up.contiguous().view(-1, key_len, dim_per_head))    # [batch_size, n_head, query_len, dim_per_head]
-        context = context.view(batch_size, n_head, query_len, dim_per_head)
+        #attn = self.mSoftMax(attn, dim=-1)
+        attn = F.softmax(attn, dim=-1)
+        #print('2222222222222222222222222')
+        #print(attn.data.cpu().numpy())
+        attn = F.dropout(attn, p=self.dropout_prob, training=self.training) # [batch_size, n_head, query_len, key_len]
+        context = tc.matmul(attn, v)    # [batch_size, n_head, query_len, dim_per_head]
+        #context = tc.bmm(attn.contiguous().view(-1, query_len, key_len),
+        #                 v.contiguous().view(-1, key_len, dim_per_head))    # [batch_size, n_head, query_len, dim_per_head]
+        #context = context.view(batch_size, n_head, query_len, dim_per_head)
         context = combine_heads(context)             # [batch_size, query_len, n_head * dim_per_head]
 
-        output = self.final_proj(context)   # [batch_size, query_len, d_model]
+        #context = self.final_proj(context)   # [batch_size, query_len, d_model]
+        context = F.linear(context, self.final_proj_weight, self.final_proj_bias)   # [batch_size, query_len, d_model]
 
         attn = attn.sum(dim=1) / self.n_head    # average attention weights over heads
 
-        return output, attn
+        return context, attn
 
 
 

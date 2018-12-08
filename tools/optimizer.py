@@ -20,7 +20,7 @@ class Optim(object):
         self.warmup_steps = wargs.warmup_steps
 
         if wargs.lr_update_way == 'invsqrt':
-            self.warmup_end_lr = wargs.learning_rate
+            self.warmup_end_lr = learning_rate
             self.warmup_init_lr = wargs.warmup_init_lr if wargs.warmup_init_lr >= 0 else self.warmup_end_lr
             # linearly warmup for the first args.warmup_updates
             self.lr_step = (self.warmup_end_lr - self.warmup_init_lr) / wargs.warmup_steps

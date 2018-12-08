@@ -29,6 +29,7 @@ class Classifier(nn.Module):
         self.bow_loss = bow_loss
 
         self.map_vocab = nn.Linear(input_size, output_size, bias=True)
+        nn.init.normal_(self.map_vocab.weight, mean=0, std=input_size ** -0.5)
         if wargs.proj_share_weight is True:
             assert input_size == wargs.d_trg_emb
             wlog('copying weights of target word embedding into classifier')

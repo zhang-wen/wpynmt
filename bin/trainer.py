@@ -182,7 +182,7 @@ class Trainer(object):
 
             #for bidx in range(self.n_batches):
             bidx = 0
-            cond = True if wargs.lr_update_way != 'invsqrt' else self.optim.learning_rate > wargs.min_l
+            cond = True if wargs.lr_update_way != 'invsqrt' else self.optim.learning_rate > wargs.min_lr
             while cond:
                 if self.train_data.eos() is True: break
                 b_counter += 1

@@ -69,10 +69,10 @@ class PositionwiseFeedForward(nn.Module):
     def __init__(self, input_size=512, filter_size=2048, output_size=512, dropout_prob=0.1):
 
         super(PositionwiseFeedForward, self).__init__()
-        self.filter_transform = nn.Linear(input_size, filter_size, bias=True)
+        self.filter_transform = Linear(input_size, filter_size, bias=True)
         self.relu = nn.ReLU()
         self.dropout_prob = dropout_prob
-        self.output_transform = nn.Linear(filter_size, output_size, bias=True)
+        self.output_transform = Linear(filter_size, output_size, bias=True)
 
     def forward(self, x):
 
@@ -86,6 +86,9 @@ class PositionwiseFeedForward(nn.Module):
 
         return x
 
-
-
-
+def Linear(in_features, out_features, bias=True):
+    m = nn.Linear(in_features, out_features, bias)
+    nn.init.xavier_uniform_(m.weight)
+    if bias is True:
+        nn.init.constant_(m.bias, 0.)
+    return m

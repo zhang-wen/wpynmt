@@ -79,7 +79,7 @@ class SelfAttEncoder(nn.Module):
                  att_dropout=0.3,
                  residual_dropout=0.0,
                  relu_dropout=0.0,
-                 encoder_normalize_before=False):
+                 encoder_normalize_before=True):
 
         super(SelfAttEncoder, self).__init__()
 
