@@ -165,9 +165,9 @@ class WordEmbedding(nn.Module):
 
         x_w_emb = self.we(x)
         if self.position_encoding is True:
-            #x_wp_emb = self.add_timing_signal(x_w_emb)
-            scale = math.sqrt(self.n_embed)
-            x_wp_emb = scale * x_w_emb + self.spe(x)
+            x_wp_emb = self.add_timing_signal(x_w_emb)
+            #scale = math.sqrt(self.n_embed)
+            #x_wp_emb = scale * x_w_emb + self.spe(x)
         else:
             x_wp_emb = x_w_emb
 

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 import wargs
 from tools.utils import wlog, PAD, schedule_bow_lambda
-from models.nn_utils import MaskSoftmax, MyLogSoftmax
+from models.nn_utils import MaskSoftmax, MyLogSoftmax, Linear
 
 epsilon = 1e-20
 class Classifier(nn.Module):
@@ -24,11 +24,11 @@ class Classifier(nn.Module):
         if bow_loss is True:
             wlog('using the bag of words loss')
             self.sigmoid = nn.Sigmoid()
-            self.ctx_map_vocab = nn.Linear(2 * input_size, output_size, bias=True)
+            self.ctx_map_vocab = Linear(2 * input_size, output_size, bias=True)
             #self.softmax = MaskSoftmax()
         self.bow_loss = bow_loss
 
-        self.map_vocab = nn.Linear(input_size, output_size, bias=True)
+        self.map_vocab = Linear(input_size, output_size, bias=True)
         nn.init.normal_(self.map_vocab.weight, mean=0, std=input_size ** -0.5)
         if wargs.proj_share_weight is True:
             assert input_size == wargs.d_trg_emb

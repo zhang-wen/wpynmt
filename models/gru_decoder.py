@@ -1,7 +1,8 @@
+import wargs
 import torch as tc
 import torch.nn as nn
-import wargs
 from tools.utils import *
+from models.nn_utils import Linear
 
 '''
     Transition Gated Recurrent Unit network decoder
@@ -24,24 +25,24 @@ class StackedGRUDecoder(nn.Module):
         n_embed = trg_emb.n_embed
         f = lambda name: str_cat(prefix, name)  # return 'Encoder_' + parameters name
 
-        self.s_init = nn.Linear(2 * enc_hid_size, dec_hid_size, bias=True)
+        self.s_init = Linear(2 * enc_hid_size, dec_hid_size, bias=True)
         self.gru_cell = nn.GRUCell(n_embed, dec_hid_size, bias=True)
         self.cgru_cell = nn.GRUCell(2 * enc_hid_size, dec_hid_size, bias=True)
 
         self.n_layers = n_layers
         if attention_type == 'additive':
-            self.keys_transform = nn.Linear(2 * enc_hid_size, dec_hid_size)
+            self.keys_transform = Linear(2 * enc_hid_size, dec_hid_size)
             from attention import Additive_Attention
             self.attention = Additive_Attention(dec_hid_size, dec_hid_size)
         if attention_type == 'multihead_additive':
-            self.keys_transform = nn.Linear(2 * enc_hid_size, dec_hid_size, bias=False)
+            self.keys_transform = Linear(2 * enc_hid_size, dec_hid_size, bias=False)
             from attention import Multihead_Additive_Attention
             self.attention = Multihead_Additive_Attention(enc_hid_size, dec_hid_size)
 
         self.sigmoid = nn.Sigmoid()
-        self.s_transform = nn.Linear(dec_hid_size, dec_hid_size)
-        self.y_transform = nn.Linear(n_embed, dec_hid_size)
-        self.c_transform = nn.Linear(2*dec_hid_size, dec_hid_size)
+        self.s_transform = Linear(dec_hid_size, dec_hid_size)
+        self.y_transform = Linear(n_embed, dec_hid_size)
+        self.c_transform = Linear(2*dec_hid_size, dec_hid_size)
         self.max_out = max_out
         self.out_dropout_prob = out_dropout_prob
 
