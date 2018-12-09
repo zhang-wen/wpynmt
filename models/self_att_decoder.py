@@ -135,7 +135,7 @@ class SelfAttDecoder(nn.Module):
                  relu_dropout=0.,
                  self_attn_type='scaled-dot',
                  proj_share_weight=False,
-                 decoder_normalize_before=True):
+                 decoder_normalize_before=False):
 
         wlog('Transformer decoder ========================= ')
         wlog('\ttrg_word_emb:       {}'.format(trg_emb.we.weight.size()))
@@ -157,7 +157,8 @@ class SelfAttDecoder(nn.Module):
                                 att_dropout=att_dropout,
                                 residual_dropout=residual_dropout,
                                 relu_dropout=relu_dropout,
-                                self_attn_type=self_attn_type)
+                                self_attn_type=self_attn_type,
+                                decoder_normalize_before=decoder_normalize_before)
             for _ in range(n_layers)])
 
         self.trg_word_emb = trg_emb
