@@ -4,7 +4,7 @@ import math
 import torch as tc
 import torch.nn as nn
 import torch.nn.functional as F
-from nn_utils import MaskSoftmax
+from nn_utils import MaskSoftmax, Linear
 import numpy as np
 np.set_printoptions(threshold='nan')
 
@@ -38,11 +38,11 @@ class Multihead_Additive_Attention(nn.Module):
 
         assert dec_hid_size % n_head == 0, 'dec_hid_size {} divided by n_head {}.'.format(dec_hid_size, n_head)
         self.n_head = n_head
-        self.linear_query = nn.Linear(dec_hid_size, dec_hid_size, bias=False)
+        self.linear_query = Linear(dec_hid_size, dec_hid_size, bias=False)
         #self.mSoftMax = MaskSoftmax()
         dim_per_head = dec_hid_size // n_head
-        self.a1 = nn.Linear(dim_per_head, 1, bias=False)
-        self.final_proj = nn.Linear(2 * dec_hid_size, 2 * dec_hid_size, bias=True)
+        self.a1 = Linear(dim_per_head, 1, bias=False)
+        self.final_proj = Linear(2 * dec_hid_size, 2 * dec_hid_size, bias=True)
 
     '''
         Compute the context vector and the attention vectors.

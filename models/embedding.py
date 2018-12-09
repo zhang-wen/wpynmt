@@ -133,10 +133,8 @@ class WordEmbedding(nn.Module):
         if position_encoding is True:
             wlog('with position emb ...')
             #self.pe = PositionalEncoding(emb_dropout, n_embed)
-            self.spe = SinusoidalPositionalEmbedding(n_embed, PAD, MAX_SEQ_SIZE + PAD + 1)
-        if emb_dropout is not None and 0. < emb_dropout <= 1.0:
-            wlog('with emb dropout prob = {} ...'.format(emb_dropout))
-            self.dropout = nn.Dropout(p=emb_dropout)
+            #self.spe = SinusoidalPositionalEmbedding(n_embed, PAD, MAX_SEQ_SIZE + PAD + 1)
+        wlog('with emb dropout prob = {} ...'.format(emb_dropout))
         self.emb_dropout = emb_dropout
 
     def add_timing_signal(self, x_emb, min_timescale=1.0, max_timescale=1.0e4, name=None):
@@ -171,8 +169,7 @@ class WordEmbedding(nn.Module):
         else:
             x_wp_emb = x_w_emb
 
-        if self.emb_dropout is not None and 0. < self.emb_dropout <= 1.0:
-            x_wp_emb = self.dropout(x_wp_emb)
+        x_wp_emb = F.dropout(x_wp_emb, p=self.emb_dropout, training=self.training)
 
         return x_w_emb, x_wp_emb
 
