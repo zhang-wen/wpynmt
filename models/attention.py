@@ -139,9 +139,7 @@ class MultiHeadAttention(nn.Module):
     '''
     def forward(self, k, v, q, attn_mask=None):
 
-        batch_size, key_len = k.size(0), k.size(1)
-        n_head = self.n_head
-        query_len = q.size(1)
+        batch_size, n_head = k.size(0), self.n_head
 
         def split_heads(x):
             return x.view(batch_size, -1, n_head, self.dim_per_head).transpose(1, 2)
@@ -171,7 +169,7 @@ class MultiHeadAttention(nn.Module):
             attn_mask = attn_mask.unsqueeze(1).expand_as(attn).byte()    # expand along n_head dim
             assert attn_mask.size() == attn.size(), 'Attention mask shape {} mismatch ' \
                     'with Attention logit tensor shape {}.'.format(attn_mask.size(), attn.size())
-            attn.masked_fill_(attn_mask, float('-inf'))
+            attn.masked_fill_(1. - attn_mask, float('-inf'))
 
         # 3. apply attention dropout and compute context vectors
         #attn = self.mSoftMax(attn, dim=-1)

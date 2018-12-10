@@ -25,10 +25,10 @@ class SelfAttEncoderLayer(nn.Module):
                  encoder_normalize_before=False):
 
         super(SelfAttEncoderLayer, self).__init__()
-        self.layer_norm_0 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
+        self.layer_norm_0 = nn.LayerNorm(d_model, elementwise_affine=True)
         self.self_attn = MultiHeadAttention(d_model, n_head, dropout_prob=att_dropout)
         self.residual_dropout_prob = residual_dropout
-        self.layer_norm_1 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
+        self.layer_norm_1 = nn.LayerNorm(d_model, elementwise_affine=True)
         self.pos_ffn = PositionwiseFeedForward(d_model, d_ff_filter, d_model, dropout_prob=relu_dropout)
         self.encoder_normalize_before = encoder_normalize_before
 
@@ -106,16 +106,16 @@ class SelfAttEncoder(nn.Module):
             for _ in range(n_layers)])
 
         if encoder_normalize_before is True:
-            self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
+            self.layer_norm = nn.LayerNorm(d_model, elementwise_affine=True)
         self.encoder_normalize_before = encoder_normalize_before
 
-    def forward(self, src_seq):
+    def forward(self, src_seq, src_mask=None):
 
         batch_size, src_L = src_seq.size()
         # word embedding look up
         _, enc_output = self.embed(src_seq)
         #nlayer_outputs, nlayer_attns = [], []
-        src_self_attn_mask = src_seq.data.eq(PAD).unsqueeze(1).expand(batch_size, src_L, src_L) # 0. is 1 !!!
+        src_self_attn_mask = None if src_mask is None else src_mask.unsqueeze(1).expand(batch_size, src_L, src_L)
         for enc_layer in self.layer_stack:
             # enc_output: (B_q, L_q, d_model), enc_self_attns: (B, L_q, L_k)
             enc_output, enc_self_attns = enc_layer(enc_output, src_self_attn_mask)

@@ -14,20 +14,15 @@ class Nbs(object):
     def __init__(self, model, tvcb_i2w, k=10, ptv=None, noise=False,
                  print_att=False, batch_sample=False):
 
-        if isinstance(model, tc.nn.DataParallel): self.model = model.module
-        else: self.model = model
-        self.decoder = self.model.decoder
-        self.classifier = self.decoder.classifier
-
         self.k = k
         self.ptv = ptv
         self.noise = noise
         self.xs_mask = None
         self.tvcb_i2w = tvcb_i2w
         self.print_att = print_att
-
         self.C = [0] * 4
         self.batch_sample = batch_sample
+        self.encoder, self.decoder, self.classifier = model.encoder, model.decoder, model.decoder.classifier
         debug('Batch sampling by beam search ... {}'.format(batch_sample))
 
     def beam_search_trans(self, x_BL, x_mask=None, y_mask=None):
@@ -49,8 +44,8 @@ class Nbs(object):
         self.maxL = y_mask.size(1) if self.batch_sample is True else 2 * self.srcL
         # get initial state of decoder rnn and encoder context
         if wargs.gpu_id is not None and not x_BL.is_cuda: x_BL = x_BL.cuda()
-        self.enc_src0 = self.model.encoder(x_BL, xs_mask=x_mask)
-        self.s0, self.uh0 = self.model.decoder.init_state(self.enc_src0, xs_mask=x_mask)
+        self.enc_src0 = self.encoder(x_BL, xs_mask=x_mask)
+        self.s0, self.uh0 = self.decoder.init_state(self.enc_src0, xs_mask=x_mask)
         #if wargs.dec_layer_cnt > 1: self.s0 = [self.s0] * wargs.dec_layer_cnt
         # (1, trg_nhids), (1, src_len, src_nhids*2)
         init_beam(self.beam, cnt=self.maxL, s0=self.s0)

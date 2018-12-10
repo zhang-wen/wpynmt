@@ -19,10 +19,7 @@ class Trainer(object):
 
     def __init__(self, model, train_data, vocab_data, optim, valid_data=None, tests_data=None):
 
-        self.model, self.optim = model, optim
-        if isinstance(model, tc.nn.DataParallel): self.classifier = model.module.decoder.classifier
-        else: self.classifier = model.decoder.classifier
-
+        self.model, self.classifier, self.optim = model, model.decoder.classifier, optim
         self.sv, self.tv = vocab_data['src'].idx2key, vocab_data['trg'].idx2key
         self.train_data, self.valid_data, self.tests_data = train_data, valid_data, tests_data
         self.max_epochs, self.start_epoch = wargs.max_epochs, wargs.start_epoch

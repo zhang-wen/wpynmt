@@ -44,7 +44,7 @@ class SelfAttDecoderLayer(nn.Module):
         super(SelfAttDecoderLayer, self).__init__()
 
         self.decoder_normalize_before = decoder_normalize_before
-        self.layer_norm_0 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
+        self.layer_norm_0 = nn.LayerNorm(d_model, elementwise_affine=True)
 
         self.self_attn_type = self_attn_type
         if self_attn_type == 'scaled-dot':
@@ -54,10 +54,10 @@ class SelfAttDecoderLayer(nn.Module):
 
         self.residual_dropout_prob = residual_dropout
 
-        self.layer_norm_1 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
+        self.layer_norm_1 = nn.LayerNorm(d_model, elementwise_affine=True)
         self.trg_src_attn = MultiHeadAttention(d_model, n_head, dropout_prob=att_dropout)
 
-        self.layer_norm_2 = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
+        self.layer_norm_2 = nn.LayerNorm(d_model, elementwise_affine=True)
         self.pos_ffn = PositionwiseFeedForward(d_model, d_ff_filter, d_model, dropout_prob=relu_dropout)
 
     def forward(self, x, enc_output, trg_self_attn_mask=None, trg_src_attn_mask=None):
@@ -163,10 +163,10 @@ class SelfAttDecoder(nn.Module):
 
         self.trg_word_emb = trg_emb
         if decoder_normalize_before is True:
-            self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=True)
+            self.layer_norm = nn.LayerNorm(d_model, elementwise_affine=True)
         self.decoder_normalize_before = decoder_normalize_before
 
-    def forward(self, trg_seq, src_seq, enc_output):
+    def forward(self, trg_seq, src_seq, enc_output, trg_mask=None, src_mask=None):
 
         src_B, src_L = src_seq.size()
         trg_B, trg_L = trg_seq.size()
@@ -178,13 +178,13 @@ class SelfAttDecoder(nn.Module):
                 [0, 0, 1],
                 [0, 0, 0]]], dtype=uint8)
         '''
-        trg_src_attn_mask = src_seq.data.eq(PAD).unsqueeze(1).expand(src_B, trg_L, src_L)
-        trg_self_attn_mask = trg_seq.data.eq(PAD).unsqueeze(1).expand(trg_B, trg_L, trg_L)
+        trg_src_attn_mask = None if src_mask is None else src_mask.unsqueeze(1).expand(src_B, trg_L, src_L)
+        trg_self_attn_mask = None if trg_mask is None else trg_mask.unsqueeze(1).expand(trg_B, trg_L, trg_L)
 
         with tc.no_grad():
-            trg_len = trg_self_attn_mask.size(1)
-            future_mask = get_attn_future_mask(trg_len).cuda()
-            trg_self_attn_mask = tc.gt(trg_self_attn_mask + future_mask[None, :, :], 0)
+            if trg_self_attn_mask is not None:
+                future_mask = tc.tril(tc.ones(trg_L, trg_L), diagonal=0, out=None).cuda()
+                trg_self_attn_mask = tc.gt(trg_self_attn_mask + future_mask[None, :, :], 1)
 
         _, dec_output = self.trg_word_emb(trg_seq)
 

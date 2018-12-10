@@ -16,19 +16,16 @@ class Nbs(object):
     def __init__(self, model, tvcb_i2w, k=10, ptv=None, noise=False,
                  print_att=False, batch_sample=False):
 
-        if isinstance(model, tc.nn.DataParallel): self.model = model.module
-        else: self.model = model
-
-        self.decoder = self.model.decoder
         self.k = k
         self.ptv = ptv
         self.noise = noise
         self.xs_mask = None
         self.tvcb_i2w = tvcb_i2w
         self.print_att = print_att
-
         self.C = [0] * 4
         self.batch_sample = batch_sample
+        self.encoder, self.decoder, self.classifier = model.encoder, model.decoder, model.decoder.classifier
+        self.model = model
         debug('Batch sampling by beam search ... {}'.format(batch_sample))
 
     def beam_search_trans(self, x_LB, x_mask=None, y_mask=None):
@@ -104,7 +101,7 @@ class Nbs(object):
                 logit = self.decoder.step_out(s_i, y_im1, a_i)
                 self.C[3] += 1
 
-                next_ces = self.model.classifier(logit)
+                next_ces = self.classifier(logit)
                 next_ces = next_ces.cpu().data.numpy()
                 next_ces_flat = next_ces.flatten()    # (1,vocsize) -> (vocsize,)
                 ranks_idx_flat = part_sort(next_ces_flat, self.k - len(self.hyps))
@@ -243,7 +240,7 @@ class Nbs(object):
 
             # (B*prevb_sz, vocab_size)
             #wlog('bleu sampling, noise {}'.format(self.noise))
-            next_ces = self.decoder.classifier(logit, noise=self.noise)
+            next_ces = self.classifier(logit, noise=self.noise)
             next_ces = next_ces.cpu().data.numpy()
             voc_size = next_ces.shape[1]
             cand_scores = hyp_scores[:, None] + next_ces
@@ -404,7 +401,7 @@ class Nbs(object):
             # logit = self.decoder.logit(s_i)
             logit = self.decoder.step_out(s_im1, y_im1, a_i)
             self.C[3] += 1
-            next_ces = self.model.classifier(logit)
+            next_ces = self.classifier(logit)
             next_ces = next_ces.cpu().data.numpy()
             #cand_scores = hyp_scores[:, None] - numpy.log(next_scores)
             cand_scores = hyp_scores[:, None] + next_ces

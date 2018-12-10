@@ -13,20 +13,14 @@ class Nbs(object):
 
     def __init__(self, model, tvcb_i2w, k=10, ptv=None, noise=False, print_att=False):
 
-        if isinstance(model, tc.nn.DataParallel): self.model = model.module
-        else: self.model = model
-        self.encoder = self.model.encoder
-        self.decoder = self.model.decoder
-        self.classifier = self.decoder.classifier
-
-        self.tvcb_i2w = tvcb_i2w
         self.k = k
         self.ptv = ptv
         self.noise = noise
         self.xs_mask = None
+        self.tvcb_i2w = tvcb_i2w
         self.print_att = print_att
-
         self.C = [0] * 4
+        self.encoder, self.decoder, self.classifier = model.encoder, model.decoder, model.decoder.classifier
         '''
         prob_projection = nn.LogSoftmax()
         self.model.prob_projection = prob_projection.cuda()
@@ -202,6 +196,9 @@ class Nbs(object):
             next_ces = self.classifier(dec_output)
             next_ces = next_ces.cpu().data.numpy()
             cand_scores = hyp_scores[:, None] + next_ces
+            if i == 1 or i == 2:
+                '''here we make the score of <s> so large to avoid null translation'''
+                cand_scores[:, BOS] = float('+inf')
             cand_scores_flat = cand_scores.flatten()
             ranks_flat = part_sort(cand_scores_flat, self.k - len(self.hyps))
             voc_size = next_ces.shape[1]

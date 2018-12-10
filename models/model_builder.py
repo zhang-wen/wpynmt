@@ -29,8 +29,8 @@ class NMTModel(nn.Module):
             results = self.decoder(enc_output, trg, src_mask, trg_mask, ss_prob=ss_prob)
             logits, attends, contexts = results['logit'], results['attend'], results['context']
         if wargs.encoder_type == 'att':
-            enc_output, _ = self.encoder(src)
-            logits, _, attends = self.decoder(trg, src, enc_output)
+            enc_output, _ = self.encoder(src, src_mask)
+            logits, _, attends = self.decoder(trg, src, enc_output, trg_mask, src_mask)
             #logits, _, nlayer_attns = self.decoder(trg, src, enc_output)
             #attends = nlayer_attns[-1]
         elif wargs.encoder_type == 'tgru':
@@ -68,7 +68,8 @@ def build_encoder(src_emb):
                               d_ff_filter = wargs.d_ff_filter,
                               att_dropout = wargs.att_dropout,
                               residual_dropout = wargs.residual_dropout,
-                              relu_dropout = wargs.relu_dropout)
+                              relu_dropout = wargs.relu_dropout,
+                              encoder_normalize_before=wargs.encoder_normalize_before)
     elif wargs.encoder_type == 'cnn':
         return CNNEncoder(opt.enc_layers, opt.rnn_size,
                           opt.cnn_kernel_width,
@@ -104,7 +105,8 @@ def build_decoder(trg_emb):
                               att_dropout = wargs.att_dropout,
                               residual_dropout = wargs.residual_dropout,
                               relu_dropout = wargs.relu_dropout,
-                              proj_share_weight = wargs.proj_share_weight)
+                              proj_share_weight = wargs.proj_share_weight,
+                              decoder_normalize_before=wargs.decoder_normalize_before)
     elif wargs.encoder_type == 'tgru':
         from models.tgru_decoder import StackedTransDecoder
         return StackedTransDecoder(trg_emb = trg_emb,
