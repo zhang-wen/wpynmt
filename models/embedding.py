@@ -119,7 +119,7 @@ class WordEmbedding(nn.Module):
     def __init__(self,
                  n_vocab,
                  n_embed=512,
-                 emb_dropout=None,
+                 emb_dropout=0.,
                  position_encoding=False,
                  prefix='WordEmbedding'):
 
