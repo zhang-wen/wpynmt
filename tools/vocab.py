@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
+import io
 import torch as tc
-from utils import *
+from .utils import *
 
 class Vocab(object):
 
@@ -27,7 +28,7 @@ class Vocab(object):
     def __repr__(self):
 
         rst = []
-        for k, v in self.idx2key.iteritems():
+        for k, v in self.idx2key.items():
             rst.append('{}:{}'.format(k, v))
         return ' '.join(rst)
 
@@ -56,9 +57,9 @@ class Vocab(object):
 
         if self.size() <= vocab_size:
             wlog('{} <= {} tokens, Bingo!~'.format(self.size(), vocab_size))
-            return self, sum(self.freq.itervalues())
+            return self, sum(self.freq.values())
 
-        idx_freq = [k for k in self.freq.iterkeys()]
+        idx_freq = [k for k in self.freq.keys()]
         _, idx = tc.sort(tc.Tensor(
             [self.freq[k] for k in idx_freq]),
             dim=0,
@@ -74,7 +75,7 @@ class Vocab(object):
     def load_from_file(self, filename):
 
         idx2key = tc.load(filename)
-        for idx, key in idx2key.iteritems():
+        for idx, key in idx2key.items():
             self.add(key, idx)
 
     def write_into_file(self, filename):
@@ -88,10 +89,13 @@ class Vocab(object):
 
         if self.real:
             txt_vocab_file = filename + '.txt'
-            file = open(txt_vocab_file, 'w')
-            file.write(content)
+            #file = open(txt_vocab_file, 'wb')
+            #file.write(content.encode('utf-8'))
+            with io.open(txt_vocab_file, mode='w', encoding='utf-8') as file:
+            #file = open(txt_vocab_file, 'w')
+                file.write(content)
 
-        file.close()
+            file.close()
 
     def keys2idx(self, list_words, unk_word, bos_word=None, eos_word=None):
 

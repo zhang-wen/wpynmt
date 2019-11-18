@@ -85,7 +85,7 @@ class Nbs(object):
             cnt_bp = (i >= 2)
             if cnt_bp: self.C[0] += preb_sz
             cands, preb_alpha = [], []
-            for j in xrange(preb_sz):  # size of last beam
+            for j in range(preb_sz):  # size of last beam
                 # (45.32, (beam, trg_nhids), -1, 0)
                 accum_im1, s_im1, _, y_im1, _ = prevb[j]
 
@@ -176,9 +176,9 @@ class Nbs(object):
                 prevb = B_prevbs[bidx]
                 preb_sz = len(prevb)
                 prebs_sz.append(preb_sz)
-                hyp_scores += list(zip(*prevb)[0])
-                s_im1 += list(zip(*prevb)[-4])
-                y_im1 += list(zip(*prevb)[-2])
+                hyp_scores += list(zip(*prevb))[0]
+                s_im1 += list(zip(*prevb))[-4]
+                y_im1 += list(zip(*prevb))[-2]
                 self.true_bidx.append(prevb[0][-3])
                 if self.enc_src0.dim() == 4:
                     # (L, L, 1, src_nhids) -> (L, L, preb_sz, src_nhids)
@@ -198,7 +198,7 @@ class Nbs(object):
                 y_part_seqs = []
                 for b in self.beam[cur_bidx - 1][0]:
                     seq, bp = [b[-2]], b[-1]
-                    for i in reversed(xrange(0, cur_bidx - 1)):
+                    for i in reversed(range(0, cur_bidx - 1)):
                         _, _, _, _, w, backptr = self.beam[i][0][bp]
                         seq.append(w)
                         bp = backptr
@@ -268,7 +268,7 @@ class Nbs(object):
                 cand_scores_flat = next_ces_prevb.flatten()
                 ranks_flat = part_sort(cand_scores_flat, self.k - len(self.hyps[true_id]))
                 prevb_id = ranks_flat // voc_size
-                debug('For beam [{}], pre-beam ids: {}'.format(i, prevb_id))
+                #debug('For beam [{}], pre-beam ids: {}'.format(i, prevb_id))
                 word_indices = ranks_flat % voc_size
                 costs = cand_scores_flat[ranks_flat] if self.batch_sample is False else \
                         _next_ces_B_prevb[bidx].flatten()[ranks_flat]
@@ -308,8 +308,8 @@ class Nbs(object):
             self.beam[i] = next_step_beam
 
             if len(del_batch_idx) < n_remainings:
-                self.enc_src0 = self.enc_src0[filter(lambda x: x not in del_batch_idx, range(n_remainings))]
-                self.uh0 = self.uh0[filter(lambda x: x not in del_batch_idx, range(n_remainings))]
+                self.enc_src0 = self.enc_src0[list(filter(lambda x: x not in del_batch_idx, range(n_remainings)))]
+                self.uh0 = self.uh0[list(filter(lambda x: x not in del_batch_idx, range(n_remainings)))]
             del enc_src, uh, y_im1, y_part_seqs, s_im1   # free the tensor
 
         # no early stop, back tracking
@@ -363,7 +363,7 @@ class Nbs(object):
         s_im1, y_im1 = self.s0, [BOS]  # indicator for the first target word (bos target)
         preb_sz = 1
 
-        for ii in xrange(self.maxL):
+        for ii in range(self.maxL):
 
             cnt_bp = (ii >= 1)
             if cnt_bp: self.C[0] += preb_sz
@@ -410,7 +410,7 @@ class Nbs(object):
             hyp_scores = []
             hyp_states = []
             # current beam, if the hyposise ends with eos, we do not
-            for idx in xrange(len(new_hyp_samples)):
+            for idx in range(len(new_hyp_samples)):
                 if new_hyp_samples[idx][-1] == EOS:
                     sample.append(new_hyp_samples[idx])
                     sample_score.append(new_hyp_scores[idx])
@@ -432,7 +432,7 @@ class Nbs(object):
             s_im1 = tc.stack(hyp_states, dim=0)
 
         if live_k > 0:
-            for idx in xrange(live_k):
+            for idx in range(live_k):
                 sample.append(hyp_samples[idx])
                 sample_score.append(hyp_scores[idx])
 

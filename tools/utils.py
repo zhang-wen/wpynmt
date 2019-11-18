@@ -2,6 +2,7 @@ from __future__ import division
 
 import sys
 import os
+import io
 import re
 import numpy
 import shutil
@@ -15,12 +16,8 @@ import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
 from torch.autograd import Variable
-
 sys.path.append('../')
 import wargs
-from wargs import *
-reload(sys)
-sys.setdefaultencoding('utf-8')
 
 def str1(content, encoding='utf-8'):
     return json.dumps(content, encoding=encoding, ensure_ascii=False, indent=4)
@@ -43,13 +40,9 @@ EOS = RESERVED_TOKENS.index(EOS_WORD)  # 3
 def load_model(model_path):
     wlog('Loading pre-trained model ... from {} '.format(model_path), 0)
     state_dict = tc.load(model_path, map_location=lambda storage, loc: storage)
-    if len(state_dict) == 4:
-        model_dict, eid, bid, optim = state_dict['model'], state_dict['epoch'], state_dict['batch'], state_dict['optim']
-        rst = ( model_dict, eid, bid, optim )
-    elif len(state_dict) == 5:
-        model_dict, class_dict, eid, bid, optim = state_dict['model'], state_dict['class'], state_dict['epoch'], state_dict['batch'], state_dict['optim']
-        rst = ( model_dict, class_dict, eid, bid, optim )
-    wlog('at epoch {} and batch {}'.format(eid, bid))
+    model_dict, e_idx, e_bidx, n_steps, optim = state_dict['model'], state_dict['epoch'], state_dict['batch'], state_dict['steps'], state_dict['optim']
+    rst = ( model_dict, e_idx, e_bidx, n_steps, optim )
+    wlog('\t At epoch {}, batch {}, step: {}'.format(e_idx, e_bidx, n_steps))
     wlog(optim)
     return rst
 
@@ -122,7 +115,7 @@ def format_time(time):
 
 def append_file(filename, content):
 
-    f = open(filename, 'a')
+    f = io.open(filename, mode='a', encoding='utf-8')
     f.write(content + '\n')
     f.close()
 
@@ -134,12 +127,18 @@ def wlog(obj, newline=1):
 
     if newline == 1: sys.stderr.write('{}\n'.format(obj))
     else: sys.stderr.write('{}'.format(obj))
+    #if newline == 1: print(obj, file=sys.stderr, flush=True)
+    #else: print(obj, file=sys.stderr, end='', flush=True)
+    #sys.stderr.flush()
 
 def debug(s, newline=1):
 
     if DEBUG is True:
+        sys.stderr.flush()
         if newline == 1: sys.stderr.write('{}\n'.format(s))
-        else: sys.stderr.write(s)
+        else: sys.stderr.write('{}'.format(s))
+        #if newline == 1: print('{}\n'.format(s))
+        #else: print(s)
         sys.stderr.flush()
 
 def get_gumbel(LB, V, eps=1e-30):
@@ -183,6 +182,7 @@ def init_params(p, name='what', init_D='U', a=0.01):
 
 def init_dir(dir_name, delete=False):
 
+    dir_name = os.path.abspath(dir_name)
     if not dir_name == '':
         if os.path.exists(dir_name):
             if delete:
@@ -234,14 +234,14 @@ def part_sort(vec, num):
     return k_rank_ids_invec
 
 # beam search
-def init_beam(beam, s0=None, cnt=50, score_0=0.0, loss_0=0.0, dyn_dec_tup=None, cp=False, transformer=False):
+def init_beam(beam, B=1, gpu_id=0, s0=None, cnt=50, score_0=0.0, loss_0=0.0, dyn_dec_tup=None, cp=False, transformer=False):
     del beam[:]
     for i in range(cnt + 1):
         ibeam = []  # one beam [] for one char besides start beam
         beam.append(ibeam)
 
     if cp is True:
-        beam[0] = [ [ (loss_0, None, s0, 0, BOS, 0) ] ]
+        beam[0] = [ [ (tc.tensor(loss_0).cuda(gpu_id), None, s0, _i, BOS * tc.ones(1).cuda(gpu_id).type(tc.int64), 0) ] for _i in range(B) ]
         return
     # indicator for the first target word (<b>)
     if dyn_dec_tup is not None:
@@ -261,7 +261,7 @@ def back_tracking(beam, bidx, best_sample_endswith_eos, attent_probs=None):
     attent_matrix = [] if attent_probs is not None else None
     check = (len(beam[0][0][0]) == 5)
     #print len(attent_probs), endi
-    for i in reversed(xrange(0, endi)): # [0, endi-1], with <bos> 0 and no <eos> endi==self.maxL
+    for i in reversed(range(0, endi)): # [0, endi-1], with <bos> 0 and no <eos> endi==self.maxL
         # the best (minimal sum) loss which is the first one in the last beam,
         # then use the back pointer to find the best path backward
         # <eos> is in pos endi, we do not keep <eos>
@@ -297,28 +297,29 @@ def filter_reidx(best_trans, tV_i2w=None, attent_matrix=None, ifmv=False, ptv=No
     remove_ids, filter_ids = [], []
     for idx in range(1, len(true_idx)):
         widx = true_idx[idx]
-        if widx == BOS or widx == EOS:
+        if widx == BOS or widx == EOS or widx == PAD:
             remove_ids.append(idx - 1)
         else:
             filter_ids.append(widx)
     #true_idx = filter(lambda y: y != BOS and y != EOS, true_idx)
 
-    return idx2sent(filter_ids, tV_i2w), filter_ids, numpy.delete(attent_matrix, remove_ids, 0)
+    return idx2sent(filter_ids, tV_i2w), filter_ids, idx2sent(true_idx, tV_i2w), \
+            true_idx, numpy.delete(attent_matrix, remove_ids, 0)
 
 def sent_filter(sent):
 
     list_filter = filter(lambda x: x != PAD and x!= BOS and x != EOS, sent)
 
-    return list_filter
+    return list(list_filter)
 
 def idx2sent(vec, vcb_i2w):
     # vec: [int, int, ...]
     if isinstance(vcb_i2w, dict):
         r = [vcb_i2w[idx] for idx in vec]
-        sent = ' '.join(r)
+        sent, trans = ' '.join(r), ' '.join(r[1:-1])
     else:
         sent = vcb_i2w.decode(vec)
-    return sent
+    return sent, trans
 
 def dec_conf():
 
@@ -356,9 +357,9 @@ def print_attention_text(attention_matrix, source_tokens, target_tokens, thresho
     :param threshold: The threshold for including an alignment link in the result, float
     """
     if not attention_matrix.shape[0] == len(target_tokens):
-        print attention_matrix
-        print '-------------------------'
-        print target_tokens
+        wlog(attention_matrix)
+        wlog('-------------------------')
+        wlog(target_tokens)
 
     if len(target_tokens) == 0: return ''
 
@@ -488,7 +489,7 @@ def lp_cp(bp, beam_idx, bidx, beam):
     cp = 0.
     if wargs.beta_cover_penalty > 0.:
         ys_pi = []
-        for i in reversed(xrange(1, beam_idx)):
+        for i in reversed(range(1, beam_idx)):
             _, p_im1, _, _, w, bp = beam[i][bidx][bp]
             ys_pi.append(p_im1)
         if len(ys_pi) == 0: return 1.0, 0.0
@@ -568,7 +569,7 @@ def ss_prob_decay(i):
 
     return prob_i
 
-from tools.bleu import *
+from tools.mteval_bleu import *
 def batch_search_oracle(B_hypos_list, y_LB, y_mask_LB):
 
     #print B_hypos_list
@@ -633,25 +634,25 @@ def grad_checker(model, _checks=None):
 
 def proc_bpe(input_fname, output_fname):
 
-    fin = open(input_fname, 'r')
+    fin = io.open(input_fname, mode='r', encoding='utf-8')
     contend = fin.read()
     fin.close()
 
     contend = re.sub('(@@ )|(@@ ?$)', '', contend)
 
-    fout = open(output_fname, 'w')
+    fout = io.open(output_fname, mode='w', encoding='utf-8')
     fout.write(contend)
     fout.close()
 
 def proc_luong(input_fname, output_fname):
 
-    fin = open(input_fname, 'r')
+    fin = io.open(input_fname, mode='r', encoding='utf-8')
     contend = fin.read()
     fin.close()
 
     contend = re.sub('( ?##AT##-##AT## ?)', '', contend)
 
-    fout = open(output_fname, 'w')
+    fout = io.open(output_fname, mode='w', encoding='utf-8')
     fout.write(contend)
     fout.close()
 

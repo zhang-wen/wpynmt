@@ -1,12 +1,13 @@
-from __future__ import print_function
+from __future__ import division, print_function
 
+import sys
 import math
+import numpy as np
 import torch as tc
 import torch.nn as nn
 import torch.nn.functional as F
-from nn_utils import MaskSoftmax, Linear
-import numpy as np
-np.set_printoptions(threshold='nan')
+from .nn_utils import MaskSoftmax, Linear
+np.set_printoptions(threshold=sys.maxsize)
 
 class Additive_Attention(nn.Module):
 
@@ -42,7 +43,7 @@ class Multihead_Additive_Attention(nn.Module):
         #self.mSoftMax = MaskSoftmax()
         dim_per_head = dec_hid_size // n_head
         self.a1 = Linear(dim_per_head, 1, bias=False)
-        self.final_proj = Linear(2 * dec_hid_size, 2 * dec_hid_size, bias=True)
+        self.final_proj = Linear(2 * enc_hid_size, 2 * enc_hid_size, bias=True)
 
     '''
         Compute the context vector and the attention vectors.
@@ -72,11 +73,19 @@ class Multihead_Additive_Attention(nn.Module):
 
         hidden = tc.tanh(q + k)
         attn = self.a1(hidden).squeeze(-1)          # [batch_size, n_head, key_len]
+        #print(attn_mask)
+        #print(attn_mask.size())
+        #print(attn_mask.dtype)
         if attn_mask is not None:   # [batch_size, key_len]
-            attn_mask = attn_mask.unsqueeze(1).expand_as(attn).byte()    # expand along n_head dim
+            attn_mask = attn_mask.unsqueeze(1).expand_as(attn).bool()    # expand along n_head dim
+            #print(attn_mask)
+            #print(attn_mask.dtype)
             assert attn_mask.size() == attn.size(), 'Attention mask shape {} mismatch ' \
                     'with Attention logit tensor shape {}.'.format(attn_mask.size(), attn.size())
-            attn = attn.masked_fill_(1. - attn_mask, float('-inf'))
+            attn = attn.masked_fill_(attn_mask.bitwise_not(), float('-inf'))
+        #print(attn)
+        #print(attn.size())
+        #print(attn.dtype)
 
         # 3. apply attention dropout and compute context vectors
         #alpha = self.mSoftMax(attn)            # [batch_size, n_head, key_len]
@@ -137,7 +146,7 @@ class MultiHeadAttention(nn.Module):
            * all attention vectors [batch_size, n_head, query_len, key_len]
            * one of the attention vectors [batch_size, query_len, key_len]
     '''
-    def forward(self, k, v, q, attn_mask=None):
+    def forward(self, k, v, q, attn_mask=None, query_mask=None):
 
         batch_size, n_head = k.size(0), self.n_head
 
@@ -166,14 +175,26 @@ class MultiHeadAttention(nn.Module):
         attn = tc.matmul(q, k.transpose(2, 3)) #[batch_size, n_head, query_len, key_len]
 
         if attn_mask is not None:   # [batch_size, query_len, key_len]
-            attn_mask = attn_mask.unsqueeze(1).expand_as(attn).byte()    # expand along n_head dim
+            attn_mask = attn_mask.unsqueeze(1).expand_as(attn).bool()    # expand along n_head dim
+            #print('-------------------')
+            #print(attn_mask.size())
+            #print(attn_mask.cpu().numpy())
+            #print(attn.size())
+            #print(attn.detach().cpu().numpy())
             assert attn_mask.size() == attn.size(), 'Attention mask shape {} mismatch ' \
                     'with Attention logit tensor shape {}.'.format(attn_mask.size(), attn.size())
-            attn.masked_fill_(1. - attn_mask, float('-inf'))
+            #attn.masked_fill_(1 - attn_mask, float('-inf'))
+            #attn.masked_fill_(1, float('-inf'))
+            attn.masked_fill_(attn_mask, -1e18)
+            #print(attn.size())
+            #print(attn.detach().cpu().numpy())
 
         # 3. apply attention dropout and compute context vectors
         #attn = self.mSoftMax(attn, dim=-1)
         attn = F.softmax(attn, dim=-1)
+        #print('softmax.....................')
+        #print(attn.size())
+        #print(attn.detach().cpu().numpy())
         attn = F.dropout(attn, p=self.dropout_prob, training=self.training) # [batch_size, n_head, query_len, key_len]
         context = tc.matmul(attn, v)    # [batch_size, n_head, query_len, dim_per_head]
         #context = tc.bmm(attn.contiguous().view(-1, query_len, key_len),
@@ -185,8 +206,365 @@ class MultiHeadAttention(nn.Module):
         context = F.linear(context, self.final_proj_weight, self.final_proj_bias)   # [batch_size, query_len, d_model]
 
         attn = attn.sum(dim=1) / self.n_head    # average attention weights over heads
+        if query_mask is not None:
+            query_mask = query_mask[:, :, None]
+            context = context * query_mask
+            attn = attn * query_mask
 
         return context, attn
+
+import torch
+class MultiheadAttention(nn.Module):
+    """Multi-headed attention.
+    See "Attention Is All You Need" for more details.
+    """
+
+    def __init__(self, embed_dim, num_heads, dropout=0., bias=True, add_bias_kv=False, add_zero_attn=False):
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.dropout = dropout
+        self.head_dim = embed_dim // num_heads
+        assert self.head_dim * num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
+        self.scaling = self.head_dim ** -0.5
+
+        self.in_proj_weight = nn.Parameter(torch.Tensor(3 * embed_dim, embed_dim))
+        if bias:
+            self.in_proj_bias = nn.Parameter(torch.Tensor(3 * embed_dim))
+        else:
+            self.register_parameter('in_proj_bias', None)
+        self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
+
+        if add_bias_kv:
+            self.bias_k = nn.Parameter(torch.Tensor(1, 1, embed_dim))
+            self.bias_v = nn.Parameter(torch.Tensor(1, 1, embed_dim))
+        else:
+            self.bias_k = self.bias_v = None
+
+        self.add_zero_attn = add_zero_attn
+
+        self.reset_parameters()
+
+        self.onnx_trace = False
+
+    def prepare_for_onnx_export_(self):
+        self.onnx_trace = True
+
+    def reset_parameters(self):
+        nn.init.xavier_uniform_(self.in_proj_weight)
+        nn.init.xavier_uniform_(self.out_proj.weight)
+        if self.in_proj_bias is not None:
+            nn.init.constant_(self.in_proj_bias, 0.)
+            nn.init.constant_(self.out_proj.bias, 0.)
+        if self.bias_k is not None:
+            nn.init.xavier_normal_(self.bias_k)
+        if self.bias_v is not None:
+            nn.init.xavier_normal_(self.bias_v)
+
+    def forward(self, query, key, value, key_padding_mask=None, incremental_state=None,
+                need_weights=True, static_kv=False, attn_mask=None):
+        """Input shape: Time x Batch x Channel
+        Self-attention can be implemented by passing in the same arguments for
+        query, key and value. Timesteps can be masked by supplying a T x T mask in the
+        `attn_mask` argument. Padding elements can be excluded from
+        the key by passing a binary ByteTensor (`key_padding_mask`) with shape:
+        batch x src_len, where padding elements are indicated by 1s.
+        """
+
+        qkv_same = query.data_ptr() == key.data_ptr() == value.data_ptr()
+        kv_same = key.data_ptr() == value.data_ptr()
+
+        tgt_len, bsz, embed_dim = query.size()
+        assert embed_dim == self.embed_dim
+        assert list(query.size()) == [tgt_len, bsz, embed_dim]
+        assert key.size() == value.size()
+
+        if incremental_state is not None:
+            saved_state = self._get_input_buffer(incremental_state)
+            if 'prev_key' in saved_state:
+                # previous time steps are cached - no need to recompute
+                # key and value if they are static
+                if static_kv:
+                    assert kv_same and not qkv_same
+                    key = value = None
+        else:
+            saved_state = None
+
+        if qkv_same:
+            # self-attention
+            q, k, v = self.in_proj_qkv(query)
+        elif kv_same:
+            # encoder-decoder attention
+            q = self.in_proj_q(query)
+            if key is None:
+                assert value is None
+                k = v = None
+            else:
+                k, v = self.in_proj_kv(key)
+        else:
+            q = self.in_proj_q(query)
+            k = self.in_proj_k(key)
+            v = self.in_proj_v(value)
+        q *= self.scaling
+
+        if self.bias_k is not None:
+            assert self.bias_v is not None
+            k = torch.cat([k, self.bias_k.repeat(1, bsz, 1)])
+            v = torch.cat([v, self.bias_v.repeat(1, bsz, 1)])
+            if attn_mask is not None:
+                attn_mask = torch.cat([attn_mask, attn_mask.new_zeros(attn_mask.size(0), 1)], dim=1)
+            if key_padding_mask is not None:
+                key_padding_mask = torch.cat(
+                    [key_padding_mask, key_padding_mask.new_zeros(key_padding_mask.size(0), 1)], dim=1)
+
+        q = q.contiguous().view(tgt_len, bsz * self.num_heads, self.head_dim).transpose(0, 1)
+        if k is not None:
+            k = k.contiguous().view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
+        if v is not None:
+            v = v.contiguous().view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
+
+        if saved_state is not None:
+            # saved states are stored with shape (bsz, num_heads, seq_len, head_dim)
+            if 'prev_key' in saved_state:
+                prev_key = saved_state['prev_key'].view(bsz * self.num_heads, -1, self.head_dim)
+                if static_kv:
+                    k = prev_key
+                else:
+                    k = torch.cat((prev_key, k), dim=1)
+            if 'prev_value' in saved_state:
+                prev_value = saved_state['prev_value'].view(bsz * self.num_heads, -1, self.head_dim)
+                if static_kv:
+                    v = prev_value
+                else:
+                    v = torch.cat((prev_value, v), dim=1)
+            saved_state['prev_key'] = k.view(bsz, self.num_heads, -1, self.head_dim)
+            saved_state['prev_value'] = v.view(bsz, self.num_heads, -1, self.head_dim)
+
+            self._set_input_buffer(incremental_state, saved_state)
+
+        src_len = k.size(1)
+
+        if key_padding_mask is not None:
+            assert key_padding_mask.size(0) == bsz, '{}, {}'.format(key_padding_mask.size(0), bsz)
+            assert key_padding_mask.size(1) == src_len, '{}, {}'.format(key_padding_mask.size(1), src_len)
+
+        if self.add_zero_attn:
+            src_len += 1
+            k = torch.cat([k, k.new_zeros((k.size(0), 1) + k.size()[2:])], dim=1)
+            v = torch.cat([v, v.new_zeros((v.size(0), 1) + v.size()[2:])], dim=1)
+            if attn_mask is not None:
+                attn_mask = torch.cat([attn_mask, attn_mask.new_zeros(attn_mask.size(0), 1)], dim=1)
+            if key_padding_mask is not None:
+                key_padding_mask = torch.cat(
+                    [key_padding_mask, torch.zeros(key_padding_mask.size(0), 1).type_as(key_padding_mask)], dim=1)
+
+        attn_weights = torch.bmm(q, k.transpose(1, 2))
+        assert list(attn_weights.size()) == [bsz * self.num_heads, tgt_len, src_len]
+
+        if attn_mask is not None:
+            attn_mask = attn_mask.unsqueeze(0)
+            if self.onnx_trace:
+                attn_mask = attn_mask.repeat(attn_weights.size(0), 1, 1)
+            attn_weights += attn_mask
+
+        if key_padding_mask is not None:
+            # don't attend to padding symbols
+            attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
+            if self.onnx_trace:
+                attn_weights = torch.where(
+                    key_padding_mask.unsqueeze(1).unsqueeze(2),
+                    torch.Tensor([float("-Inf")]),
+                    attn_weights.float()
+                ).type_as(attn_weights)
+            else:
+                attn_weights = attn_weights.float().masked_fill(
+                    key_padding_mask.unsqueeze(1).unsqueeze(2),
+                    float('-inf'),
+                ).type_as(attn_weights)  # FP16 support: cast to float and back
+            attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
+
+        attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(attn_weights)
+        attn_weights = F.dropout(attn_weights, p=self.dropout, training=self.training)
+
+        attn = torch.bmm(attn_weights, v)
+        assert list(attn.size()) == [bsz * self.num_heads, tgt_len, self.head_dim]
+        if (self.onnx_trace and attn.size(1) == 1):
+            # when ONNX tracing a single decoder step (sequence length == 1)
+            # the transpose is a no-op copy before view, thus unnecessary
+            attn = attn.contiguous().view(tgt_len, bsz, embed_dim)
+        else:
+            attn = attn.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
+        attn = self.out_proj(attn)
+
+        if need_weights:
+            # average attention weights over heads
+            attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
+            attn_weights = attn_weights.sum(dim=1) / self.num_heads
+        else:
+            attn_weights = None
+
+        return attn, attn_weights
+
+    def in_proj_qkv(self, query):
+        return self._in_proj(query).chunk(3, dim=-1)
+
+    def in_proj_kv(self, key):
+        return self._in_proj(key, start=self.embed_dim).chunk(2, dim=-1)
+
+    def in_proj_q(self, query):
+        return self._in_proj(query, end=self.embed_dim)
+
+    def in_proj_k(self, key):
+        return self._in_proj(key, start=self.embed_dim, end=2 * self.embed_dim)
+
+    def in_proj_v(self, value):
+        return self._in_proj(value, start=2 * self.embed_dim)
+
+    def _in_proj(self, input, start=0, end=None):
+        weight = self.in_proj_weight
+        bias = self.in_proj_bias
+        weight = weight[start:end, :]
+        if bias is not None:
+            bias = bias[start:end]
+        return F.linear(input, weight, bias)
+
+    def reorder_incremental_state(self, incremental_state, new_order):
+        """Reorder buffered internal state (for incremental generation)."""
+        input_buffer = self._get_input_buffer(incremental_state)
+        if input_buffer is not None:
+            for k in input_buffer.keys():
+                input_buffer[k] = input_buffer[k].index_select(0, new_order)
+            self._set_input_buffer(incremental_state, input_buffer)
+
+    def _get_input_buffer(self, incremental_state):
+        return utils.get_incremental_state(
+            self,
+            incremental_state,
+            'attn_state',
+        ) or {}
+
+    def _set_input_buffer(self, incremental_state, buffer):
+        utils.set_incremental_state(
+            self,
+            incremental_state,
+            'attn_state',
+            buffer,
+        )
+
+
+
+
+
+'''
+---------------------------------------------------------------------------------------------------
+An attention function can be described as mapping a query and a set of key-value pairs to an output,
+where the query, keys, values, and output are all vectors. The output is computed as a weighted sum
+of the values, where the weight assigned to each value is computed by a compatibility function of
+the query with the corresponding key.
+
+We call our particular attention “Scaled Dot-Product Attention”. The input consists of queries and
+of dimension d_k, and values of dimension d_v. We compute the dot products of the query with all
+keys, divide each by sqrt(d_k), and apply a softmax function to obtain the weights on the values.
+'''
+
+'''
+In practice, we compute the attention function on a set of queries simultaneously, packed together
+into a matrix Q. The keys and values are also packed together into matrices K and V.
+We compute the matrix of outputs as:
+
+Attention(Q, K, V) = softmax(Q*K^T / sqrt(d_k)) * V
+'''
+def attention(query, key, value, mask=None, dropout=None):
+    "Compute 'Scaled Dot Product Attention'"
+    # query, key, value: torch.Size([B, n_heads, L, 512 / 8])
+    d_k = query.size(-1)
+    scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
+    # (B, n_heads, query_L, key_L), mask: (B, n_heads, -1, key_L)
+    if mask is not None:
+        scores = scores.masked_fill(mask == 0, -1e9)
+    p_attn = F.softmax(scores, dim = -1)
+    if dropout is not None:
+        p_attn = dropout(p_attn)
+    return torch.matmul(p_attn, value), p_attn
+
+'''
+The two most commonly used attention functions are:
+    * additive attention: computes the compatibility function using a feed-forward network with a
+    single hidden layer.
+    * dot-product (multiplicative) attention: is much faster and more space-efficient in practice,
+    since it can be implemented using highly optimized matrix multiplication code
+        the two are similar in theoretical complexity
+
+Dot-product attention is identical to our algorithm, except for the scaling factor of 1 / sqrt(d_k)
+
+For small values of d_k, the two mechanisms perform similarly.
+For larger values of d_k, additive attention outperforms dot product attention without scaling.
+We suspect that for large values of d_k, the dot products grow large in magnitude, pushing the
+softmax function into regions where it has extremely small gradients (To illustrate why the dot
+products get large, assume that the components of q and k are independent random variables with mean
+0 and variance 1. Then their dot product, q·k=Sum_{i=1}^{d_k}q_i * k_i, has mean 0 and variance d_k)
+
+To counteract this effect, we scale the dot products by 1 / sqrt(d_k).
+'''
+
+
+'''
+Multi-head attention allows the model to jointly attend to information from different representation
+subspaces at different positions. With a single attention head, averaging inhibits this.
+MultiHead(Q,K,V)=Concat(head1,...,headh)W^O   where head_i=Attention(Q*W_i^Q,K*W_i^K,V*W_i^V)
+Where the projections are parameter matrices:
+    * W_i^Q (d_model, d_k)
+    * W_i^K (d_model, d_k)
+    * W_i^V (d_model, d_v)
+    * W^O (h*d_v, d_model)
+In this work we employ h=8 parallel attention layers, or heads. For each of these weights, we use
+d_k=d_v=d_model/h=64.
+Due to the reduced dimension of each head, the total computational cost is similar to that of
+single-head attention with full dimensionality.
+'''
+from .self_att_model import clones
+class MultiHeadedAttention(nn.Module):
+    def __init__(self, h, d_model, dropout=0.1):
+        "Take in model size and number of heads."
+        super(MultiHeadedAttention, self).__init__()
+        assert d_model % h == 0
+        # We assume d_v always equals d_k
+        self.d_k = d_model // h
+        self.h = h
+        self.linears = clones(nn.Linear(d_model, d_model), 4)
+        self.attn = None
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, query, key, value, mask=None):
+        "Implements Figure 2"
+        if mask is not None:
+            # Same mask applied to all h heads.
+            mask = mask.unsqueeze(1)
+        nbatches = query.size(0)
+
+        # 1) Do all the linear projections in batch from d_model => h x d_k
+        query, key, value = \
+            [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
+             for l, x in zip(self.linears, (query, key, value))]
+
+        # 2) Apply attention on all the projected vectors in batch.
+        x, self.attn = attention(query, key, value, mask=mask, dropout=self.dropout)
+
+        # 3) "Concat" using a view and apply a final linear.
+        x = x.transpose(1, 2).contiguous().view(nbatches, -1, self.h * self.d_k)
+        return self.linears[-1](x)
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -31,18 +31,21 @@ class StackedGRUDecoder(nn.Module):
 
         self.n_layers = n_layers
         if attention_type == 'additive':
+            wlog('additive')
             self.keys_transform = Linear(2 * enc_hid_size, dec_hid_size)
-            from attention import Additive_Attention
+            from .attention import Additive_Attention
             self.attention = Additive_Attention(dec_hid_size, dec_hid_size)
         if attention_type == 'multihead_additive':
+            wlog('multihead_additive')
             self.keys_transform = Linear(2 * enc_hid_size, dec_hid_size, bias=False)
-            from attention import Multihead_Additive_Attention
+            from .attention import Multihead_Additive_Attention
             self.attention = Multihead_Additive_Attention(enc_hid_size, dec_hid_size)
 
         self.sigmoid = nn.Sigmoid()
         self.s_transform = Linear(dec_hid_size, dec_hid_size)
         self.y_transform = Linear(n_embed, dec_hid_size)
-        self.c_transform = Linear(2*dec_hid_size, dec_hid_size)
+        self.c_transform = Linear(2 * enc_hid_size, dec_hid_size)
+        self.src_transform = Linear(dec_hid_size, 2 * enc_hid_size)
         self.max_out = max_out
         self.out_dropout_prob = out_dropout_prob
 
@@ -154,6 +157,7 @@ class StackedGRUDecoder(nn.Module):
 
         # (batch_size, y_Lm1, dec_hid_size)
         logit = self.y_transform(y) + self.c_transform(c) + self.s_transform(s)
+        logit = self.src_transform(logit)
 
         if self.max_out is True:
             if logit.dim() == 2:    # for decoding
